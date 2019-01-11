@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"path"
@@ -244,6 +245,7 @@ func (b *bearerTokenGetter) getBearerToken(adminClient kubernetes.Interface, nam
 		TypeMeta:   metav1.TypeMeta{APIVersion: corev1.SchemeGroupVersion.String(), Kind: "ServiceAccount"},
 		ObjectMeta: metav1.ObjectMeta{Name: namespace + "-sa", Namespace: namespace},
 	}
+	log.Printf("Obtaining bearerToken for ServiceAccount %q...\n", sa.Name)
 
 	_, err = adminClient.CoreV1().ServiceAccounts(namespace).Create(sa)
 	if err != nil && !kapierrs.IsAlreadyExists(err) {
@@ -303,8 +305,10 @@ func (b *bearerTokenGetter) getBearerToken(adminClient kubernetes.Interface, nam
 		b.finished = true
 		b.tokenStore = bearerToken
 		b.executeWaitQueue()
+		log.Printf("Obtained bearerToken for metrics ServiceAccount %q...\n", sa.Name)
 		return true, nil
 	}); err != nil {
-
+		b.lastError = err
+		return
 	}
 }
