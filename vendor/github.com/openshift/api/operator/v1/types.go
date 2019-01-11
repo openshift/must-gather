@@ -87,41 +87,6 @@ type OperandContainerSpec struct {
 
 	// resources are the requests and limits to place in the container.  Nil means to accept the defaults.
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
-
-	// logging contains parameters for setting log values on the operand. Nil means to accept the defaults.
-	Logging LoggingConfig `json:"logging,omitempty"`
-}
-
-// LoggingConfig holds information about configuring logging
-type LoggingConfig struct {
-	Type string `json:"type"`
-
-	Glog     *GlogConfig     `json:"glog,omitempty"`
-	CapnsLog *CapnsLogConfig `json:"capnsLog,omitempty"`
-	Java     *JavaLog        `json:"java,omitempty"`
-}
-
-// GlogConfig holds information about configuring logging
-type GlogConfig struct {
-	// level is passed to glog.
-	Level int64 `json:"level"`
-
-	// vmodule is passed to glog.
-	Vmodule string `json:"vmodule"`
-}
-
-type CapnsLogConfig struct {
-	// level is passed to capnslog: critical, error, warning, notice, info, debug, trace
-	Level string `json:"level"`
-
-	// TODO There is some kind of repo/package level thing for this
-}
-
-type JavaLog struct {
-	// level is passed to jsr47: fatal, error, warning, info, fine, finer, finest
-	Level string `json:"level"`
-
-	// TODO There is some kind of repo/package level thing for this.  might end up hierarchical
 }
 
 type OperatorStatus struct {
