@@ -1,14 +1,14 @@
 package main
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
-	"os"
-
 	mustgather "github.com/openshift/must-gather/pkg/cmd"
-	"github.com/spf13/pflag"
 )
 
 type MustGatherOptions struct {
