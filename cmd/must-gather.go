@@ -46,7 +46,7 @@ func NewCmdMustGather(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(mustgather.NewCmdInfo("openshift-must-gather", streams))
+	cmd.AddCommand(mustgather.NewCmdInspect("openshift-must-gather", streams))
 	return cmd
 }
 
