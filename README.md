@@ -15,14 +15,15 @@ $ make
 ```
 
 **Before Running**: Make sure you have a `KUBECONFIG` environment variable set, and that it points to a valid admin kubeconfig file.
+Alternatively, provide a filepath to a valid `admin.kubeconfig` file via the `--kubeconfig` flag.
 
 Run with:
 ```
-./bin/openshift-must-gather info clusteroperator/<name>
+./bin/openshift-must-gather inspect clusteroperator/<name>
 ```
 
 Note: it is possible to run this tool to collect all clusteroperator data by omitting a `<name>`:
 
 ```
-./bin/openshift-must-gather info clusteroperators
+./bin/openshift-must-gather inspect clusteroperators
 ```
