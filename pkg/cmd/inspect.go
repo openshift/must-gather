@@ -208,6 +208,10 @@ func (o *InspectOptions) Run() error {
 		}
 
 		// save operator data for each clusteroperator namespace
+		if len(namespaces) == 0 {
+			log.Printf("unable to find any namespaces related to clusteroperator/%s. Skipping namespaced data collection...\n", info.Name)
+		}
+
 		for _, namespace := range namespaces {
 			if err := o.gatherNamespaceData(path.Join(o.baseDir, "namespaces", namespace), namespace); err != nil {
 				if kapierrs.IsNotFound(err) {
@@ -256,11 +260,6 @@ func obtainClusterOperatorNamespaces(obj runtime.Object) ([]string, error) {
 
 		namespaces = append(namespaces, related.Name)
 		log.Printf("    Found related namespace %q for ClusterOperator %q...\n", related.Name, structuredCO.Name)
-	}
-	if len(namespaces) == 0 {
-		log.Printf("    Falling back to <operator> namespace %q for ClusterOperator %q. Unable to find any related namespaces in object status...\n", structuredCO.Name, structuredCO.Name)
-		log.Printf("    Falling back to <operand> namespace %q for ClusterOperator %q. Unable to find any related namespaces in object status...\n", strings.TrimSuffix(structuredCO.Name, "-operator"), structuredCO.Name)
-		namespaces = []string{structuredCO.Name, strings.TrimSuffix(structuredCO.Name, "-operator")}
 	}
 
 	return namespaces, nil
@@ -541,11 +540,9 @@ func (o *InspectOptions) gatherPodData(destDir, namespace string, pod *corev1.Po
 	errs := []error{}
 
 	// skip gathering container data if containers are no longer running
-	running, err := util.PodRunningReady(pod)
-	if err != nil {
+	if running, err := util.PodRunningReady(pod); err != nil {
 		return err
-	}
-	if !running {
+	} else if !running {
 		log.Printf("        Skipping container data collection for pod %q: Pod not running\n", pod.Name)
 		return nil
 	}
