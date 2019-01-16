@@ -201,13 +201,16 @@ func (o *InspectOptions) Run() error {
 			continue
 		}
 
-		namespaces, err := obtainClusterOperatorNamespaces(info.Object)
+		namespaces, otherObjs, err := obtainClusterOperatorRelatedObjects(info.Object)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
 
 		// save operator data for each clusteroperator namespace
+		if len(namespaces) == 0 {
+			log.Printf("unable to find any namespaces related to clusteroperator/%s. Skipping namespaced data collection...\n", info.Name)
+		}
 		for _, namespace := range namespaces {
 			if err := o.gatherNamespaceData(path.Join(o.baseDir, "namespaces", namespace), namespace); err != nil {
 				if kapierrs.IsNotFound(err) {
@@ -219,6 +222,19 @@ func (o *InspectOptions) Run() error {
 				continue
 			}
 		}
+
+		// save other related-object data for each clusteroperator
+		if len(otherObjs) == 0 {
+			log.Printf("unable to find any non-namespace related objects to clusteroperator/%s. Will not perform further data collection...\n", info.Name)
+		}
+		//for _, relatedObj := range otherObjs {
+		//	if len(relatedObj.Namespace) == 0 {
+		//		o.gatherClusterOperatorRelatedObjectData(path.Join(o.baseDir, "/cluster-scoped-resources", "/"+relatedObj.Group, "/"+relatedObj.Resource), relatedObj)
+		//		continue
+		//	}
+		//
+		//	o.gatherClusterOperatorRelatedObjectData(path.Join(o.baseDir, "/namespaces", "/"+relatedObj.Namespace, "/"+relatedObj.Resource), relatedObj)
+		//}
 	}
 
 	if len(skippedNamespaces) > 0 {
@@ -235,35 +251,57 @@ func (o *InspectOptions) Run() error {
 	return nil
 }
 
-func obtainClusterOperatorNamespaces(obj runtime.Object) ([]string, error) {
+func (o *InspectOptions) gatherClusterOperatorRelatedObjectData(destDir string, relatedObj *configv1.ObjectReference) error {
+	log.Printf("Gathering cluster operator related object data: %s/%s ...\n", relatedObj.Resource, relatedObj.Name)
+
+	// ensure destination path exists
+	if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
+		return err
+	}
+
+	var err error
+	var resource *unstructured.Unstructured
+
+	if len(relatedObj.Namespace) == 0 {
+		resource, err = o.dynamicClient.Resource(schema.GroupVersionResource{Group: relatedObj.Group, Resource: relatedObj.Resource}).Get(relatedObj.Name, metav1.GetOptions{})
+	} else {
+		resource, err = o.dynamicClient.Resource(schema.GroupVersionResource{Group: relatedObj.Group, Resource: relatedObj.Resource, Version: "v1"}).Namespace(relatedObj.Namespace).Get(relatedObj.Name, metav1.GetOptions{})
+	}
+	if err != nil {
+		return err
+	}
+
+	filename := fmt.Sprintf("%s.yaml", relatedObj.Name)
+	return o.fileWriter.WriteFromResource(path.Join(destDir, "/"+filename), runtime.Object(resource))
+}
+
+func obtainClusterOperatorRelatedObjects(obj runtime.Object) ([]string, []*configv1.ObjectReference, error) {
 	// obtain related namespace info for the current clusteroperator
 	unstructuredCO, ok := obj.(*unstructured.Unstructured)
 	if !ok {
-		return nil, fmt.Errorf("invalid resource type, expecting clusteroperators but got %T", obj)
+		return nil, nil, fmt.Errorf("invalid resource type, expecting clusteroperators but got %T", obj)
 	}
 	log.Printf("    Gathering namespace information for ClusterOperator %q...\n", unstructuredCO.GetName())
 
 	structuredCO := &configv1.ClusterOperator{}
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredCO.Object, structuredCO); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	otherObjs := []*configv1.ObjectReference{}
 	namespaces := []string{}
-	for _, related := range structuredCO.Status.RelatedObjects {
+	for idx := range structuredCO.Status.RelatedObjects {
+		related := structuredCO.Status.RelatedObjects[idx]
 		if related.Resource != "namespaces" {
+			otherObjs = append(otherObjs, &related)
 			continue
 		}
 
 		namespaces = append(namespaces, related.Name)
 		log.Printf("    Found related namespace %q for ClusterOperator %q...\n", related.Name, structuredCO.Name)
 	}
-	if len(namespaces) == 0 {
-		log.Printf("    Falling back to <operator> namespace %q for ClusterOperator %q. Unable to find any related namespaces in object status...\n", structuredCO.Name, structuredCO.Name)
-		log.Printf("    Falling back to <operand> namespace %q for ClusterOperator %q. Unable to find any related namespaces in object status...\n", strings.TrimSuffix(structuredCO.Name, "-operator"), structuredCO.Name)
-		namespaces = []string{structuredCO.Name, strings.TrimSuffix(structuredCO.Name, "-operator")}
-	}
 
-	return namespaces, nil
+	return namespaces, otherObjs, nil
 }
 
 // ensureDirectoryViable returns an error if the given path:
