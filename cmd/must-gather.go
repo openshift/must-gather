@@ -8,19 +8,16 @@ import (
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
-	mustgather "github.com/openshift/must-gather/pkg/cmd"
+	"github.com/openshift/must-gather/pkg/cmd/inspect"
 )
 
 type MustGatherOptions struct {
-	configFlags *genericclioptions.ConfigFlags
-
 	genericclioptions.IOStreams
 }
 
 func NewMustGatherOptions(streams genericclioptions.IOStreams) *MustGatherOptions {
 	return &MustGatherOptions{
-		configFlags: genericclioptions.NewConfigFlags(),
-		IOStreams:   streams,
+		IOStreams: streams,
 	}
 }
 
@@ -46,7 +43,7 @@ func NewCmdMustGather(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(mustgather.NewCmdInspect("openshift-must-gather", streams))
+	cmd.AddCommand(inspect.NewCmdInspect("openshift-must-gather", streams))
 	return cmd
 }
 
