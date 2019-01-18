@@ -27,3 +27,15 @@ Note: it is possible to run this tool to collect all clusteroperator data by omi
 ```
 ./bin/openshift-must-gather inspect clusteroperators
 ```
+
+#### Developers Only
+
+**WARNING**: The following tool is provided with no guarantees and might (and will) be changed at any time. Please do not rely on anything below in your scripts or automatization.
+
+Beside the `oppenshift-must-gather` binary the `openshift-dev-helpers` binary is also provided. This binary combines various
+tools useful for the OpenShift developers teams. 
+
+To list all events recorded during a test run and stored in `events.json` file, you can run this command:
+```bash
+./bin/openshift-dev-helpers events https://storage.googleapis.com/origin-ci-test/pr-logs/.../artifacts/e2e-aws/events.json --component=openshift-apiserver-operator
+```
