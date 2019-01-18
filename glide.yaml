@@ -8,6 +8,5 @@ import:
   version: kubernetes-1.12.4
 - package: k8s.io/apimachinery
   version: kubernetes-1.12.4
-- package: k8s.io/openshift/api
-  repo:    https://github.com/openshift/api
+- package: github.com/openshift/api
   version: master
