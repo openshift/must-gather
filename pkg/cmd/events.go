@@ -3,10 +3,12 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/openshift/must-gather/pkg/util"
 	"github.com/spf13/cobra"
+
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericclioptions/resource"
+
+	"github.com/openshift/must-gather/pkg/util"
 )
 
 var (
