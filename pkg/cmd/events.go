@@ -45,7 +45,7 @@ func NewCmdEvents(parentName string, streams genericclioptions.IOStreams) *cobra
 
 	cmd := &cobra.Command{
 		Use:          "events <URL> [flags]",
-		Short:        "Collect debugging data for a given cluster operator",
+		Short:        "Inspects the events captured during the CI test run.",
 		Example:      fmt.Sprintf(inspectExample, parentName),
 		SilenceUsage: true,
 		RunE: func(c *cobra.Command, args []string) error {
