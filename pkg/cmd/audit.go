@@ -48,7 +48,7 @@ func NewCmdAudit(parentName string, streams genericclioptions.IOStreams) *cobra.
 	cmd := &cobra.Command{
 		Use:          "audit <URL> [flags]",
 		Short:        "Inspects the audit logs captured during CI test run.",
-		Example:      fmt.Sprintf(inspectExample, parentName),
+		Example:      fmt.Sprintf(auditExample, parentName),
 		SilenceUsage: true,
 		RunE: func(c *cobra.Command, args []string) error {
 			if err := o.Complete(c, args); err != nil {
