@@ -46,6 +46,7 @@ func NewCmdDevHelpers(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	cmd.AddCommand(mustgather.NewCmdEvents("openshift-dev-helpers", streams))
+	cmd.AddCommand(mustgather.NewCmdAudit("openshift-dev-helpers", streams))
 	return cmd
 }
 
