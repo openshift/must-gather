@@ -40,7 +40,7 @@ func GetEventBytesFromURL(eventFileURL string) ([]byte, error) {
 // PrintEvents prints the given events JSON in human readable way.
 // If componentName is provided, only events related to that component are printed out (use '*' to print all events).
 // If printComponents is provided we only print the component names.
-func PrintEvents(writer io.Writer, eventBytes []byte, componentName string, printComponents bool) error {
+func PrintEvents(writer io.Writer, eventBytes []byte, absoluteTime bool, componentName string, printComponents bool) error {
 	eventList := v1.EventList{}
 	if err := json.Unmarshal(eventBytes, &eventList); err != nil {
 		log.Fatal(err.Error())
@@ -52,7 +52,7 @@ func PrintEvents(writer io.Writer, eventBytes []byte, componentName string, prin
 
 	englishFormat := timeago.English
 	englishFormat.PastSuffix = " "
-	w := tabwriter.NewWriter(writer, 50, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
+	w := tabwriter.NewWriter(writer, 60, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
 
 	components := sets.NewString()
 
@@ -66,14 +66,17 @@ func PrintEvents(writer io.Writer, eventBytes []byte, componentName string, prin
 		if item.Source.Component != componentName && componentName != `*` {
 			continue
 		}
-		humanTime := englishFormat.FormatReference(eventList.Items[0].FirstTimestamp.Time, item.FirstTimestamp.Time)
 		message := item.Message
-		if componentName == `*` {
-			component := item.Source.Component
-			if len(component) > 35 {
-				component = component[0:35] + "..."
+		humanTime := item.FirstTimestamp.Time.String()
+		if !absoluteTime {
+			humanTime := englishFormat.FormatReference(eventList.Items[0].FirstTimestamp.Time, item.FirstTimestamp.Time)
+			if componentName == `*` {
+				component := item.Source.Component
+				if len(component) > 35 {
+					component = component[0:35] + "..."
+				}
+				humanTime = component + "\t" + humanTime
 			}
-			humanTime = component + "\t" + humanTime
 		}
 		if _, err := fmt.Fprintf(w, "%s  %s\t%s\n", humanTime, item.Reason, message); err != nil {
 			return err
