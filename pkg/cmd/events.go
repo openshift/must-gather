@@ -47,7 +47,7 @@ func NewCmdEvents(parentName string, streams genericclioptions.IOStreams) *cobra
 	cmd := &cobra.Command{
 		Use:          "events <URL> [flags]",
 		Short:        "Inspects the events captured during the CI test run.",
-		Example:      fmt.Sprintf(inspectExample, parentName),
+		Example:      fmt.Sprintf(eventsExample, parentName),
 		SilenceUsage: true,
 		RunE: func(c *cobra.Command, args []string) error {
 			if err := o.Complete(c, args); err != nil {

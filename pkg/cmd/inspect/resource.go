@@ -1,423 +1,138 @@
-package cmd
+package inspect
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	kapierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericclioptions/resource"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/route"
-
 	"github.com/openshift/must-gather/pkg/util"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-var (
-	inspectExample = `
-	# Collect debugging data for the "openshift-apiserver-operator"
-	%[1]s inspect clusteroperator/openshift-apiserver-operator
-
-	# Collect debugging data for all clusteroperators
-	%[1]s inspect clusteroperator
-`
+const (
+	clusterScopedResourcesDirname = "cluster-scoped-resources"
+	namespaceResourcesDirname     = "namespaces"
 )
 
-type InspectOptions struct {
-	printFlags  *genericclioptions.PrintFlags
-	configFlags *genericclioptions.ConfigFlags
-
-	restConfig      *rest.Config
-	kubeClient      kubernetes.Interface
-	discoveryClient discovery.CachedDiscoveryInterface
-	dynamicClient   dynamic.Interface
-
-	podUrlGetter *util.PortForwardURLGetter
-
-	fileWriter *util.MultiSourceFileWriter
-	builder    *resource.Builder
-	args       []string
-
-	// directory where all gathered data will be stored
-	baseDir string
-	// whether or not to allow writes to an existing and populated base directory
-	overwrite bool
-
-	genericclioptions.IOStreams
-}
-
-func NewInspectOptions(streams genericclioptions.IOStreams) *InspectOptions {
-	return &InspectOptions{
-		printFlags:  genericclioptions.NewPrintFlags("gathered").WithDefaultOutput("yaml").WithTypeSetter(scheme.Scheme),
-		configFlags: genericclioptions.NewConfigFlags(),
-		overwrite:   true,
-		IOStreams:   streams,
+// InspectResource receives an object to gather debugging data for, and a context to keep track of
+// already-seen objects when following related-object reference chains.
+func InspectResource(info *resource.Info, context *resourceContext, o *InspectOptions) error {
+	if context.visited.Has(infoToContextKey(info)) {
+		return nil
 	}
-}
+	context.visited.Insert(infoToContextKey(info))
 
-func NewCmdInspect(parentName string, streams genericclioptions.IOStreams) *cobra.Command {
-	o := NewInspectOptions(streams)
-
-	cmd := &cobra.Command{
-		Use:          "inspect <operator> [flags]",
-		Short:        "Collect debugging data for a given cluster operator",
-		Example:      fmt.Sprintf(inspectExample, parentName),
-		SilenceUsage: true,
-		RunE: func(c *cobra.Command, args []string) error {
-			if err := o.Complete(c, args); err != nil {
-				return err
-			}
-			if err := o.Validate(); err != nil {
-				return err
-			}
-			if err := o.Run(); err != nil {
-				return err
-			}
-
-			return nil
-		},
+	unstr, ok := info.Object.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("unexpected type. Expecting %q but got %T", "*unstructured.Unstructured", info.Object)
 	}
 
-	cmd.Flags().StringVar(&o.baseDir, "base-dir", "must-gather", "Root directory used for storing all gathered cluster operator data. Defaults to $(PWD)/must-gather")
-
-	o.printFlags.AddFlags(cmd)
-	return cmd
-}
-
-func (o *InspectOptions) Complete(cmd *cobra.Command, args []string) error {
-	o.args = args
-
-	var err error
-	o.restConfig, err = o.configFlags.ToRESTConfig()
-	if err != nil {
-		return err
-	}
-
-	o.kubeClient, err = kubernetes.NewForConfig(o.restConfig)
-	if err != nil {
-		return err
-	}
-
-	o.dynamicClient, err = dynamic.NewForConfig(o.restConfig)
-	if err != nil {
-		return err
-	}
-
-	o.discoveryClient, err = o.configFlags.ToDiscoveryClient()
-	if err != nil {
-		return err
-	}
-
-	printer, err := o.printFlags.ToPrinter()
-	if err != nil {
-		return err
-	}
-	o.fileWriter = util.NewMultiSourceWriter(printer)
-	o.podUrlGetter = &util.PortForwardURLGetter{
-		Protocol:  "https",
-		Host:      "localhost",
-		LocalPort: "37587",
-	}
-
-	o.builder = resource.NewBuilder(o.configFlags)
-	return nil
-}
-
-func (o *InspectOptions) Validate() error {
-	if len(o.args) != 1 {
-		return fmt.Errorf("exactly 1 argument (operator name) is supported")
-	}
-	if len(o.baseDir) == 0 {
-		return fmt.Errorf("--base-dir must not be empty")
-	}
-	return nil
-}
-
-func (o *InspectOptions) Run() error {
-	r := o.builder.
-		Unstructured().
-		ResourceTypeOrNameArgs(true, o.args...).
-		Flatten().
-		Latest().Do()
-
-	infos, err := r.Infos()
-	if err != nil {
-		return err
-	}
-
-	// first, ensure we're dealing with correct resource types
-	for _, info := range infos {
-		if configv1.GroupName != info.Mapping.GroupVersionKind.Group {
-			return fmt.Errorf("unexpected resource API group %q. Expected %q", info.Mapping.GroupVersionKind.Group, configv1.GroupName)
-		}
-		if info.Mapping.Resource.Resource != "clusteroperators" {
-			return fmt.Errorf("unsupported resource type, must be %q", "clusteroperators")
-		}
-	}
-
-	// next, ensure we're able to proceed writing data to specified destination
-	if err := o.ensureDirectoryViable(o.baseDir, o.overwrite); err != nil {
-		return err
-	}
-
-	// gather config.openshift.io resource data
-	skippedNamespaces := []string{}
-	errs := []error{}
-	if err := o.gatherConfigResourceData(path.Join(o.baseDir, "/cluster-scoped-resources/config.openshift.io")); err != nil {
-		errs = append(errs, err)
-	}
-
-	// gather operator.openshift.io resource data
-	if err := o.gatherOperatorResourceData(path.Join(o.baseDir, "/cluster-scoped-resources/operator.openshift.io")); err != nil {
-		errs = append(errs, err)
-	}
-
-	for _, info := range infos {
-		// save clusteroperator resources
-		if err := o.gatherClusterOperatorResource(path.Join(o.baseDir, "/clusteroperator"), info); err != nil {
-			errs = append(errs, err)
-			continue
+	switch info.ResourceMapping().Resource.GroupResource() {
+	case configv1.GroupVersion.WithResource("clusteroperators").GroupResource():
+		// save clusteroperator resources to disk
+		if err := gatherClusterOperatorResource(o.baseDir, unstr, o.fileWriter); err != nil {
+			return err
 		}
 
-		namespaces, err := obtainClusterOperatorNamespaces(info.Object)
+		// obtain associated objects for the current clusteroperator resources
+		relatedObjReferences, err := obtainClusterOperatorRelatedObjects(unstr)
 		if err != nil {
-			errs = append(errs, err)
-			continue
+			return err
 		}
 
-		// save operator data for each clusteroperator namespace
-		if len(namespaces) == 0 {
-			log.Printf("unable to find any namespaces related to clusteroperator/%s. Skipping namespaced data collection...\n", info.Name)
-		}
+		errs := []error{}
+		for _, relatedRef := range relatedObjReferences {
+			if context.visited.Has(objectRefToContextKey(relatedRef)) {
+				continue
+			}
 
-		for _, namespace := range namespaces {
-			if err := o.gatherNamespaceData(path.Join(o.baseDir, "namespaces", namespace), namespace); err != nil {
-				if kapierrs.IsNotFound(err) {
-					skippedNamespaces = append(skippedNamespaces, namespace)
-					continue
-				}
+			relatedInfo, err := objectReferenceToResourceInfo(o.configFlags, relatedRef)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
 
+			if err := InspectResource(relatedInfo, context, o); err != nil {
 				errs = append(errs, err)
 				continue
 			}
 		}
-	}
 
-	if len(skippedNamespaces) > 0 {
-		for _, namespace := range skippedNamespaces {
-			log.Printf("Data collection skipped namespace %q. Unable to find namespace...\n", namespace)
+		if len(errs) > 0 {
+			return errors.NewAggregate(errs)
 		}
+	case corev1.SchemeGroupVersion.WithResource("namespaces").GroupResource():
+		if err := o.gatherNamespaceData(o.baseDir, info.Name); err != nil {
+			return err
+		}
+	default:
+		// save the current object to disk
+		filename := fmt.Sprintf("%s.yaml", unstr.GetName())
+		objPath := path.Join(o.baseDir, "/namespaces", "/"+unstr.GetNamespace(), "/"+info.ResourceMapping().Resource.Resource)
+		if len(unstr.GetNamespace()) == 0 {
+			objPath = path.Join(o.baseDir, "/cluster-scoped-resources", "/"+unstr.GroupVersionKind().Group, "/"+info.ResourceMapping().Resource.Resource)
+		}
+		// ensure destination path exists
+		if err := os.MkdirAll(objPath, os.ModePerm); err != nil {
+			return err
+		}
+
+		return o.fileWriter.WriteFromResource(path.Join(objPath, "/"+filename), info.Object)
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("One or more errors ocurred gathering cluster data:\n\n    %v", errors.NewAggregate(errs))
-	}
-
-	log.Printf("Finished successfully with no errors.\n")
 	return nil
 }
 
-func obtainClusterOperatorNamespaces(obj runtime.Object) ([]string, error) {
-	// obtain related namespace info for the current clusteroperator
-	unstructuredCO, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return nil, fmt.Errorf("invalid resource type, expecting clusteroperators but got %T", obj)
-	}
-	log.Printf("    Gathering namespace information for ClusterOperator %q...\n", unstructuredCO.GetName())
-
-	structuredCO := &configv1.ClusterOperator{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredCO.Object, structuredCO); err != nil {
-		return nil, err
-	}
-
-	namespaces := []string{}
-	for _, related := range structuredCO.Status.RelatedObjects {
-		if related.Resource != "namespaces" {
-			continue
-		}
-
-		namespaces = append(namespaces, related.Name)
-		log.Printf("    Found related namespace %q for ClusterOperator %q...\n", related.Name, structuredCO.Name)
-	}
-
-	return namespaces, nil
-}
-
-// ensureDirectoryViable returns an error if the given path:
-// 1. already exists AND is a file (not a directory)
-// 2. already exists AND is NOT empty
-// 3. an IO error occurs
-func (o *InspectOptions) ensureDirectoryViable(dirPath string, allowDataOverride bool) error {
-	baseDirInfo, err := os.Stat(dirPath)
-	if err != nil && os.IsNotExist(err) {
-		// no error, directory simply does not exist yet
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	if !baseDirInfo.IsDir() {
-		return fmt.Errorf("%q exists and is a file", dirPath)
-	}
-	files, err := ioutil.ReadDir(dirPath)
-	if err != nil {
-		return err
-	}
-	if len(files) > 0 && !allowDataOverride {
-		return fmt.Errorf("%q exists and is not empty. Pass --overwrite to allow data overwrites", dirPath)
-	}
-	return nil
-}
-
-func (o *InspectOptions) gatherClusterOperatorResource(destDir string, info *resource.Info) error {
+func gatherClusterOperatorResource(baseDir string, obj *unstructured.Unstructured, fileWriter *util.MultiSourceFileWriter) error {
 	log.Printf("Gathering cluster operator resource data...\n")
 
 	// ensure destination path exists
+	destDir := path.Join(baseDir, "/"+clusterScopedResourcesDirname, "/"+obj.GroupVersionKind().Group, "/clusteroperators")
 	if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
 		return err
 	}
 
-	filename := fmt.Sprintf("%s.yaml", info.Name)
-	return o.fileWriter.WriteFromResource(path.Join(destDir, "/"+filename), info.Object)
+	filename := fmt.Sprintf("%s.yaml", obj.GetName())
+	return fileWriter.WriteFromResource(path.Join(destDir, "/"+filename), obj)
 }
 
-// gatherConfigResourceData gathers all config.openshift.io resources
-func (o *InspectOptions) gatherConfigResourceData(destDir string) error {
-	log.Printf("Gathering config.openshift.io resource data...\n")
+func obtainClusterOperatorRelatedObjects(obj *unstructured.Unstructured) ([]*configv1.ObjectReference, error) {
+	// obtain related namespace info for the current clusteroperator
+	log.Printf("    Gathering related object reference information for ClusterOperator %q...\n", obj.GetName())
 
-	// ensure destination path exists
-	if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
-		return err
+	structuredCO := &configv1.ClusterOperator{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, structuredCO); err != nil {
+		return nil, err
 	}
 
-	resources, err := retrieveAPIGroupVersionResourceNames(o.discoveryClient, configv1.GroupName)
-	if err != nil {
-		return err
+	relatedObjs := []*configv1.ObjectReference{}
+	for idx, relatedObj := range structuredCO.Status.RelatedObjects {
+		relatedObjs = append(relatedObjs, &structuredCO.Status.RelatedObjects[idx])
+		log.Printf("    Found related object %q for ClusterOperator %q...\n", relatedObj.Name, structuredCO.Name)
 	}
 
-	errs := []error{}
-	for _, resource := range resources {
-		resourceList, err := o.dynamicClient.Resource(resource).List(metav1.ListOptions{})
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-
-		objToPrint := runtime.Object(resourceList)
-		filename := fmt.Sprintf("%s.yaml", resource.Resource)
-		if err := o.fileWriter.WriteFromResource(path.Join(destDir, "/"+filename), objToPrint); err != nil {
-			errs = append(errs, err)
-			continue
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("one or more errors ocurred while gathering config.openshift.io resource data:\n\n    %v", errors.NewAggregate(errs))
-	}
-	return nil
+	return relatedObjs, nil
 }
 
-// gatherOperatorResourceData gathers all kubeapiserver.operator.openshift.io resources
-func (o *InspectOptions) gatherOperatorResourceData(destDir string) error {
-	log.Printf("Gathering kubeapiserver.operator.openshift.io resource data...\n")
-
-	// ensure destination path exists
-	if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
-		return err
-	}
-
-	resources, err := retrieveAPIGroupVersionResourceNames(o.discoveryClient, "kubeapiserver.operator.openshift.io")
-	if err != nil {
-		return err
-	}
-
-	errs := []error{}
-	for _, resource := range resources {
-		resourceList, err := o.dynamicClient.Resource(resource).List(metav1.ListOptions{})
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-
-		objToPrint := runtime.Object(resourceList)
-		filename := fmt.Sprintf("%s.yaml", resource.Resource)
-		if err := o.fileWriter.WriteFromResource(path.Join(destDir, "/"+filename), objToPrint); err != nil {
-			errs = append(errs, err)
-			continue
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("one or more errors ocurred while gathering config.openshift.io resource data:\n\n    %v", errors.NewAggregate(errs))
-	}
-	return nil
-}
-
-func retrieveAPIGroupVersionResourceNames(discoveryClient discovery.CachedDiscoveryInterface, apiGroup string) ([]schema.GroupVersionResource, error) {
-	lists, discoveryErr := discoveryClient.ServerPreferredResources()
-
-	foundResources := sets.String{}
-	resources := []schema.GroupVersionResource{}
-	for _, list := range lists {
-		if len(list.APIResources) == 0 {
-			continue
-		}
-		gv, err := schema.ParseGroupVersion(list.GroupVersion)
-		if err != nil {
-			/// something went seriously wrong
-			return nil, err
-		}
-		for _, resource := range list.APIResources {
-			// filter groups outside of the provided apiGroup
-			if !strings.HasSuffix(gv.Group, apiGroup) {
-				continue
-			}
-			verbs := sets.NewString(([]string(resource.Verbs))...)
-			if !verbs.Has("list") {
-				continue
-			}
-			// if we've already seen this resource in another version, don't add it again
-			if foundResources.Has(resource.Name) {
-				continue
-			}
-
-			foundResources.Insert(resource.Name)
-			resources = append(resources, schema.GroupVersionResource{Group: gv.Group, Version: gv.Version, Resource: resource.Name})
-		}
-	}
-	// we only care about discovery errors if we don't find what we want
-	if len(resources) == 0 {
-		return nil, discoveryErr
-	}
-
-	return resources, nil
-}
-
-func (o *InspectOptions) gatherNamespaceData(destDir, namespace string) error {
+func (o *InspectOptions) gatherNamespaceData(baseDir, namespace string) error {
 	log.Printf("Gathering data for ns/%s...\n", namespace)
+
+	destDir := path.Join(baseDir, namespaceResourcesDirname, namespace)
 
 	// ensure destination path exists
 	if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
@@ -495,7 +210,7 @@ func (o *InspectOptions) gatherNamespaceData(destDir, namespace string) error {
 	for gvr, obj := range resourcesToStore {
 		filename := gvr.Resource
 		if len(gvr.Group) > 0 {
-			filename += "."+gvr.Group
+			filename += "." + gvr.Group
 		}
 		filename += ".yaml"
 		if err := o.fileWriter.WriteFromResource(path.Join(destDir, "/"+filename), obj); err != nil {
