@@ -30,6 +30,7 @@ type EventsOptions struct {
 
 	componentName  string
 	listComponents bool
+	absoluteTime   bool
 
 	genericclioptions.IOStreams
 }
@@ -65,6 +66,7 @@ func NewCmdEvents(parentName string, streams genericclioptions.IOStreams) *cobra
 
 	cmd.Flags().StringVar(&o.componentName, "component", "", "Name of the component to filter events for (eg. 'openshift-apiserver-operator')")
 	cmd.Flags().BoolVar(&o.listComponents, "list-components", false, "List all available component names in events")
+	cmd.Flags().BoolVar(&o.absoluteTime, "absolute-time", false, "Show absolute time instead of relative")
 
 	return cmd
 }
@@ -97,7 +99,7 @@ func (o *EventsOptions) Run() error {
 	if err != nil {
 		return err
 	}
-	if err := util.PrintEvents(o.Out, eventFileBytes, o.componentName, o.listComponents); err != nil {
+	if err := util.PrintEvents(o.Out, eventFileBytes, o.absoluteTime, o.componentName, o.listComponents); err != nil {
 		return err
 	}
 	return nil
