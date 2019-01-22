@@ -68,8 +68,10 @@ func (m *AuditEventsMap) SearchEventsRegexp(regexpInput string, verb string) ([]
 		if !re.MatchString(u) {
 			continue
 		}
-		if len(verb) > 0 && m.uriVerbsIndex[u][verb] != nil {
-			result = append(result, m.uriVerbsIndex[u][verb]...)
+		if len(verb) > 0 {
+			if m.uriVerbsIndex[u][verb] != nil {
+				result = append(result, m.uriVerbsIndex[u][verb]...)
+			}
 			continue
 		}
 		for v := range m.uriVerbsIndex[u] {
