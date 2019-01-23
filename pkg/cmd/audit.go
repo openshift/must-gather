@@ -81,14 +81,14 @@ func (o *AuditOptions) Complete(command *cobra.Command, args []string) error {
 
 func (o *AuditOptions) Validate() error {
 	if len(o.auditFileURL) == 0 {
-		fmt.Errorf("you must specify the audit log URL")
+		return fmt.Errorf("you must specify an audit log URL")
 	}
 	if len(o.regexp) > 0 && len(o.contains) > 0 {
-		fmt.Errorf("either regexp or contains are supported, not both")
+		return fmt.Errorf("either --regexp or --contains are supported, not both")
 	}
 
 	if len(o.regexp) == 0 && len(o.contains) == 0 && len(o.verb) > 0 {
-		fmt.Errorf("verb only supported for searching")
+		return fmt.Errorf("verb only supported for searching, it must be used with either --regexp or --contains")
 	}
 	return nil
 }
