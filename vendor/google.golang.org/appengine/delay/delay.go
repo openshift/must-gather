@@ -9,7 +9,6 @@ user request by using the taskqueue API.
 To declare a function that may be executed later, call Func
 in a top-level assignment context, passing it an arbitrary string key
 and a function whose first argument is of type context.Context.
-The key is used to look up the function so it can be called later.
 	var laterFunc = delay.Func("key", myFunc)
 It is also possible to use a function literal.
 	var laterFunc = delay.Func("key", func(c context.Context, x string) {
@@ -34,16 +33,8 @@ be associated with the request that invoked the Call method.
 The state of a function invocation that has not yet successfully
 executed is preserved by combining the file name in which it is declared
 with the string key that was passed to the Func function. Updating an app
-with pending function invocations should safe as long as the relevant
-functions have the (filename, key) combination preserved. The filename is
-parsed according to these rules:
-  * Paths in package main are shortened to just the file name (github.com/foo/foo.go -> foo.go)
-  * Paths are stripped to just package paths (/go/src/github.com/foo/bar.go -> github.com/foo/bar.go)
-  * Module versions are stripped (/go/pkg/mod/github.com/foo/bar@v0.0.0-20181026220418-f595d03440dc/baz.go -> github.com/foo/bar/baz.go)
-
-There is some inherent risk of pending function invocations being lost during
-an update that contains large changes. For example, switching from using GOPATH
-to go.mod is a large change that may inadvertently cause file paths to change.
+with pending function invocations is safe as long as the relevant
+functions have the (filename, key) combination preserved.
 
 The delay package uses the Task Queue API to create tasks that call the
 reserved application path "/_ah/queue/go/delay".
@@ -54,23 +45,16 @@ package delay // import "google.golang.org/appengine/delay"
 
 import (
 	"bytes"
-	stdctx "context"
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"go/build"
-	stdlog "log"
 	"net/http"
-	"path/filepath"
 	"reflect"
-	"regexp"
 	"runtime"
-	"strings"
 
 	"golang.org/x/net/context"
 
 	"google.golang.org/appengine"
-	"google.golang.org/appengine/internal"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/taskqueue"
 )
@@ -89,67 +73,17 @@ const (
 	queue = ""
 )
 
-type contextKey int
-
 var (
 	// registry of all delayed functions
 	funcs = make(map[string]*Function)
 
 	// precomputed types
-	errorType = reflect.TypeOf((*error)(nil)).Elem()
+	contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
+	errorType   = reflect.TypeOf((*error)(nil)).Elem()
 
 	// errors
-	errFirstArg         = errors.New("first argument must be context.Context")
-	errOutsideDelayFunc = errors.New("request headers are only available inside a delay.Func")
-
-	// context keys
-	headersContextKey contextKey = 0
-	stdContextType               = reflect.TypeOf((*stdctx.Context)(nil)).Elem()
-	netContextType               = reflect.TypeOf((*context.Context)(nil)).Elem()
+	errFirstArg = errors.New("first argument must be context.Context")
 )
-
-func isContext(t reflect.Type) bool {
-	return t == stdContextType || t == netContextType
-}
-
-var modVersionPat = regexp.MustCompile("@v[^/]+")
-
-// fileKey finds a stable representation of the caller's file path.
-// For calls from package main: strip all leading path entries, leaving just the filename.
-// For calls from anywhere else, strip $GOPATH/src, leaving just the package path and file path.
-func fileKey(file string) (string, error) {
-	if !internal.IsSecondGen() || internal.MainPath == "" {
-		return file, nil
-	}
-	// If the caller is in the same Dir as mainPath, then strip everything but the file name.
-	if filepath.Dir(file) == internal.MainPath {
-		return filepath.Base(file), nil
-	}
-	// If the path contains "_gopath/src/", which is what the builder uses for
-	// apps which don't use go modules, strip everything up to and including src.
-	// Or, if the path starts with /tmp/staging, then we're importing a package
-	// from the app's module (and we must be using go modules), and we have a
-	// path like /tmp/staging1234/srv/... so strip everything up to and
-	// including the first /srv/.
-	// And be sure to look at the GOPATH, for local development.
-	s := string(filepath.Separator)
-	for _, s := range []string{filepath.Join("_gopath", "src") + s, s + "srv" + s, filepath.Join(build.Default.GOPATH, "src") + s} {
-		if idx := strings.Index(file, s); idx > 0 {
-			return file[idx+len(s):], nil
-		}
-	}
-
-	// Finally, if that all fails then we must be using go modules, and the file is a module,
-	// so the path looks like /go/pkg/mod/github.com/foo/bar@v0.0.0-20181026220418-f595d03440dc/baz.go
-	// So... remove everything up to and including mod, plus the @.... version string.
-	m := "/mod/"
-	if idx := strings.Index(file, m); idx > 0 {
-		file = file[idx+len(m):]
-	} else {
-		return file, fmt.Errorf("fileKey: unknown file path format for %q", file)
-	}
-	return modVersionPat.ReplaceAllString(file, ""), nil
-}
 
 // Func declares a new Function. The second argument must be a function with a
 // first argument of type context.Context.
@@ -164,19 +98,14 @@ func Func(key string, i interface{}) *Function {
 
 	// Derive unique, somewhat stable key for this func.
 	_, file, _, _ := runtime.Caller(1)
-	fk, err := fileKey(file)
-	if err != nil {
-		// Not fatal, but log the error
-		stdlog.Printf("delay: %v", err)
-	}
-	f.key = fk + ":" + key
+	f.key = file + ":" + key
 
 	t := f.fv.Type()
 	if t.Kind() != reflect.Func {
 		f.err = errors.New("not a function")
 		return f
 	}
-	if t.NumIn() == 0 || !isContext(t.In(0)) {
+	if t.NumIn() == 0 || t.In(0) != contextType {
 		f.err = errFirstArg
 		return f
 	}
@@ -195,9 +124,6 @@ func Func(key string, i interface{}) *Function {
 		gob.Register(reflect.Zero(t.In(i)).Interface())
 	}
 
-	if old := funcs[f.key]; old != nil {
-		old.err = fmt.Errorf("multiple functions registered for %s in %s", key, file)
-	}
 	funcs[f.key] = f
 	return f
 }
@@ -211,7 +137,7 @@ type invocation struct {
 //   err := f.Call(c, ...)
 // is equivalent to
 //   t, _ := f.Task(...)
-//   _, err := taskqueue.Add(c, t, "")
+//   err := taskqueue.Add(c, t, "")
 func (f *Function) Call(c context.Context, args ...interface{}) error {
 	t, err := f.Task(args...)
 	if err != nil {
@@ -292,15 +218,6 @@ func (f *Function) Task(args ...interface{}) (*taskqueue.Task, error) {
 	}, nil
 }
 
-// Request returns the special task-queue HTTP request headers for the current
-// task queue handler. Returns an error if called from outside a delay.Func.
-func RequestHeaders(c context.Context) (*taskqueue.RequestHeaders, error) {
-	if ret, ok := c.Value(headersContextKey).(*taskqueue.RequestHeaders); ok {
-		return ret, nil
-	}
-	return nil, errOutsideDelayFunc
-}
-
 var taskqueueAdder = taskqueue.Add // for testing
 
 func init() {
@@ -311,8 +228,6 @@ func init() {
 
 func runFunc(c context.Context, w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
-
-	c = context.WithValue(c, headersContextKey, taskqueue.ParseRequestHeaders(req.Header))
 
 	var inv invocation
 	if err := gob.NewDecoder(req.Body).Decode(&inv); err != nil {

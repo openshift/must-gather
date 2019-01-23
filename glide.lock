@@ -1,5 +1,5 @@
 hash: ef6bc5c69adf89f99b28e2d61448ebe0df198075d8c26753959f493d029c7ef3
-updated: 2019-01-22T09:30:01.32730823-05:00
+updated: 2019-01-24T13:36:01.353232325-05:00
 imports:
 - name: github.com/docker/spdystream
   version: 449fdfce4d962303d702fec724ef0ad181c92528
@@ -51,13 +51,13 @@ imports:
 - name: github.com/modern-go/reflect2
   version: 05fbef0ca5da472bbf96c9322b84a53edc03c9fd
 - name: github.com/openshift/api
-  version: 4ec3bbc496faedf30f5fa640dde0eb9457f445b9
+  version: 8d1c1c5266e68bd2d6cde1b9c76bc48dc5a2b76a
   subpackages:
   - config/v1
   - route
   - route/v1
 - name: github.com/openshift/library-go
-  version: 5d1b2a52a0ef569db562b90e9136be543177ec8a
+  version: 5d4485484d0a510bffbf146235694e28da5ecbe9
   repo: https://github.com/soltysh/library-go
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
