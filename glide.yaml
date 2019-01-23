@@ -12,3 +12,7 @@ import:
   version: kubernetes-1.12.4
 - package: github.com/openshift/api
   version: master
+- package: github.com/openshift/library-go
+  repo:    https://github.com/soltysh/library-go
+  version: rebase-1.12.2
+
