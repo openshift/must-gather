@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -169,8 +168,6 @@ func (o *InspectOptions) Run() error {
 	if err := o.ensureDirectoryViable(o.baseDir, o.overwrite); err != nil {
 		return err
 	}
-
-	fmt.Println("GSSDefaults:" + strconv.FormatBool(o.gssdefaults))
 
 	// first, gather config.openshift.io resource data
 	errs := []error{}
