@@ -20,6 +20,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	ocpappsv1 "github.com/openshift/api/apps/v1"
+	ocpbuildv1 "github.com/openshift/api/build/v1"
 	"github.com/openshift/api/route"
 	"github.com/openshift/must-gather/pkg/util"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -167,15 +168,21 @@ func (o *InspectOptions) gatherNamespaceData(baseDir, namespace string) error {
 	log.Printf("    Collecting resources for namespace %q...\n", namespace)
 
 	resourcesTypesToStore := map[schema.GroupVersionResource]bool{
-		corev1.SchemeGroupVersion.WithResource("events"):               true,
-		corev1.SchemeGroupVersion.WithResource("pods"):                 true,
-		corev1.SchemeGroupVersion.WithResource("configmaps"):           true,
-		corev1.SchemeGroupVersion.WithResource("services"):             true,
-		appsv1.SchemeGroupVersion.WithResource("deployments"):          true,
-		ocpappsv1.SchemeGroupVersion.WithResource("deploymentconfigs"): true,
-		appsv1.SchemeGroupVersion.WithResource("daemonsets"):           true,
-		appsv1.SchemeGroupVersion.WithResource("statefulsets"):         true,
-		{Group: route.GroupName, Version: "v1", Resource: "routes"}:    true,
+		corev1.SchemeGroupVersion.WithResource("events"):                 true,
+		corev1.SchemeGroupVersion.WithResource("pods"):                   true,
+		corev1.SchemeGroupVersion.WithResource("configmaps"):             true,
+		corev1.SchemeGroupVersion.WithResource("services"):               true,
+		corev1.SchemeGroupVersion.WithResource("serviceaccounts"):        true,
+		corev1.SchemeGroupVersion.WithResource("replicationcontrollers"): true,
+		corev1.SchemeGroupVersion.WithResource("persistentvolumeclaims"): true,
+		appsv1.SchemeGroupVersion.WithResource("deployments"):            true,
+		appsv1.SchemeGroupVersion.WithResource("replicasets"):            true,
+		ocpappsv1.SchemeGroupVersion.WithResource("deploymentconfigs"):   true,
+		ocpbuildv1.SchemeGroupVersion.WithResource("builds"):             true,
+		ocpbuildv1.SchemeGroupVersion.WithResource("buildconfigs"):       true,
+		appsv1.SchemeGroupVersion.WithResource("daemonsets"):             true,
+		appsv1.SchemeGroupVersion.WithResource("statefulsets"):           true,
+		{Group: route.GroupName, Version: "v1", Resource: "routes"}:      true,
 	}
 	resourcesToStore := map[schema.GroupVersionResource]runtime.Object{}
 

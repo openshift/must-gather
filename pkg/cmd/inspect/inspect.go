@@ -41,6 +41,8 @@ var (
 var (
 	defaults = []string{
 		"clusteroperator",
+		"nodes",
+		"persistentvolumes",
 	}
 )
 
