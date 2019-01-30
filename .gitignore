@@ -11,4 +11,6 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-bin/*
+# Ignore any binaries that we create
+bin/*     ### I don't think we use this anymore. 
+openshift*
