@@ -183,6 +183,7 @@ func (o *InspectOptions) gatherNamespaceData(baseDir, namespace string) error {
 		corev1.SchemeGroupVersion.WithResource("configmaps"): true,
 		corev1.SchemeGroupVersion.WithResource("endpoints"): true,
 		corev1.SchemeGroupVersion.WithResource("podtemplates"): true,
+		corev1.SchemeGroupVersion.WithResource("serviceaccounts"): true,
 	}
 	resourcesToStore := map[schema.GroupVersionResource]runtime.Object{}
 
