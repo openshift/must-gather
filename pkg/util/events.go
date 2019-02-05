@@ -18,6 +18,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
+func GetEventBytesFromLocalFile(eventFileName string) ([]byte, error) {
+	return ioutil.ReadFile(eventFileName)
+}
+
 func GetEventBytesFromURL(eventFileURL string) ([]byte, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},

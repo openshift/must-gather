@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -26,7 +27,8 @@ type EventsOptions struct {
 	builder    *resource.Builder
 	args       []string
 
-	eventFileURL string
+	eventFileURL  string
+	eventFileName string
 
 	componentName  string
 	listComponents bool
@@ -73,7 +75,11 @@ func NewCmdEvents(parentName string, streams genericclioptions.IOStreams) *cobra
 
 func (o *EventsOptions) Complete(command *cobra.Command, args []string) error {
 	if len(args) == 1 {
-		o.eventFileURL = args[0]
+		if strings.HasPrefix(args[0], "http") {
+			o.eventFileURL = args[0]
+		} else {
+			o.eventFileName = args[0]
+		}
 	}
 	return nil
 }
@@ -85,8 +91,8 @@ func (o *EventsOptions) Validate() error {
 	if o.listComponents {
 		return nil
 	}
-	if len(o.eventFileURL) == 0 {
-		return fmt.Errorf("the event URL must be specified")
+	if len(o.eventFileURL) == 0 && len(o.eventFileName) == 0 {
+		return fmt.Errorf("the event URL or local file must be specified")
 	}
 	if len(o.componentName) == 0 {
 		return fmt.Errorf("the component name must be specified")
@@ -95,9 +101,22 @@ func (o *EventsOptions) Validate() error {
 }
 
 func (o *EventsOptions) Run() error {
-	eventFileBytes, err := util.GetEventBytesFromURL(o.eventFileURL)
-	if err != nil {
-		return err
+	var (
+		eventFileBytes []byte
+		err            error
+	)
+
+	if len(o.eventFileURL) > 0 {
+		eventFileBytes, err = util.GetEventBytesFromURL(o.eventFileURL)
+		if err != nil {
+			return err
+		}
+	}
+	if len(o.eventFileName) > 0 {
+		eventFileBytes, err = util.GetEventBytesFromLocalFile(o.eventFileName)
+		if err != nil {
+			return err
+		}
 	}
 	if err := util.PrintEvents(o.Out, eventFileBytes, o.absoluteTime, o.componentName, o.listComponents); err != nil {
 		return err
