@@ -181,6 +181,7 @@ func (o *InspectOptions) gatherNamespaceData(baseDir, namespace string) error {
 	resourcesTypesToStore := map[schema.GroupVersionResource]bool{
 		corev1.SchemeGroupVersion.WithResource("events"):     true,
 		corev1.SchemeGroupVersion.WithResource("configmaps"): true,
+		corev1.SchemeGroupVersion.WithResource("endpoints"): true,
 	}
 	resourcesToStore := map[schema.GroupVersionResource]runtime.Object{}
 
