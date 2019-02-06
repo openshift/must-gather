@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 
+	"github.com/openshift/must-gather/pkg/cmd/certinspection"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -47,6 +49,8 @@ func NewCmdDevHelpers(streams genericclioptions.IOStreams) *cobra.Command {
 
 	cmd.AddCommand(mustgather.NewCmdEvents("openshift-dev-helpers", streams))
 	cmd.AddCommand(mustgather.NewCmdAudit("openshift-dev-helpers", streams))
+	cmd.AddCommand(certinspection.NewCmdCertInspection(streams))
+
 	return cmd
 }
 
