@@ -28,6 +28,8 @@ import (
 	"github.com/openshift/must-gather/pkg/util"
 )
 
+const localPodUrlGetterPort = "37587"
+
 var (
 	inspectExample = `
 	# Collect debugging data for the "openshift-apiserver-operator"
@@ -137,10 +139,16 @@ func (o *InspectOptions) Complete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	o.fileWriter = util.NewMultiSourceWriter(printer)
-	o.podUrlGetter = &util.PortForwardURLGetter{
-		Protocol:  "https",
-		Host:      "localhost",
-		LocalPort: "37587",
+
+	log.Printf("SETUP: Creating ServiceAccount with token in order fetch required pod data...\n")
+	o.podUrlGetter, err = util.NewPortForwardUrlGetter(localPodUrlGetterPort).WithToken(o.restConfig)
+	if err != nil {
+		log.Printf("SETUP: Failed to obtain a ServiceAccount token... Some pod data-gathering steps may not succeed...\n")
+	} else {
+		log.Printf("SETUP: Successfully obtained ServiceAccount token\n")
+	}
+	if o.podUrlGetter == nil {
+		return fmt.Errorf("unable to obtain a pod URL getter: %v\n", err)
 	}
 
 	o.builder = resource.NewBuilder(o.configFlags)

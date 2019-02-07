@@ -5,16 +5,27 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	rbacv1client "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
 )
+
+const defaultPortForwardTokenNamespace = "must-gather"
 
 type defaultPortForwarder struct {
 	restConfig *rest.Config
@@ -23,7 +34,7 @@ type defaultPortForwarder struct {
 	ReadyChannel chan struct{}
 }
 
-func NewDefaultPortForwarder(adminConfig *rest.Config) *defaultPortForwarder {
+func newDefaultPortForwarder(adminConfig *rest.Config) *defaultPortForwarder {
 	return &defaultPortForwarder{
 		restConfig:   adminConfig,
 		StopChannel:  make(chan struct{}, 1),
@@ -112,12 +123,114 @@ type PortForwardURLGetter struct {
 	Protocol  string
 	Host      string
 	LocalPort string
+
+	Token string
+}
+
+func NewPortForwardUrlGetter(localPort string) *PortForwardURLGetter {
+	return &PortForwardURLGetter{
+		Protocol:  "https",
+		Host:      "localhost",
+		LocalPort: localPort,
+	}
+}
+
+func (c *PortForwardURLGetter) WithToken(config *rest.Config) (*PortForwardURLGetter, error) {
+	kubeClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return c, err
+	}
+
+	_, err = kubeClient.CoreV1().Namespaces().Create(&corev1.Namespace{
+		TypeMeta: metav1.TypeMeta{Kind: "Namespace", APIVersion: "v1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: defaultPortForwardTokenNamespace,
+		},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return nil, err
+	}
+
+	defaultSaName := fmt.Sprintf("%s-sa", defaultPortForwardTokenNamespace)
+	_, err = kubeClient.CoreV1().ServiceAccounts(defaultPortForwardTokenNamespace).Create(&corev1.ServiceAccount{
+		TypeMeta: metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      defaultSaName,
+			Namespace: defaultPortForwardTokenNamespace,
+		},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return c, err
+	}
+
+	rbacClient, err := rbacv1client.NewForConfig(config)
+	if err != nil {
+		return c, err
+	}
+
+	_, err = rbacClient.ClusterRoleBindings().Create(&rbacv1.ClusterRoleBinding{
+		TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "v1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-rolebinding", defaultPortForwardTokenNamespace),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      defaultSaName,
+				Namespace: defaultPortForwardTokenNamespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     "cluster-admin",
+		},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return c, err
+	}
+
+	secretName := ""
+	if err := wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
+		sa, err := kubeClient.CoreV1().ServiceAccounts(defaultPortForwardTokenNamespace).Get(defaultSaName, metav1.GetOptions{})
+		if err != nil && !errors.IsNotFound(err) {
+			return false, err
+		}
+
+		for _, secret := range sa.Secrets {
+			if !strings.HasPrefix(secret.Name, defaultSaName+"-token") {
+				continue
+			}
+
+			secretName = secret.Name
+			break
+		}
+		if len(secretName) == 0 {
+			return false, nil
+		}
+
+		return true, nil
+	}); err != nil {
+		return c, err
+	}
+
+	secret, err := kubeClient.CoreV1().Secrets(defaultPortForwardTokenNamespace).Get(secretName, metav1.GetOptions{})
+	if err != nil {
+		return c, err
+	}
+	token, ok := secret.Data[corev1.ServiceAccountTokenKey]
+	if !ok {
+		return c, fmt.Errorf("unable to retrieve secret with token for must-gather ServiceAccount")
+	}
+
+	c.Token = string(token)
+	return c, nil
 }
 
 func (c *PortForwardURLGetter) Get(urlPath string, pod *corev1.Pod, config *rest.Config, containerPort *RemoteContainerPort) (string, error) {
 	var result string
 	var lastErr error
-	forwarder := NewDefaultPortForwarder(config)
+	forwarder := newDefaultPortForwarder(config)
 
 	if err := forwarder.ForwardPortsAndExecute(pod, []string{fmt.Sprintf("%v:%v", c.LocalPort, containerPort.Port)}, func() {
 		url := fmt.Sprintf("%s://%s:%s", containerPort.Protocol, c.Host, c.LocalPort)
@@ -127,7 +240,13 @@ func (c *PortForwardURLGetter) Get(urlPath string, pod *corev1.Pod, config *rest
 			return
 		}
 
-		ioCloser, err := restClient.Get().RequestURI(urlPath).Stream()
+		req := restClient.Get().RequestURI(urlPath)
+		if len(c.Token) > 0 {
+			log.Printf("        Using ServiceAccount token to perform request to %q\n", req.URL().String())
+			req = req.SetHeader("Authorization", fmt.Sprintf("Bearer %s", c.Token))
+		}
+
+		ioCloser, err := req.Stream()
 		if err != nil {
 			lastErr = err
 			return
