@@ -69,7 +69,7 @@ func InspectResource(info *resource.Info, context *resourceContext, o *InspectOp
 				continue
 			}
 
-			relatedInfo, err := objectReferenceToResourceInfo(o.configFlags, relatedRef)
+			relatedInfo, err := objectReferenceToResourceInfo(o.ConfigFlags, relatedRef)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -93,7 +93,7 @@ func InspectResource(info *resource.Info, context *resourceContext, o *InspectOp
 			if context.visited.Has(resourceToContextKey(resource, info.Name)) {
 				continue
 			}
-			resourceInfos, err := groupResourceToInfos(o.configFlags, resource, info.Name)
+			resourceInfos, err := groupResourceToInfos(o.ConfigFlags, resource, info.Name)
 			if err != nil {
 				errs = append(errs, err)
 				continue

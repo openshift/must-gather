@@ -40,7 +40,7 @@ var (
 
 type InspectOptions struct {
 	printFlags  *genericclioptions.PrintFlags
-	configFlags *genericclioptions.ConfigFlags
+	ConfigFlags *genericclioptions.ConfigFlags
 
 	restConfig      *rest.Config
 	kubeClient      kubernetes.Interface
@@ -50,8 +50,7 @@ type InspectOptions struct {
 	podUrlGetter *util.PortForwardURLGetter
 
 	fileWriter    *util.MultiSourceFileWriter
-	builder       *resource.Builder
-	args          []string
+	Builder       *resource.Builder
 	namespace     string
 	allNamespaces bool
 
@@ -66,7 +65,7 @@ type InspectOptions struct {
 func NewInspectOptions(streams genericclioptions.IOStreams) *InspectOptions {
 	return &InspectOptions{
 		printFlags:  genericclioptions.NewPrintFlags("gathered").WithDefaultOutput("yaml").WithTypeSetter(scheme.Scheme),
-		configFlags: genericclioptions.NewConfigFlags(),
+		ConfigFlags: genericclioptions.NewConfigFlags(),
 		overwrite:   true,
 		IOStreams:   streams,
 	}
@@ -87,7 +86,7 @@ func NewCmdInspect(streams genericclioptions.IOStreams) *cobra.Command {
 			if err := o.Validate(); err != nil {
 				return err
 			}
-			if err := o.Run(); err != nil {
+			if err := o.Run(args...); err != nil {
 				return err
 			}
 
@@ -95,19 +94,21 @@ func NewCmdInspect(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&o.baseDir, "base-dir", "must-gather", "Root directory used for storing all gathered cluster operator data. Defaults to $(PWD)/must-gather")
-	cmd.Flags().BoolVar(&o.allNamespaces, "all-namespaces", o.allNamespaces, "If present, list the requested object(s) across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
-
-	o.configFlags.AddFlags(cmd.Flags())
-	o.printFlags.AddFlags(cmd)
+	o.AddFlags(cmd)
 	return cmd
 }
 
-func (o *InspectOptions) Complete(cmd *cobra.Command, args []string) error {
-	o.args = args
+func (o *InspectOptions) AddFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&o.baseDir, "base-dir", "must-gather", "Root directory used for storing all gathered cluster operator data. Defaults to $(PWD)/must-gather")
+	cmd.Flags().BoolVar(&o.allNamespaces, "all-namespaces", o.allNamespaces, "If present, list the requested object(s) across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
 
+	o.ConfigFlags.AddFlags(cmd.Flags())
+	o.printFlags.AddFlags(cmd)
+}
+
+func (o *InspectOptions) Complete(cmd *cobra.Command, args []string) error {
 	var err error
-	o.restConfig, err = o.configFlags.ToRESTConfig()
+	o.restConfig, err = o.ConfigFlags.ToRESTConfig()
 	if err != nil {
 		return err
 	}
@@ -122,12 +123,12 @@ func (o *InspectOptions) Complete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	o.discoveryClient, err = o.configFlags.ToDiscoveryClient()
+	o.discoveryClient, err = o.ConfigFlags.ToDiscoveryClient()
 	if err != nil {
 		return err
 	}
 
-	o.namespace, _, err = o.configFlags.ToRawKubeConfigLoader().Namespace()
+	o.namespace, _, err = o.ConfigFlags.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return err
 	}
@@ -143,7 +144,7 @@ func (o *InspectOptions) Complete(cmd *cobra.Command, args []string) error {
 		LocalPort: "37587",
 	}
 
-	o.builder = resource.NewBuilder(o.configFlags)
+	o.Builder = resource.NewBuilder(o.ConfigFlags)
 	return nil
 }
 
@@ -154,11 +155,11 @@ func (o *InspectOptions) Validate() error {
 	return nil
 }
 
-func (o *InspectOptions) Run() error {
-	r := o.builder.
+func (o *InspectOptions) Run(resources ...string) error {
+	r := o.Builder.
 		Unstructured().
 		NamespaceParam(o.namespace).DefaultNamespace().AllNamespaces(o.allNamespaces).
-		ResourceTypeOrNameArgs(true, o.args...).
+		ResourceTypeOrNameArgs(true, resources...).
 		Flatten().
 		Latest().Do()
 

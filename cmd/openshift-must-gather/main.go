@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 
+	"github.com/openshift/must-gather/pkg/cmd/inspectcontrolplane"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -44,6 +46,8 @@ func NewCmdMustGather(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	cmd.AddCommand(inspect.NewCmdInspect(streams))
+	cmd.AddCommand(inspectcontrolplane.NewCmdInspectControlPlane(streams))
+
 	return cmd
 }
 
