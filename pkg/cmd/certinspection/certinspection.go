@@ -147,24 +147,45 @@ func inspectConfigMap(obj *corev1.ConfigMap) {
 
 func inspectSecret(obj *corev1.Secret) {
 	resourceString := fmt.Sprintf("secrets/%s[%s]", obj.Name, obj.Namespace)
-	tlsCrt, ok := obj.Data["tls.crt"]
-	if !ok {
-		fmt.Printf("%s NOT a tls secret\n", resourceString)
-		return
-	}
-	if len(tlsCrt) == 0 {
-		fmt.Printf("%s MISSING tls.crt content\n", resourceString)
-		return
+	tlsCrt, isTLS := obj.Data["tls.crt"]
+	if isTLS {
+		fmt.Printf("%s - tls (%v)\n", resourceString, obj.CreationTimestamp.UTC())
+		if len(tlsCrt) == 0 {
+			fmt.Printf("%s MISSING tls.crt content\n", resourceString)
+			return
+		}
+
+		certificates, err := cert.ParseCertsPEM([]byte(tlsCrt))
+		if err != nil {
+			fmt.Printf("    ERROR - %v\n", err)
+			return
+		}
+		for _, curr := range certificates {
+			fmt.Printf("    %s\n", certDetail(curr))
+		}
 	}
 
-	fmt.Printf("%s - tls (%v)\n", resourceString, obj.CreationTimestamp.UTC())
-	certificates, err := cert.ParseCertsPEM([]byte(tlsCrt))
-	if err != nil {
-		fmt.Printf("    ERROR - %v\n", err)
-		return
+	caBundle, isCA := obj.Data["ca.crt"]
+	if isCA {
+		fmt.Printf("%s - token secret (%v)\n", resourceString, obj.CreationTimestamp.UTC())
+		if len(caBundle) == 0 {
+			fmt.Printf("%s MISSING ca.crt content\n", resourceString)
+			return
+		}
+
+		certificates, err := cert.ParseCertsPEM([]byte(caBundle))
+		if err != nil {
+			fmt.Printf("    ERROR - %v\n", err)
+			return
+		}
+		for _, curr := range certificates {
+			fmt.Printf("    %s\n", certDetail(curr))
+		}
 	}
-	for _, curr := range certificates {
-		fmt.Printf("    %s\n", certDetail(curr))
+
+	if !isTLS && !isCA {
+		fmt.Printf("%s NOT a tls secret or token secret\n", resourceString)
+		return
 	}
 }
 
@@ -197,12 +218,11 @@ func certDetail(certificate *x509.Certificate) string {
 	for _, curr := range certificate.ExtKeyUsage {
 		if curr == x509.ExtKeyUsageClientAuth {
 			usages = append(usages, "client")
+			continue
 		}
 		if curr == x509.ExtKeyUsageServerAuth {
 			usages = append(usages, "serving")
-		}
-		if curr == x509.ExtKeyUsageCodeSigning {
-			usages = append(usages, "signing")
+			continue
 		}
 
 		usages = append(usages, fmt.Sprintf("%d", curr))
