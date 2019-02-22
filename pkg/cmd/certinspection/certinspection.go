@@ -228,5 +228,22 @@ func certDetail(certificate *x509.Certificate) string {
 		usages = append(usages, fmt.Sprintf("%d", curr))
 	}
 
-	return fmt.Sprintf("%q [%s] issuer=%q (%v to %v)", humanName, strings.Join(usages, ","), signerHumanName, certificate.NotBefore.UTC(), certificate.NotAfter.UTC())
+	validServingNames := []string{}
+	for _, ip := range certificate.IPAddresses {
+		validServingNames = append(validServingNames, ip.String())
+	}
+	for _, dnsName := range certificate.DNSNames {
+		validServingNames = append(validServingNames, dnsName)
+	}
+	servingString := ""
+	if len(validServingNames) > 0 {
+		servingString = fmt.Sprintf(" validServingFor=[%s]", strings.Join(validServingNames, ","))
+	}
+
+	groupString := ""
+	if len(certificate.Subject.Organization) > 0 {
+		groupString = fmt.Sprintf(" groups=[%s]", strings.Join(certificate.Subject.Organization, ","))
+	}
+
+	return fmt.Sprintf("%q [%s]%s%s issuer=%q (%v to %v)", humanName, strings.Join(usages, ","), groupString, servingString, signerHumanName, certificate.NotBefore.UTC(), certificate.NotAfter.UTC())
 }
