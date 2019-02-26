@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -40,8 +41,10 @@ type AuditOptions struct {
 	namespaces []string
 	names      []string
 	users      []string
+	uids       []string
 	filename   string
 	failedOnly bool
+	output     string
 
 	genericclioptions.IOStreams
 }
@@ -75,7 +78,9 @@ func NewCmdAudit(parentName string, streams genericclioptions.IOStreams) *cobra.
 		},
 	}
 
-	cmd.Flags().StringVarP(&o.filename, "filename", "f", "", "Search for audit logs that contains specified URI")
+	cmd.Flags().StringVarP(&o.filename, "filename", "f", o.filename, "Search for audit logs that contains specified URI")
+	cmd.Flags().StringVarP(&o.output, "output", "o", o.output, "Choose your output format")
+	cmd.Flags().StringSliceVar(&o.uids, "uid", o.uids, "Only match specific UIDs")
 	cmd.Flags().StringSliceVar(&o.verbs, "verb", o.verbs, "Filter result of search to only contain the specified verb (eg. 'update', 'get', etc..)")
 	cmd.Flags().StringSliceVar(&o.resources, "resource", o.resources, "Filter result of search to only contain the specified resource.)")
 	cmd.Flags().StringSliceVarP(&o.namespaces, "namespace", "n", o.namespaces, "Filter result of search to only contain the specified namespace.)")
@@ -96,6 +101,9 @@ func (o *AuditOptions) Validate() error {
 
 func (o *AuditOptions) Run() error {
 	filters := AuditFilters{}
+	if len(o.uids) > 0 {
+		filters = append(filters, &FilterByUIDs{UIDs: sets.NewString(o.uids...)})
+	}
 	if len(o.names) > 0 {
 		filters = append(filters, &FilterByNames{Names: sets.NewString(o.names...)})
 	}
@@ -132,7 +140,21 @@ func (o *AuditOptions) Run() error {
 	}
 	events = filters.FilterEvents(events...)
 
-	PrintAuditEvents(o.Out, events)
+	switch o.output {
+	case "":
+		PrintAuditEvents(o.Out, events)
+	case "wide":
+		PrintAuditEventsWide(o.Out, events)
+	case "json":
+		encoder := json.NewEncoder(o.Out)
+		for _, event := range events {
+			if err := encoder.Encode(event); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported output format")
+	}
 
 	return nil
 }

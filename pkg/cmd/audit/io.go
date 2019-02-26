@@ -25,6 +25,16 @@ func PrintAuditEvents(writer io.Writer, events []*auditv1.Event) {
 	}
 }
 
+func PrintAuditEventsWide(writer io.Writer, events []*auditv1.Event) {
+	w := tabwriter.NewWriter(writer, 20, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
+	defer w.Flush()
+
+	for _, event := range events {
+		duration := event.StageTimestamp.Time.Sub(event.RequestReceivedTimestamp.Time)
+		fmt.Fprintf(w, "%s (%v) [%s][%s] [%d]\t %s\t [%s]\n", event.RequestReceivedTimestamp.Format("15:04:05"), event.AuditID, strings.ToUpper(event.Verb), duration, event.ResponseStatus.Code, event.RequestURI, event.User.Username)
+	}
+}
+
 func GetEvents(auditFilename string) ([]*auditv1.Event, error) {
 	stat, err := os.Stat(auditFilename)
 	if err != nil {
@@ -80,7 +90,7 @@ func GetEvents(auditFilename string) ([]*auditv1.Event, error) {
 			if info.Name() == stat.Name() {
 				return nil
 			}
-			newEvents, err := GetEvents(info.Name())
+			newEvents, err := GetEvents(filepath.Join(auditFilename, info.Name()))
 			if err != nil {
 				return err
 			}

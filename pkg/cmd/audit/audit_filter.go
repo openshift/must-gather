@@ -97,6 +97,27 @@ func (f *FilterByNames) FilterEvents(events ...*auditv1.Event) []*auditv1.Event 
 	return ret
 }
 
+type FilterByUIDs struct {
+	UIDs sets.String
+}
+
+func (f *FilterByUIDs) FilterEvents(events ...*auditv1.Event) []*auditv1.Event {
+	ret := []*auditv1.Event{}
+	for i := range events {
+		event := events[i]
+		currUID := string(event.AuditID)
+		// check for an anti-match
+		if f.UIDs.Has("-" + currUID) {
+			continue
+		}
+		if f.UIDs.Has(currUID) {
+			ret = append(ret, event)
+		}
+	}
+
+	return ret
+}
+
 type FilterByUser struct {
 	Users sets.String
 }
