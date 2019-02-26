@@ -24,6 +24,9 @@ var (
 
 	# find all GETs against deployments and any resource under config.openshift.io
 	openshift-dev-helpers audit -f audit.log --resource=deployments.* --resource=*.config.openshift.io --verb=get
+
+	# find CREATEs of everything except SAR and tokenreview
+	openshift-dev-helpers audit -f audit.log --verb=create --resource=*.* --resource=-subjectaccessreviews.* --resource=-tokenreviews.*
 `
 )
 

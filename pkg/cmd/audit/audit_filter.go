@@ -52,6 +52,10 @@ func (f *FilterByNamespaces) FilterEvents(events ...*auditv1.Event) []*auditv1.E
 	for i := range events {
 		event := events[i]
 		ns, _, _ := URIToParts(event.RequestURI)
+		// check for an anti-match
+		if f.Namespaces.Has("-" + ns) {
+			continue
+		}
 		if f.Namespaces.Has(ns) {
 			ret = append(ret, event)
 		}
@@ -69,11 +73,20 @@ func (f *FilterByNames) FilterEvents(events ...*auditv1.Event) []*auditv1.Event 
 	for i := range events {
 		event := events[i]
 		_, _, name := URIToParts(event.RequestURI)
+		// check for an anti-match
+		if f.Names.Has("-" + name) {
+			continue
+		}
 		if f.Names.Has(name) {
 			ret = append(ret, event)
 		}
+
 		// if we didn't match, check the objectref
 		if event.ObjectRef == nil {
+			continue
+		}
+		// check for an anti-match
+		if f.Names.Has("-" + event.ObjectRef.Name) {
 			continue
 		}
 		if f.Names.Has(event.ObjectRef.Name) {
@@ -92,6 +105,10 @@ func (f *FilterByUser) FilterEvents(events ...*auditv1.Event) []*auditv1.Event {
 	ret := []*auditv1.Event{}
 	for i := range events {
 		event := events[i]
+		// check for an anti-match
+		if f.Users.Has("-" + event.User.Username) {
+			continue
+		}
 		if f.Users.Has(event.User.Username) {
 			ret = append(ret, event)
 		}
@@ -108,6 +125,10 @@ func (f *FilterByVerbs) FilterEvents(events ...*auditv1.Event) []*auditv1.Event 
 	ret := []*auditv1.Event{}
 	for i := range events {
 		event := events[i]
+		// check for an anti-match
+		if f.Verbs.Has("-" + event.Verb) {
+			continue
+		}
 		if f.Verbs.Has(event.Verb) {
 			ret = append(ret, event)
 		}
@@ -125,11 +146,38 @@ func (f *FilterByResources) FilterEvents(events ...*auditv1.Event) []*auditv1.Ev
 	for i := range events {
 		event := events[i]
 		_, gvr, _ := URIToParts(event.RequestURI)
+		antiMatch := schema.GroupResource{Resource: "-" + gvr.Resource, Group: gvr.Group}
+
+		// check for an anti-match
+		if f.Resources[antiMatch] {
+			continue
+		}
 		if f.Resources[gvr.GroupResource()] {
 			ret = append(ret, event)
 		}
+
 		// if we aren't an exact match, match on resource only if group is '*'
+		// check for an anti-match
+		antiMatched := false
 		for currResource := range f.Resources {
+			if currResource.Group == "*" && currResource.Resource == antiMatch.Resource {
+				antiMatched = true
+				break
+			}
+			if currResource.Resource == "-*" && currResource.Group == gvr.Group {
+				antiMatched = true
+				break
+			}
+		}
+		if antiMatched {
+			continue
+		}
+
+		for currResource := range f.Resources {
+			if currResource.Group == "*" && currResource.Resource == "*" {
+				ret = append(ret, event)
+				break
+			}
 			if currResource.Group == "*" && currResource.Resource == gvr.Resource {
 				ret = append(ret, event)
 				break
