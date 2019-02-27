@@ -6,4 +6,5 @@ RUN go build -ldflags "-X $GO_PACKAGE/pkg/version.versionFromGit=$(git describe 
 
 FROM registry.svc.ci.openshift.org/openshift/origin-v4.0:base
 COPY --from=builder /go/src/github.com/openshift/must-gather/openshift-must-gather /usr/bin/
+COPY --from=builder /go/src/github.com/openshift/must-gather/collection-scripts/* /usr/bin/
 
