@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -44,7 +45,7 @@ func GetEventBytesFromURL(eventFileURL string) ([]byte, error) {
 // PrintEvents prints the given events JSON in human readable way.
 // If componentName is provided, only events related to that component are printed out (use '*' to print all events).
 // If printComponents is provided we only print the component names.
-func PrintEvents(writer io.Writer, eventBytes []byte, absoluteTime bool, componentName string, printComponents bool) error {
+func PrintEvents(writer io.Writer, eventBytes []byte, absoluteTime bool, componentRegexp string, printComponents bool) error {
 	eventList := v1.EventList{}
 	if err := json.Unmarshal(eventBytes, &eventList); err != nil {
 		log.Fatal(err.Error())
@@ -58,6 +59,11 @@ func PrintEvents(writer io.Writer, eventBytes []byte, absoluteTime bool, compone
 	englishFormat.PastSuffix = " "
 	w := tabwriter.NewWriter(writer, 60, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
 
+	re, err := regexp.Compile(componentRegexp)
+	if err != nil {
+		return err
+	}
+
 	components := sets.NewString()
 
 	for _, item := range eventList.Items {
@@ -67,14 +73,14 @@ func PrintEvents(writer io.Writer, eventBytes []byte, absoluteTime bool, compone
 		if printComponents {
 			continue
 		}
-		if item.Source.Component != componentName && componentName != `*` {
+		if !re.MatchString(item.Source.Component) && componentRegexp != "*" {
 			continue
 		}
 		message := item.Message
 		humanTime := item.FirstTimestamp.Time.String()
 		if !absoluteTime {
 			humanTime := englishFormat.FormatReference(eventList.Items[0].FirstTimestamp.Time, item.FirstTimestamp.Time)
-			if componentName == `*` {
+			if componentRegexp == `*` {
 				component := item.Source.Component
 				if len(component) > 35 {
 					component = component[0:35] + "..."

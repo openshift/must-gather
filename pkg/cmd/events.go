@@ -66,7 +66,7 @@ func NewCmdEvents(parentName string, streams genericclioptions.IOStreams) *cobra
 		},
 	}
 
-	cmd.Flags().StringVar(&o.componentName, "component", "", "Name of the component to filter events for (eg. 'openshift-apiserver-operator')")
+	cmd.Flags().StringVar(&o.componentName, "component", "", "Regular expression to filter the events by component name (eg. 'kube-apiserver-.*')")
 	cmd.Flags().BoolVar(&o.listComponents, "list-components", false, "List all available component names in events")
 	cmd.Flags().BoolVar(&o.absoluteTime, "absolute-time", false, "Show absolute time instead of relative")
 
