@@ -55,6 +55,7 @@ func (*PodsAnalyzer) Analyze(content []byte) (string, error) {
 				return err
 			}
 			if exitCode != 0 {
+				restartCount, _, _ := unstructured.NestedInt64(status.(map[string]interface{}), "restartCount")
 				message, _, err := unstructured.NestedString(status.(map[string]interface{}), "lastState", "terminated", "message")
 				if err != nil {
 					return err
@@ -63,7 +64,7 @@ func (*PodsAnalyzer) Analyze(content []byte) (string, error) {
 				if err != nil {
 					return err
 				}
-				resultContainers = append(resultContainers, fmt.Sprintf("  [!] Container %q exited with %d:\n   %s\n", containerName, exitCode, message))
+				resultContainers = append(resultContainers, fmt.Sprintf("  [!] Container %q restarted %d times, last exit %d caused by:\n   %s\n", containerName, restartCount, exitCode, message))
 			}
 		}
 
