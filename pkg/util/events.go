@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"regexp"
 	"sort"
 	"strings"
 	"text/tabwriter"
 
+	"github.com/ghodss/yaml"
+	"github.com/golang/glog"
 	"github.com/xeonx/timeago"
 
 	"k8s.io/api/core/v1"
@@ -48,7 +49,9 @@ func GetEventBytesFromURL(eventFileURL string) ([]byte, error) {
 func PrintEvents(writer io.Writer, eventBytes []byte, absoluteTime bool, componentRegexp string, printComponents bool) error {
 	eventList := v1.EventList{}
 	if err := json.Unmarshal(eventBytes, &eventList); err != nil {
-		log.Fatal(err.Error())
+		if err = yaml.Unmarshal(eventBytes, &eventList); err != nil {
+			glog.Fatal(err.Error())
+		}
 	}
 
 	sort.Slice(eventList.Items, func(i, j int) bool {
