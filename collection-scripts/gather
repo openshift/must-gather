@@ -16,7 +16,7 @@ resources+=(nodes machines machineconfigs)
 resources+=(ns/default ns/openshift ns/kube-system)
 
 # Storage Resources
-resources+=(storageclasses volumes)
+resources+=(storageclasses persistentvolumes volumeattachments)
 
 # Networking Resources
 resources+=(clusternetworks hostsubnets)
