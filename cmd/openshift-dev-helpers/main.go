@@ -3,9 +3,10 @@ package main
 import (
 	"os"
 
-	"github.com/openshift/must-gather/pkg/cmd/analyze-e2e"
+	analyze_e2e "github.com/openshift/must-gather/pkg/cmd/analyze-e2e"
 	"github.com/openshift/must-gather/pkg/cmd/audit"
 	"github.com/openshift/must-gather/pkg/cmd/certinspection"
+	"github.com/openshift/must-gather/pkg/cmd/events"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -49,7 +50,7 @@ func NewCmdDevHelpers(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(mustgather.NewCmdEvents("openshift-dev-helpers", streams))
+	cmd.AddCommand(events.NewCmdEvent("openshift-dev-helpers", streams))
 	cmd.AddCommand(audit.NewCmdAudit("openshift-dev-helpers", streams))
 	cmd.AddCommand(mustgather.NewCmdRevisionStatus("openshift-dev-helpers", streams))
 	cmd.AddCommand(certinspection.NewCmdCertInspection(streams))
