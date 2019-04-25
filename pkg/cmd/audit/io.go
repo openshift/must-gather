@@ -19,9 +19,14 @@ func PrintAuditEvents(writer io.Writer, events []*auditv1.Event) {
 	w := tabwriter.NewWriter(writer, 20, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
 	defer w.Flush()
 
+	//
 	for _, event := range events {
 		duration := event.StageTimestamp.Time.Sub(event.RequestReceivedTimestamp.Time)
-		fmt.Fprintf(w, "%s [%s][%s] [%d]\t %s\t [%s]\n", event.RequestReceivedTimestamp.Format("15:04:05"), strings.ToUpper(event.Verb), duration, event.ResponseStatus.Code, event.RequestURI, event.User.Username)
+		code := int32(0)
+		if event.ResponseStatus != nil {
+			code = event.ResponseStatus.Code
+		}
+		fmt.Fprintf(w, "%s [%s][%s] [%d]\t %s\t [%s]\n", event.RequestReceivedTimestamp.Format("15:04:05"), strings.ToUpper(event.Verb), duration, code, event.RequestURI, event.User.Username)
 	}
 }
 
@@ -31,7 +36,11 @@ func PrintAuditEventsWide(writer io.Writer, events []*auditv1.Event) {
 
 	for _, event := range events {
 		duration := event.StageTimestamp.Time.Sub(event.RequestReceivedTimestamp.Time)
-		fmt.Fprintf(w, "%s (%v) [%s][%s] [%d]\t %s\t [%s]\n", event.RequestReceivedTimestamp.Format("15:04:05"), event.AuditID, strings.ToUpper(event.Verb), duration, event.ResponseStatus.Code, event.RequestURI, event.User.Username)
+		code := int32(0)
+		if event.ResponseStatus != nil {
+			code = event.ResponseStatus.Code
+		}
+		fmt.Fprintf(w, "%s (%v) [%s][%s] [%d]\t %s\t [%s]\n", event.RequestReceivedTimestamp.Format("15:04:05"), event.AuditID, strings.ToUpper(event.Verb), duration, code, event.RequestURI, event.User.Username)
 	}
 }
 
