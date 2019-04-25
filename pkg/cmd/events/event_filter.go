@@ -1,6 +1,7 @@
 package events
 
 import (
+	"github.com/openshift/must-gather/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -47,12 +48,8 @@ func (f *FilterByNamespaces) FilterEvents(events ...*corev1.Event) []*corev1.Eve
 	ret := []*corev1.Event{}
 	for i := range events {
 		event := events[i]
-		ns := event.InvolvedObject.Namespace
-		// check for an anti-match
-		if f.Namespaces.Has("-" + ns) {
-			continue
-		}
-		if f.Namespaces.Has(ns) {
+
+		if util.AcceptString(f.Namespaces, event.InvolvedObject.Namespace) {
 			ret = append(ret, event)
 		}
 	}
@@ -68,12 +65,8 @@ func (f *FilterByNames) FilterEvents(events ...*corev1.Event) []*corev1.Event {
 	ret := []*corev1.Event{}
 	for i := range events {
 		event := events[i]
-		name := event.InvolvedObject.Name
-		// check for an anti-match
-		if f.Names.Has("-" + name) {
-			continue
-		}
-		if f.Names.Has(name) {
+
+		if util.AcceptString(f.Names, event.InvolvedObject.Name) {
 			ret = append(ret, event)
 		}
 	}
@@ -89,12 +82,8 @@ func (f *FilterByReasons) FilterEvents(events ...*corev1.Event) []*corev1.Event 
 	ret := []*corev1.Event{}
 	for i := range events {
 		event := events[i]
-		reason := event.Reason
-		// check for an anti-match
-		if f.Reasons.Has("-" + reason) {
-			continue
-		}
-		if f.Reasons.Has(reason) {
+
+		if util.AcceptString(f.Reasons, event.Reason) {
 			ret = append(ret, event)
 		}
 	}
@@ -110,12 +99,8 @@ func (f *FilterByUIDs) FilterEvents(events ...*corev1.Event) []*corev1.Event {
 	ret := []*corev1.Event{}
 	for i := range events {
 		event := events[i]
-		currUID := string(event.InvolvedObject.UID)
-		// check for an anti-match
-		if f.UIDs.Has("-" + currUID) {
-			continue
-		}
-		if f.UIDs.Has(currUID) {
+
+		if util.AcceptString(f.UIDs, string(event.InvolvedObject.UID)) {
 			ret = append(ret, event)
 		}
 	}
@@ -131,11 +116,8 @@ func (f *FilterByComponent) FilterEvents(events ...*corev1.Event) []*corev1.Even
 	ret := []*corev1.Event{}
 	for i := range events {
 		event := events[i]
-		// check for an anti-match
-		if f.Components.Has("-" + event.ReportingController) {
-			continue
-		}
-		if f.Components.Has(event.ReportingController) {
+
+		if util.AcceptString(f.Components, event.ReportingController) {
 			ret = append(ret, event)
 		}
 	}
