@@ -3,6 +3,7 @@ package events
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -45,6 +46,7 @@ type EventOptions struct {
 	filename    string
 	warningOnly bool
 	output      string
+	sortBy      string
 
 	genericclioptions.IOStreams
 }
@@ -98,6 +100,7 @@ func NewCmdEvent(parentName string, streams genericclioptions.IOStreams) *cobra.
 	cmd.Flags().StringSliceVar(&o.reasons, "reason", o.reasons, "Filter result of search to only contain the specified reason.)")
 	cmd.Flags().StringSliceVar(&o.components, "component", o.components, "Filter result of search to only contain the specified component.)")
 	cmd.Flags().BoolVar(&o.warningOnly, "warning-only", false, "Filter result of search to only contain http failures.)")
+	cmd.Flags().StringVar(&o.sortBy, "by", o.sortBy, "Choose how to sort")
 
 	o.configFlags.AddFlags(cmd.Flags())
 	o.builderFlags.AddFlags(cmd.Flags())
@@ -125,12 +128,19 @@ func (o *EventOptions) Run() error {
 
 		switch castObj := info.Object.(type) {
 		case *corev1.Event:
-			events = append(events, info.Object.(*corev1.Event))
+			event := info.Object.(*corev1.Event)
+			events = append(events, event)
+
+			// inject the event twice when it appeared multiple times for easy sorting/reading
+			if event.LastTimestamp != event.FirstTimestamp {
+				alternateEvent := event.DeepCopy()
+				alternateEvent.FirstTimestamp = event.LastTimestamp
+				events = append(events, alternateEvent)
+			}
 		default:
 			return fmt.Errorf("unhandled resource: %T", castObj)
 		}
 
-		fmt.Println()
 		return nil
 	})
 	if err != nil {
@@ -172,6 +182,11 @@ func (o *EventOptions) Run() error {
 	}
 
 	events = filters.FilterEvents(events...)
+
+	switch o.sortBy {
+	case "", "time":
+		sort.Sort(byTime(events))
+	}
 
 	switch o.output {
 	case "components":

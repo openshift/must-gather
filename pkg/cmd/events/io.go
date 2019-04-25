@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"text/tabwriter"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -26,7 +25,6 @@ func PrintComponents(writer io.Writer, events []*corev1.Event) error {
 }
 
 func PrintEvents(writer io.Writer, events []*corev1.Event) error {
-
 	for _, event := range events {
 		message := event.Message
 		message = strings.Replace(message, "\\\\", "\\", -1)
@@ -35,9 +33,7 @@ func PrintEvents(writer io.Writer, events []*corev1.Event) error {
 		message = strings.Replace(message, `"""`, `"`, -1)
 		message = strings.Replace(message, "\t", "\t", -1)
 
-		firstTime := event.FirstTimestamp.Time.String()
-		lastTime := event.LastTimestamp.Time.String()
-		if _, err := fmt.Fprintf(writer, "%s to %s (%d) %q %s %s\n", firstTime, lastTime, event.Count, event.InvolvedObject.Namespace, event.Reason, message); err != nil {
+		if _, err := fmt.Fprintf(writer, "%s (%d) %q %s %s\n", event.FirstTimestamp.Format("15:04:05"), event.Count, event.InvolvedObject.Namespace, event.Reason, message); err != nil {
 			return err
 		}
 	}
@@ -46,25 +42,5 @@ func PrintEvents(writer io.Writer, events []*corev1.Event) error {
 }
 
 func PrintEventsWide(writer io.Writer, events []*corev1.Event) error {
-	w := tabwriter.NewWriter(writer, 60, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
-
-	components := sets.NewString()
-
-	for _, event := range events {
-		if !components.Has(event.Source.Component) {
-			components.Insert(event.Source.Component)
-		}
-
-		message := event.Message
-		firstTime := event.FirstTimestamp.Time.String()
-		lastTime := event.LastTimestamp.Time.String()
-		if _, err := fmt.Fprintf(w, "%s-%s (%d) %s\t%s\n", firstTime, lastTime, event.Count, event.Reason, message); err != nil {
-			return err
-		}
-		if err := w.Flush(); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return PrintEvents(writer, events)
 }
