@@ -3,6 +3,8 @@ package audit
 import (
 	"strings"
 
+	"github.com/openshift/must-gather/pkg/util"
+
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
@@ -52,11 +54,8 @@ func (f *FilterByNamespaces) FilterEvents(events ...*auditv1.Event) []*auditv1.E
 	for i := range events {
 		event := events[i]
 		ns, _, _ := URIToParts(event.RequestURI)
-		// check for an anti-match
-		if f.Namespaces.Has("-" + ns) {
-			continue
-		}
-		if f.Namespaces.Has(ns) {
+
+		if util.AcceptString(f.Namespaces, ns) {
 			ret = append(ret, event)
 		}
 	}
@@ -73,23 +72,18 @@ func (f *FilterByNames) FilterEvents(events ...*auditv1.Event) []*auditv1.Event 
 	for i := range events {
 		event := events[i]
 		_, _, name := URIToParts(event.RequestURI)
-		// check for an anti-match
-		if f.Names.Has("-" + name) {
-			continue
-		}
-		if f.Names.Has(name) {
+
+		if util.AcceptString(f.Names, name) {
 			ret = append(ret, event)
+			continue
 		}
 
 		// if we didn't match, check the objectref
 		if event.ObjectRef == nil {
 			continue
 		}
-		// check for an anti-match
-		if f.Names.Has("-" + event.ObjectRef.Name) {
-			continue
-		}
-		if f.Names.Has(event.ObjectRef.Name) {
+
+		if util.AcceptString(f.Names, event.ObjectRef.Name) {
 			ret = append(ret, event)
 		}
 	}
@@ -105,12 +99,8 @@ func (f *FilterByUIDs) FilterEvents(events ...*auditv1.Event) []*auditv1.Event {
 	ret := []*auditv1.Event{}
 	for i := range events {
 		event := events[i]
-		currUID := string(event.AuditID)
-		// check for an anti-match
-		if f.UIDs.Has("-" + currUID) {
-			continue
-		}
-		if f.UIDs.Has(currUID) {
+
+		if util.AcceptString(f.UIDs, string(event.AuditID)) {
 			ret = append(ret, event)
 		}
 	}
@@ -126,11 +116,8 @@ func (f *FilterByUser) FilterEvents(events ...*auditv1.Event) []*auditv1.Event {
 	ret := []*auditv1.Event{}
 	for i := range events {
 		event := events[i]
-		// check for an anti-match
-		if f.Users.Has("-" + event.User.Username) {
-			continue
-		}
-		if f.Users.Has(event.User.Username) {
+
+		if util.AcceptString(f.Users, event.User.Username) {
 			ret = append(ret, event)
 		}
 	}
@@ -146,11 +133,8 @@ func (f *FilterByVerbs) FilterEvents(events ...*auditv1.Event) []*auditv1.Event 
 	ret := []*auditv1.Event{}
 	for i := range events {
 		event := events[i]
-		// check for an anti-match
-		if f.Verbs.Has("-" + event.Verb) {
-			continue
-		}
-		if f.Verbs.Has(event.Verb) {
+
+		if util.AcceptString(f.Verbs, event.Verb) {
 			ret = append(ret, event)
 		}
 	}
