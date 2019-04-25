@@ -15,6 +15,11 @@ import (
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
 )
 
+type eventWithCounter struct {
+	event *auditv1.Event
+	count int64
+}
+
 func PrintAuditEvents(writer io.Writer, events []*auditv1.Event) {
 	w := tabwriter.NewWriter(writer, 20, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
 	defer w.Flush()
@@ -30,6 +35,22 @@ func PrintAuditEvents(writer io.Writer, events []*auditv1.Event) {
 	}
 }
 
+func PrintAuditEventsWithCount(writer io.Writer, events []*eventWithCounter) {
+	w := tabwriter.NewWriter(writer, 20, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
+	defer w.Flush()
+
+	//
+	for _, event := range events {
+		duration := event.event.StageTimestamp.Time.Sub(event.event.RequestReceivedTimestamp.Time)
+		code := int32(0)
+		if event.event.ResponseStatus != nil {
+			code = event.event.ResponseStatus.Code
+		}
+		fmt.Fprintf(w, "%dx %s [%s][%s] [%d]\t %s\t [%s]\n", event.count, event.event.RequestReceivedTimestamp.Format("15:04:05"), strings.ToUpper(event.event.Verb), duration, code, event.event.RequestURI,
+			event.event.User.Username)
+	}
+}
+
 func PrintAuditEventsWide(writer io.Writer, events []*auditv1.Event) {
 	w := tabwriter.NewWriter(writer, 20, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
 	defer w.Flush()
@@ -41,6 +62,50 @@ func PrintAuditEventsWide(writer io.Writer, events []*auditv1.Event) {
 			code = event.ResponseStatus.Code
 		}
 		fmt.Fprintf(w, "%s (%v) [%s][%s] [%d]\t %s\t [%s]\n", event.RequestReceivedTimestamp.Format("15:04:05"), event.AuditID, strings.ToUpper(event.Verb), duration, code, event.RequestURI, event.User.Username)
+	}
+}
+
+func PrintTopByVerbAuditEvents(writer io.Writer, events []*auditv1.Event) {
+	countVerbs := map[string][]*auditv1.Event{}
+
+	for _, event := range events {
+		countVerbs[event.Verb] = append(countVerbs[event.Verb], event)
+	}
+
+	result := map[string][]*eventWithCounter{}
+
+	for verb, eventList := range countVerbs {
+		countedEvents := []*eventWithCounter{}
+		for _, event := range eventList {
+			found := false
+			for i, countedEvent := range countedEvents {
+				if countedEvent.event.RequestURI == event.RequestURI && countedEvent.event.User.Username == event.User.Username {
+					countedEvents[i].count += 1
+					found = true
+					break
+				}
+			}
+			if !found {
+				countedEvents = append(countedEvents, &eventWithCounter{event: event, count: 0})
+			}
+		}
+
+		sort.Slice(countedEvents, func(i, j int) bool {
+			return countedEvents[i].count >= countedEvents[j].count
+		})
+		if len(countedEvents) <= 5 {
+			result[verb] = countedEvents
+			continue
+		}
+		result[verb] = countedEvents[0:5]
+	}
+
+	w := tabwriter.NewWriter(writer, 20, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
+	defer w.Flush()
+
+	for verb, eventWithCounter := range result {
+		fmt.Fprintf(w, "\nTop 5 %q:\n", strings.ToUpper(verb))
+		PrintAuditEventsWithCount(writer, eventWithCounter)
 	}
 }
 

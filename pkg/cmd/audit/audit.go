@@ -143,6 +143,8 @@ func (o *AuditOptions) Run() error {
 	switch o.output {
 	case "":
 		PrintAuditEvents(o.Out, events)
+	case "top":
+		PrintTopByVerbAuditEvents(o.Out, events)
 	case "wide":
 		PrintAuditEventsWide(o.Out, events)
 	case "json":
