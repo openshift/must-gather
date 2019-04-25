@@ -151,6 +151,8 @@ func (o *AuditOptions) Run() error {
 			PrintTopByVerbAuditEvents(o.Out, events)
 		case "user":
 			PrintTopByUserAuditEvents(o.Out, events)
+		case "resource":
+			PrintTopByResourceAuditEvents(o.Out, events)
 		default:
 			return fmt.Errorf("unsupported -by value")
 		}

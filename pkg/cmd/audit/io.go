@@ -97,6 +97,71 @@ func PrintTopByUserAuditEvents(writer io.Writer, events []*auditv1.Event) {
 	}
 }
 
+func PrintTopByResourceAuditEvents(writer io.Writer, events []*auditv1.Event) {
+	result := map[string]int64{}
+
+	for _, event := range events {
+		noParamsUri := strings.Split(event.RequestURI, "?")
+		uri := strings.Split(strings.TrimPrefix(noParamsUri[0], "/"), "/")
+		if len(uri) == 0 {
+			continue
+		}
+
+		switch uri[0] {
+		// kube api
+		case "api":
+			switch len(uri) {
+			case 1, 2:
+				continue
+			case 3:
+				// /api/v1/nodes -> v1/nodes
+				result[strings.Join(uri[1:3], "/")]++
+			default:
+				// /api/v1/namespaces/foo/secrets -> v1/secrets
+				if uri[2] == "namespaces" && len(uri) >= 5 {
+					result[uri[1]+"/"+uri[4]]++
+					continue
+				}
+				result[strings.Join(uri[1:3], "/")]++
+			}
+		case "apis":
+			switch len(uri) {
+			case 1, 2, 3:
+				continue
+			case 4:
+				result[strings.Join(uri[1:4], "/")]++
+			default:
+				if uri[3] == "namespaces" && len(uri) >= 6 {
+					result[uri[1]+"/"+uri[5]]++
+					continue
+				}
+				result[strings.Join(uri[1:4], "/")]++
+			}
+		}
+	}
+
+	w := tabwriter.NewWriter(writer, 20, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
+	defer w.Flush()
+
+	type sortedResultItem struct {
+		resource string
+		count    int64
+	}
+
+	sortedResult := []sortedResultItem{}
+
+	for resource, count := range result {
+		sortedResult = append(sortedResult, sortedResultItem{resource: resource, count: count})
+	}
+	sort.Slice(sortedResult, func(i, j int) bool {
+		return sortedResult[i].count >= sortedResult[j].count
+	})
+
+	for _, item := range sortedResult {
+		fmt.Fprintf(w, "%dx\t %s\n", item.count, item.resource)
+	}
+}
+
 func PrintTopByVerbAuditEvents(writer io.Writer, events []*auditv1.Event) {
 	countVerbs := map[string][]*auditv1.Event{}
 
@@ -118,7 +183,7 @@ func PrintTopByVerbAuditEvents(writer io.Writer, events []*auditv1.Event) {
 				}
 			}
 			if !found {
-				countedEvents = append(countedEvents, &eventWithCounter{event: event, count: 0})
+				countedEvents = append(countedEvents, &eventWithCounter{event: event, count: 1})
 			}
 		}
 
