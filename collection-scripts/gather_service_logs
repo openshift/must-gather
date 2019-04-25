@@ -1,0 +1,40 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="/must-gather"
+ROLES=${1:-master}         ### Defaults to only collecting things from Masters
+
+# Service Lists
+GENERAL_SERVICES=(kubelet crio)
+MASTER_SERVICES+=${2:-${GENERAL_SERVICES[@]}}
+MASTER_SERVICES+=()        ### Placeholder to extend Master only services
+NODE_SERVICES+=${2:-${GENERAL_SERVICES[@]}}
+NODE_SERVICES+=()          ### Placeholder to extend Node only services
+
+# Collect System Service Logs
+SERVICE_LOG_PATH="${BASE_COLLECTION_PATH}/host_service_logs/"
+
+function collect_serivce_logs {  ## Takes a node role input (master or worker)
+    PIDS=()
+    DIR_PATH=${SERVICE_LOG_PATH}/${1}s
+    echo "WARNING: Collecting one or more service logs on ALL $1 nodes in your cluster. This could take a large amount of time." >&2
+    mkdir -p ${DIR_PATH}
+    for service in ${NODE_SERVICES[@]}; do
+        echo "INFO: Collecting host service logs for $service"
+        /usr/bin/oc adm node-logs --role=$1 -u $service > ${DIR_PATH}/${service}_service.log &
+	PIDS+=($!)
+    done
+    echo "INFO: Waiting for worker host service log collection to complete ..."
+    wait ${PIDS[@]}
+    echo "INFO: Worker host service log collection to complete."
+}
+
+if [[ $ROLES == "master" ]]; then
+    collect_serivce_logs master
+elif [[ $ROLES == "worker" ]]; then
+    collect_serivce_logs worker
+elif [[ $ROLES == "master,worker" ]] || [[ $ROLES == "worker,master" ]] ; then
+    collect_serivce_logs master
+    collect_serivce_logs worker
+else
+    echo "Error: no role supplied or an invalid role was supplied." >&2
+    echo "Error: valid roles are 'master', 'worker', 'master,worker' or 'worker,master'." >&2
+fi

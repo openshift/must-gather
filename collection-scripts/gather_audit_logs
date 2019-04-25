@@ -1,0 +1,37 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="/must-gather"
+AUDIT_LOG_PATH="${BASE_COLLECTION_PATH}/audit_logs/"
+
+### Helper Functions
+function queue() {
+    local TARGET="${1}"
+    shift
+    local LIVE="$(jobs | wc -l)"
+    while [[ "${LIVE}" -ge 45 ]]; do
+        sleep 1
+	LIVE="$(jobs | wc -l)"
+    done
+    echo "${@}"
+    if [[ -n "${FILTER}" ]]; then
+        "${@}" | "${FILTER}" >"${TARGET}" &
+    else
+        "${@}" >"${TARGET}" &
+    fi
+}
+
+# Collect System Audit Logs
+function collect_audit_logs {  ### Takes an input of PATH 
+                               ###  (openshift-apiserver or kube-apiserver)
+
+    echo "WARNING: Collecting one or more audit logs on ALL masters in your cluster. This could take a large amount of time." >&2
+    mkdir -p ${AUDIT_LOG_PATH}/${1}
+    /usr/bin/oc adm node-logs --role=master --path=${1}/ > ${AUDIT_LOG_PATH}/${1}.audit_logs_listing
+    while IFS=$'\n' read -r line; do
+        IFS=' ' read -ra log <<< "${line}"
+	FILTER=gzip queue ${AUDIT_LOG_PATH}/${1}/"${log[0]}"-"${log[1]}".gz /usr/bin/oc adm node-logs "${log[0]}" --path=${1}/"${log[1]}"
+    done < ${AUDIT_LOG_PATH}/${1}.audit_logs_listing
+    echo "INFO: Audit logs for $1 collected."
+}
+
+collect_audit_logs openshift-apiserver
+collect_audit_logs kube-apiserver
