@@ -31,7 +31,15 @@ func PrintAuditEvents(writer io.Writer, events []*auditv1.Event) {
 		if event.ResponseStatus != nil {
 			code = event.ResponseStatus.Code
 		}
-		fmt.Fprintf(w, "%s [%s][%s] [%d]\t %s\t [%s]\n", event.RequestReceivedTimestamp.Format("15:04:05"), strings.ToUpper(event.Verb), duration, code, event.RequestURI, event.User.Username)
+		if _, err := fmt.Fprintf(w, "%s [%6s][%12s] [%3d]\t %s\t [%s]\n",
+			event.RequestReceivedTimestamp.Format("15:04:05"),
+			strings.ToUpper(event.Verb),
+			duration,
+			code,
+			event.RequestURI,
+			event.User.Username); err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -46,8 +54,14 @@ func PrintAuditEventsWithCount(writer io.Writer, events []*eventWithCounter) {
 		if event.event.ResponseStatus != nil {
 			code = event.event.ResponseStatus.Code
 		}
-		fmt.Fprintf(w, "%dx %s [%s][%s] [%d]\t %s\t [%s]\n", event.count, event.event.RequestReceivedTimestamp.Format("15:04:05"), strings.ToUpper(event.event.Verb), duration, code, event.event.RequestURI,
-			event.event.User.Username)
+		if _, err := fmt.Fprintf(w, "%8s [%12s] [%3d]\t %s\t [%s]\n",
+			fmt.Sprintf("%dx", event.count),
+			duration,
+			code,
+			event.event.RequestURI,
+			event.event.User.Username); err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -61,7 +75,16 @@ func PrintAuditEventsWide(writer io.Writer, events []*auditv1.Event) {
 		if event.ResponseStatus != nil {
 			code = event.ResponseStatus.Code
 		}
-		fmt.Fprintf(w, "%s (%v) [%s][%s] [%d]\t %s\t [%s]\n", event.RequestReceivedTimestamp.Format("15:04:05"), event.AuditID, strings.ToUpper(event.Verb), duration, code, event.RequestURI, event.User.Username)
+		if _, err := fmt.Fprintf(w, "%s (%v) [%s][%s] [%d]\t %s\t [%s]\n",
+			event.RequestReceivedTimestamp.Format("15:04:05"),
+			event.AuditID,
+			strings.ToUpper(event.Verb),
+			duration,
+			code,
+			event.RequestURI,
+			event.User.Username); err != nil {
+			panic(err)
+		}
 	}
 }
 
