@@ -186,6 +186,8 @@ func (o *EventOptions) Run() error {
 	switch o.sortBy {
 	case "", "time":
 		sort.Sort(byTime(events))
+	case "count":
+		sort.Sort(byFrequency(events))
 	}
 
 	switch o.output {
