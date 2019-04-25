@@ -45,6 +45,7 @@ type AuditOptions struct {
 	filename   string
 	failedOnly bool
 	output     string
+	topBy      string
 
 	genericclioptions.IOStreams
 }
@@ -86,6 +87,7 @@ func NewCmdAudit(parentName string, streams genericclioptions.IOStreams) *cobra.
 	cmd.Flags().StringSliceVarP(&o.namespaces, "namespace", "n", o.namespaces, "Filter result of search to only contain the specified namespace.)")
 	cmd.Flags().StringSliceVar(&o.names, "name", o.names, "Filter result of search to only contain the specified name.)")
 	cmd.Flags().StringSliceVar(&o.users, "user", o.users, "Filter result of search to only contain the specified user.)")
+	cmd.Flags().StringVar(&o.topBy, "by", o.topBy, "Switch the top output format (eg. -o top -by [verb,user,resource]).")
 	cmd.Flags().BoolVar(&o.failedOnly, "failed-only", false, "Filter result of search to only contain http failures.)")
 
 	return cmd
@@ -144,7 +146,14 @@ func (o *AuditOptions) Run() error {
 	case "":
 		PrintAuditEvents(o.Out, events)
 	case "top":
-		PrintTopByVerbAuditEvents(o.Out, events)
+		switch o.topBy {
+		case "verb":
+			PrintTopByVerbAuditEvents(o.Out, events)
+		case "user":
+			PrintTopByUserAuditEvents(o.Out, events)
+		default:
+			return fmt.Errorf("unsupported -by value")
+		}
 	case "wide":
 		PrintAuditEventsWide(o.Out, events)
 	case "json":

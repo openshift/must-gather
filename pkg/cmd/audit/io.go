@@ -65,6 +65,38 @@ func PrintAuditEventsWide(writer io.Writer, events []*auditv1.Event) {
 	}
 }
 
+func PrintTopByUserAuditEvents(writer io.Writer, events []*auditv1.Event) {
+	countUsers := map[string][]*auditv1.Event{}
+
+	for _, event := range events {
+		countUsers[event.User.Username] = append(countUsers[event.User.Username], event)
+	}
+
+	type userWithCount struct {
+		name  string
+		count int
+	}
+	result := []userWithCount{}
+
+	for username, userEvents := range countUsers {
+		result = append(result, userWithCount{name: username, count: len(userEvents)})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].count >= result[j].count
+	})
+
+	w := tabwriter.NewWriter(writer, 20, 0, 0, ' ', tabwriter.DiscardEmptyColumns)
+	defer w.Flush()
+
+	if len(result) > 10 {
+		result = result[0:10]
+	}
+
+	for _, r := range result {
+		fmt.Fprintf(w, "%dx\t %s\n", r.count, r.name)
+	}
+}
+
 func PrintTopByVerbAuditEvents(writer io.Writer, events []*auditv1.Event) {
 	countVerbs := map[string][]*auditv1.Event{}
 
