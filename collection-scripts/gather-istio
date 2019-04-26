@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Resource List
+resources=()
+
+# Istio Resources
+resources+=(ns/istio-operator ns/istio-system)
+
+# Custom Resources
+resources+=(CustomResourceDefinition)
+
+# Run the Collection of Resources using must-gather
+for resource in ${resources[@]}; do
+    /usr/bin/openshift-must-gather inspect ${resource}
+done
