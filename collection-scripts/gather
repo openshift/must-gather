@@ -24,6 +24,9 @@ resources+=(clusternetworks hostsubnets)
 # Autoscaler Resources
 resources+=(clusterautoscaler machineautoscaler)
 
+# Custom Resources
+resources+=(CustomResourceDefinition)
+
 # Run the Collection of Resources using must-gather
 for resource in ${resources[@]}; do
     /usr/bin/openshift-must-gather inspect ${resource}
