@@ -35,3 +35,5 @@ function collect_audit_logs {  ### Takes an input of PATH
 
 collect_audit_logs openshift-apiserver
 collect_audit_logs kube-apiserver
+
+exit 0

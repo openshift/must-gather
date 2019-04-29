@@ -1,4 +1,5 @@
 #!/bin/bash
+BASE_COLLECTION_PATH="/must-gather"
 
 # generate /must-gather/version file
 . version
@@ -32,14 +33,23 @@ resources+=(imagecontentsourcepolicies.operator.openshift.io)
 # Networking Resources
 resources+=(networks.operator.openshift.io)
 
-# Run the Collection of Resources using inspect
-# running accross all-namespaces for the few "Autoscaler" resouces.
-for resource in "${resources[@]}"; do
-    oc adm inspect --dest-dir must-gather ${resource}
+LOG_DIR="${BASE_COLLECTION_PATH}/must-gather-resource-logs"
+mkdir -p ${LOG_DIR}
+
+PIDS=()
+# Run the Collection of Resources using must-gather
+for resource in ${resources[@]}; do
+    oc adm inspect ${resource} 2> ${LOG_DIR}/${resource/\//_}.log &
+    PIDS+=($!)
 done
 
 # Collect System Audit Logs
-/usr/bin/gather_audit_logs
+/usr/bin/gather_audit_logs &
+PIDS+=($!)
 
 # Gather Service Logs (using a suplamental Script); Scoped to Masters.
-/usr/bin/gather_service_logs master
+/usr/bin/gather_service_logs master &
+PIDS+=($!)
+wait ${PIDS[@]}   ### Wait on all threads to complte.
+
+exit 0     #### We always want our script to exit 0 to ensure some data collection.
