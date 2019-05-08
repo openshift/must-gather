@@ -10,7 +10,7 @@ resources+=(clusteroperators)
 resources+=(certificatesigningrequests)
 
 # Machine/Node Resources
-resources+=(nodes machines machineconfigs)
+resources+=(nodes machines machineconfigs machineconfigpools)
 
 # Namespaces/Project Resources
 resources+=(ns/default ns/openshift ns/kube-system)
