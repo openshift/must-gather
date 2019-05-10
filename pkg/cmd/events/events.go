@@ -20,16 +20,16 @@ import (
 var (
 	eventExample = `
 	# find all GC calls to deployments in any apigroup (extensions or apps)
-	openshift-dev-helpers event -f event.json --user=system:serviceaccount:kube-system:generic-garbage-collector --resource=deployments.*
+	%[1]s event -f event.json --user=system:serviceaccount:kube-system:generic-garbage-collector --resource=deployments.*
 
 	# find all failed calls to kube-system and olm namespaces
-	openshift-dev-helpers event -f event.json --namespace=kube-system --namespace=openshift-operator-lifecycle-manager --failed-only
+	%[1]s event -f event.json --namespace=kube-system --namespace=openshift-operator-lifecycle-manager --failed-only
 
 	# find all GETs against deployments and any resource under config.openshift.io
-	openshift-dev-helpers event -f event.json --resource=deployments.* --resource=*.config.openshift.io --verb=get
+	%[1]s event -f event.json --resource=deployments.* --resource=*.config.openshift.io --verb=get
 
 	# find CREATEs of everything except SAR and tokenreview
-	openshift-dev-helpers event -f event.json --verb=create --resource=*.* --resource=-subjectaccessreviews.* --resource=-tokenreviews.*
+	%[1]s event -f event.json --verb=create --resource=*.* --resource=-subjectaccessreviews.* --resource=-tokenreviews.*
 `
 )
 
