@@ -46,7 +46,7 @@ func NewCmdDevHelpers(streams genericclioptions.IOStreams) *cobra.Command {
 				return err
 			}
 
-			return nil
+			return c.Help()
 		},
 	}
 
