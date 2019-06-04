@@ -4,18 +4,31 @@ NETWORK_LOG_PATH="${BASE_COLLECTION_PATH}/network_logs/"
 
 mkdir -p ${NETWORK_LOG_PATH}/
 
-WORKERS=$(oc get nodes --no-headers -o custom-columns=":metadata.name")
+NODES=$(oc get nodes --no-headers -o custom-columns=":metadata.name")
+PIDS=()
 
-for WORKER in $WORKERS; do
-    SDN_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=$WORKER -l app=sdn)
-    oc -n openshift-sdn exec $SDN_POD -- bash -c "iptables-save -c" > ${NETWORK_LOG_PATH}/${WORKER}_iptables
-    oc -n openshift-sdn exec $SDN_POD -- bash -c "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${WORKER}_ovs_dump
-    oc -n openshift-sdn logs $SDN_POD > ${NETWORK_LOG_PATH}/${SDN_POD}_sdn_logs
+for NODE in $NODES; do
+    SDN_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=$NODE -l app=sdn)
+    oc -n openshift-sdn exec $SDN_POD -- bash -c "iptables-save -c" > ${NETWORK_LOG_PATH}/${NODE}_iptables &
+    PIDS+=($!)
+    oc -n openshift-sdn exec $SDN_POD -- bash -c "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${NODE}_ovs_dump &
+    PIDS+=($!)
+    oc -n openshift-sdn logs $SDN_POD > ${NETWORK_LOG_PATH}/${SDN_POD}_sdn_log &
+    PIDS+=($!)
+
+    OVS_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=$NODE -l app=ovs)
+    oc -n openshift-sdn exec $OVS_POD -- bash -c "cat /var/log/openvswitch/ovs-vswitchd.log" > ${NETWORK_LOG_PATH}/${OVS_POD}_vswitchd_log &
+    PIDS+=($!)
+    oc -n openshift-sdn exec $OVS_POD -- bash -c "cat /var/log/openvswitch/ovsdb-server.log" > ${NETWORK_LOG_PATH}/${OVS_POD}_ovsdb_log &
+    PIDS+=($!)
+
+    CONTROLLER_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=$NODE -l app=sdn-controller)
+    if [ -n "$CONTROLLER_POD" ]; then
+       oc -n openshift-sdn logs $CONTROLLER_POD > ${NETWORK_LOG_PATH}/${CONTROLLER_POD}_controller_logs &
+       PIDS+=($!)
+    fi
 done
 
-MASTERS=$(oc get nodes --no-headers -o custom-columns=":metadata.name" -l node-role.kubernetes.io/master)
-
-for MASTER in $MASTERS; do
-    CONTROLLER_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=$MASTER -l app=sdn-controller)
-    oc -n openshift-sdn logs $CONTROLLER_POD > ${NETWORK_LOG_PATH}/${CONTROLLER_POD}_controller_logs
-done
+echo "INFO: Waiting for node network log collection to complete ..."
+wait ${PIDS[@]}
+echo "INFO: Node network log collection to complete."
