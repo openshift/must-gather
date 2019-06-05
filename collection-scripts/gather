@@ -4,7 +4,7 @@
 resources=()
 
 # Cluster Version Information 
-resources+=(clusterversion)
+resources+=(clusterversion ns/openshift-cluster-version)
 
 # Operator Resources
 resources+=(clusteroperators)
