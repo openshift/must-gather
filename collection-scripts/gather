@@ -3,6 +3,9 @@
 # Resource List
 resources=()
 
+# Cluster Version Information 
+resources+=(clusterversion)
+
 # Operator Resources
 resources+=(clusteroperators)
 
