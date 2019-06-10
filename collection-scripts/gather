@@ -19,7 +19,7 @@ resources+=(ns/default ns/openshift ns/kube-system)
 resources+=(storageclasses persistentvolumes volumeattachments)
 
 # Networking Resources
-resources+=(network.config.openshift.io networkoperator.openshift.io clusternetworks hostsubnets)
+resources+=(network.config.openshift.io network.operator.openshift.io clusternetworks hostsubnets)
 
 # Autoscaler Resources
 resources+=(clusterautoscaler machineautoscaler)
