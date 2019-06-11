@@ -16,8 +16,13 @@ import (
 )
 
 func (o *InspectOptions) gatherPodData(destDir, namespace string, pod *corev1.Pod) error {
-	if pod.Status.Phase != corev1.PodRunning {
-		log.Printf("        Skipping container data collection for pod %q: Pod not running\n", pod.Name)
+	isInstallerPod := false
+	// allow installer pods logs to be collected in what ever state they are in
+	if strings.HasPrefix(pod.Name, "installer-") {
+		isInstallerPod = true
+	}
+	if pod.Status.Phase != corev1.PodRunning || !isInstallerPod {
+		log.Printf("        Skipping container data collection for pod %q: Pod not running and is not installer pod \n", pod.Name)
 		return nil
 	}
 
@@ -33,11 +38,11 @@ func (o *InspectOptions) gatherPodData(destDir, namespace string, pod *corev1.Po
 
 	errs := []error{}
 
-	// skip gathering container data if containers are no longer running
+	// skip gathering container data if pods are no longer running or not installer pods
 	if running, err := util.PodRunningReady(pod); err != nil {
 		return err
-	} else if !running {
-		log.Printf("        Skipping container data collection for pod %q: Pod not running\n", pod.Name)
+	} else if !(running || isInstallerPod) {
+		log.Printf("        Skipping container data collection for pod %q: Pod not running or is not installer pod\n", pod.Name)
 		return nil
 	}
 
