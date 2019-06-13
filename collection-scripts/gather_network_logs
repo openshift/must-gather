@@ -4,7 +4,7 @@ NETWORK_LOG_PATH="${BASE_COLLECTION_PATH}/network_logs/"
 
 mkdir -p ${NETWORK_LOG_PATH}/
 
-NODES=$(oc get nodes --no-headers -o custom-columns=":metadata.name")
+NODES="${NETWORK_NODES:-$(oc get nodes --no-headers -o custom-columns=':metadata.name')}"
 PIDS=()
 
 for NODE in $NODES; do
