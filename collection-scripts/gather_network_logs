@@ -13,20 +13,12 @@ for NODE in $NODES; do
     PIDS+=($!)
     oc -n openshift-sdn exec $SDN_POD -- bash -c "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${NODE}_ovs_dump &
     PIDS+=($!)
-    oc -n openshift-sdn logs $SDN_POD > ${NETWORK_LOG_PATH}/${SDN_POD}_sdn_log &
-    PIDS+=($!)
 
     OVS_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=$NODE -l app=ovs)
     oc -n openshift-sdn exec $OVS_POD -- bash -c "cat /var/log/openvswitch/ovs-vswitchd.log" > ${NETWORK_LOG_PATH}/${OVS_POD}_vswitchd_log &
     PIDS+=($!)
     oc -n openshift-sdn exec $OVS_POD -- bash -c "cat /var/log/openvswitch/ovsdb-server.log" > ${NETWORK_LOG_PATH}/${OVS_POD}_ovsdb_log &
     PIDS+=($!)
-
-    CONTROLLER_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=$NODE -l app=sdn-controller)
-    if [ -n "$CONTROLLER_POD" ]; then
-       oc -n openshift-sdn logs $CONTROLLER_POD > ${NETWORK_LOG_PATH}/${CONTROLLER_POD}_controller_logs &
-       PIDS+=($!)
-    fi
 done
 
 echo "INFO: Waiting for node network log collection to complete ..."
