@@ -1,0 +1,30 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="must-gather"
+NETWORK_LOG_PATH="${BASE_COLLECTION_PATH}/network_logs/"
+
+mkdir -p ${NETWORK_LOG_PATH}/
+
+if [ $# -eq 0 ]; then
+    echo "WARNING: Collecting network logs on ALL nodes in your cluster. This could take a large amount of time." >&2
+fi
+
+NODES="${@:-$(oc get nodes --no-headers -o custom-columns=':metadata.name')}"
+PIDS=()
+
+for NODE in $NODES; do
+    SDN_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=$NODE -l app=sdn)
+    oc -n openshift-sdn exec $SDN_POD -- bash -c "iptables-save -c" > ${NETWORK_LOG_PATH}/${NODE}_iptables &
+    PIDS+=($!)
+    oc -n openshift-sdn exec $SDN_POD -- bash -c "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${NODE}_ovs_dump &
+    PIDS+=($!)
+
+    OVS_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=$NODE -l app=ovs)
+    oc -n openshift-sdn exec $OVS_POD -- bash -c "cat /var/log/openvswitch/ovs-vswitchd.log" > ${NETWORK_LOG_PATH}/${OVS_POD}_vswitchd_log &
+    PIDS+=($!)
+    oc -n openshift-sdn exec $OVS_POD -- bash -c "cat /var/log/openvswitch/ovsdb-server.log" > ${NETWORK_LOG_PATH}/${OVS_POD}_ovsdb_log &
+    PIDS+=($!)
+done
+
+echo "INFO: Waiting for node network log collection to complete ..."
+wait ${PIDS[@]}
+echo "INFO: Node network log collection to complete."
