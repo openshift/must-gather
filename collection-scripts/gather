@@ -3,6 +3,9 @@
 # Resource List
 resources=()
 
+# Cluster Version Information 
+resources+=(clusterversion ns/openshift-cluster-version)
+
 # Operator Resources
 resources+=(clusteroperators)
 
