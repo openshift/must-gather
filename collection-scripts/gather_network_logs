@@ -23,6 +23,18 @@ for NODE in $NODES; do
     PIDS+=($!)
     oc -n openshift-sdn exec $OVS_POD -- bash -c "cat /var/log/openvswitch/ovsdb-server.log" > ${NETWORK_LOG_PATH}/${OVS_POD}_ovsdb_log &
     PIDS+=($!)
+
+    oc -n openshift-sdn exec $SDN_POD -- bash -c "ip a" > ${NETWORK_LOG_PATH}/${NODE}_ip &
+    PIDS+=($!)
+
+    oc -n openshift-sdn exec $SDN_POD -- bash -c "ip route`" > ${NETWORK_LOG_PATH}/${NODE}_routes &
+    PIDS+=($!)    
+
+    oc -n openshift-sdn exec $SDN_POD -- bash -c "bridge fdb show" >> ${NETWORK_LOG_PATH}/${NODE}_bridgefdb &
+    PIDS+=($!)
+
+    oc -n openshift-sdn exec $SDN_POD -- bash -c "bridge vlan show" >> ${NETWORK_LOG_PATH}/${NODE}_bridgevlan &
+    PIDS+=($!)
 done
 
 echo "INFO: Waiting for node network log collection to complete ..."
