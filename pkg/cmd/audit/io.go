@@ -245,7 +245,9 @@ func GetEvents(auditFilename string) ([]*auditv1.Event, error) {
 
 		// each line in audit file use following format: `hostname {JSON}`, we are not interested in hostname,
 		// so lets parse out the events.
+		line := 0
 		for scanner.Scan() {
+			line++
 			auditBytes := scanner.Bytes()
 			if len(auditBytes) > 0 {
 				if string(auditBytes[0]) != "{" {
@@ -264,7 +266,7 @@ func GetEvents(auditFilename string) ([]*auditv1.Event, error) {
 			// will cause mess in flags...
 			eventObj := &auditv1.Event{}
 			if err := json.Unmarshal(auditBytes, eventObj); err != nil {
-				return nil, fmt.Errorf("unable to decode: %s to audit event: %v", string(auditBytes), err)
+				return nil, fmt.Errorf("unable to decode %q line %d: %s to audit event: %v", auditFilename, line, string(auditBytes), err)
 			}
 
 			// Add to index
