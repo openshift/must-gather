@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Resource List
+resources=()
+
+# Metal3 related Resources
+resources+=(ns/openshift-machine-api ns/openshift-machine-config-operator)
+
+for i in $(/usr/bin/oc get crd | grep metal3 | awk '{print $1}')
+do
+  resources+=(crd/$i)
+done
+
+# Run the collection of resources using must-gather
+for resource in ${resources[@]}; do
+  /usr/bin/openshift-must-gather inspect ${resource}
+done
+
+exit 0

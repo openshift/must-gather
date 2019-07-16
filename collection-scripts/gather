@@ -37,3 +37,6 @@ done
 
 # Gather Service Logs (using a suplamental Script); Scoped to Masters.
 /usr/bin/gather_service_logs master
+
+# Gather Metal3 related resources
+/usr/bin/gather_metal3
