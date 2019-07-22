@@ -2,9 +2,11 @@ package audit
 
 import (
 	"strings"
+	"time"
 
 	"github.com/openshift/must-gather/pkg/util"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
@@ -275,4 +277,37 @@ func URIToParts(uri string) (string, schema.GroupVersionResource, string) {
 		name = parts[6]
 	}
 	return ns, gvr, name
+}
+
+type FilterByAfter struct {
+	After time.Time
+}
+
+func (f *FilterByAfter) FilterEvents(events ...*auditv1.Event) []*auditv1.Event {
+	ret := []*auditv1.Event{}
+	for i := range events {
+		event := events[i]
+		if event.RequestReceivedTimestamp.After(f.After) {
+			ret = append(ret, event)
+		}
+	}
+
+	return ret
+}
+
+type FilterByBefore struct {
+	Before time.Time
+}
+
+func (f *FilterByBefore) FilterEvents(events ...*auditv1.Event) []*auditv1.Event {
+	t := metav1.NewMicroTime(f.Before)
+	ret := []*auditv1.Event{}
+	for i := range events {
+		event := events[i]
+		if event.RequestReceivedTimestamp.Before(&t) {
+			ret = append(ret, event)
+		}
+	}
+
+	return ret
 }

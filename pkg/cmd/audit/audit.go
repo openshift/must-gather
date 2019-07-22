@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -36,16 +37,18 @@ type AuditOptions struct {
 	builder    *resource.Builder
 	args       []string
 
-	verbs      []string
-	resources  []string
-	namespaces []string
-	names      []string
-	users      []string
-	uids       []string
-	filename   string
-	failedOnly bool
-	output     string
-	topBy      string
+	verbs        []string
+	resources    []string
+	namespaces   []string
+	names        []string
+	users        []string
+	uids         []string
+	filename     string
+	failedOnly   bool
+	output       string
+	topBy        string
+	beforeString string
+	afterString  string
 
 	genericclioptions.IOStreams
 }
@@ -89,6 +92,8 @@ func NewCmdAudit(parentName string, streams genericclioptions.IOStreams) *cobra.
 	cmd.Flags().StringSliceVar(&o.users, "user", o.users, "Filter result of search to only contain the specified user.)")
 	cmd.Flags().StringVar(&o.topBy, "by", o.topBy, "Switch the top output format (eg. -o top -by [verb,user,resource]).")
 	cmd.Flags().BoolVar(&o.failedOnly, "failed-only", false, "Filter result of search to only contain http failures.)")
+	cmd.Flags().StringVar(&o.beforeString, "before", o.beforeString, "Filter result of search to only before a timestamp.)")
+	cmd.Flags().StringVar(&o.afterString, "after", o.afterString, "Filter result of search to only after a timestamp.)")
 
 	return cmd
 }
@@ -111,6 +116,20 @@ func (o *AuditOptions) Run() error {
 	}
 	if len(o.namespaces) > 0 {
 		filters = append(filters, &FilterByNamespaces{Namespaces: sets.NewString(o.namespaces...)})
+	}
+	if len(o.beforeString) > 0 {
+		t, err := time.Parse(time.RFC3339, o.beforeString)
+		if err != nil {
+			return err
+		}
+		filters = append(filters, &FilterByBefore{Before: t})
+	}
+	if len(o.afterString) > 0 {
+		t, err := time.Parse(time.RFC3339, o.afterString)
+		if err != nil {
+			return err
+		}
+		filters = append(filters, &FilterByAfter{After: t})
 	}
 	if len(o.resources) > 0 {
 		resources := map[schema.GroupResource]bool{}
