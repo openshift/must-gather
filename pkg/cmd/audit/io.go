@@ -286,7 +286,7 @@ func GetEvents(auditFilename string) ([]*auditv1.Event, error) {
 			if info.Name() == stat.Name() {
 				return nil
 			}
-			newEvents, err := GetEvents(filepath.Join(auditFilename, info.Name()))
+			newEvents, err := GetEvents(path)
 			if err != nil {
 				return err
 			}
