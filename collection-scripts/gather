@@ -3,7 +3,10 @@
 # Resource List
 resources=()
 
-# Cluster Version Information 
+# machine-api resources
+machineresources=()
+
+# Cluster Version Information
 resources+=(clusterversion ns/openshift-cluster-version)
 
 # Operator Resources
@@ -12,8 +15,11 @@ resources+=(clusteroperators)
 # Certificate Resources
 resources+=(certificatesigningrequests)
 
-# Machine/Node Resources
-resources+=(nodes machines machineconfigs machineconfigpools)
+# MCO/Node Resources
+resources+=(nodes machineconfigs machineconfigpools)
+
+# machine-api resources
+machineresources+=(machines machinesets)
 
 # Namespaces/Project Resources
 resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd)
@@ -25,11 +31,16 @@ resources+=(storageclasses persistentvolumes volumeattachments)
 resources+=(clusternetworks hostsubnets)
 
 # Autoscaler Resources
-resources+=(clusterautoscaler machineautoscaler)
+machineresources+=(clusterautoscaler machineautoscaler)
 
 # Run the Collection of Resources using must-gather
 for resource in ${resources[@]}; do
     /usr/bin/openshift-must-gather inspect ${resource}
+done
+
+# Run the Collection of MachineAPIResources using must-gather
+for resource in ${machineresources[@]}; do
+    /usr/bin/openshift-must-gather inspect ${resource} --namespace openshift-machine-api
 done
 
 # Collect System Audit Logs
