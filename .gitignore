@@ -20,7 +20,7 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-openshift-dev-helpers
-openshift-must-gather
+/openshift-dev-helpers
+/openshift-must-gather
 
 must-gather
