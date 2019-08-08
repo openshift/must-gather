@@ -66,10 +66,20 @@ func (o *InspectOptions) gatherContainerInfo(destDir string, pod *corev1.Pod, co
 		return err
 	}
 
-	if len(container.Ports) == 0 {
+	switch len(container.Ports) {
+	case 0:
 		log.Printf("        Skipping container endpoint collection for pod %q container %q: No ports\n", pod.Name, container.Name)
 		return nil
+	case 1:
+		if container.Ports[0].Name == "grpc" {
+			log.Printf("        Skipping container endpoint collection for pod %q container %q: No suitable ports\n", pod.Name, container.Name)
+			return nil
+		}
+	default:
+		log.Printf("        Skipping container endpoint collection for pod %q container %q: Too many ports\n", pod.Name, container.Name)
+		return nil
 	}
+
 	port := &util.RemoteContainerPort{
 		Protocol: "https",
 		Port:     container.Ports[0].ContainerPort,
