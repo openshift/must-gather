@@ -1,0 +1,26 @@
+#!/bin/bash
+
+BASE_COLLECTION_PATH="/must-gather"
+
+function collect() {
+  local resources target 
+  resources=()
+  target="$1"
+
+  mkdir -p "${BASE_COLLECTION_PATH}/${target}"
+  for i in $(/usr/bin/oc get "${target}.monitoring.coreos.com" --all-namespaces | grep "openshift-" | cut -d' ' -f1 )
+  do
+    resources+=("$i")
+  done
+  
+  # we use nested loops to nicely output objects partitioned per namespace, kind
+  for resource in ${resources[@]}; do 
+    echo "INFO: Gathering ServiceMonitors in ${resource} namespace"
+    /usr/bin/oc get "${target}.servicemonitors.monitoring.coreos.com" -n "${resource}" -o yaml > "${BASE_COLLECTION_PATH}/${target}/${resource}.yaml"
+  done
+}
+
+collect prometheusrules
+collect servicemonitors
+
+exit 0
