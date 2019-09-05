@@ -13,7 +13,7 @@ resources+=(clusteroperators)
 resources+=(certificatesigningrequests)
 
 # Machine/Node Resources
-resources+=(nodes machines machineconfigs machineconfigpools)
+resources+=(nodes machineconfigs machineconfigpools)
 
 # Namespaces/Project Resources
 resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd)
@@ -24,10 +24,8 @@ resources+=(storageclasses persistentvolumes volumeattachments)
 # Networking Resources
 resources+=(networks.operator.openshift.io)
 
-# Autoscaler Resources
-resources+=(clusterautoscaler machineautoscaler)
-
 # Run the Collection of Resources using must-gather
+# running accross all-namespaces for the few "Autoscaler" resouces.
 for resource in ${resources[@]}; do
     /usr/bin/openshift-must-gather inspect ${resource}
 done
