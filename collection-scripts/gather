@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# generate /must-gather/version file
+. version
+echo "openshift/must-gather" > /must-gather/version
+version >> /must-gather/version
+
 # Resource List
 resources=()
 

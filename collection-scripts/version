@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+function version() {
+  # get version from image
+  version=$( \
+    oc status | grep '^pod' | \
+    sed -n -r -e 's/.*([[:digit:]]+\.[[:digit:]]+(:?\.[[:digit:]])?(:?-[^@]+)?).*/\1/p' \
+  )
+
+  # if version not found, fallback to imageID
+  [ -z "${version}" ] && version=$(oc status | grep '^pod.*runs' | sed -r -e 's/^pod.*runs //')
+
+  # if version still not found, use Unknown
+  [ -z "${version}" ] && version="Unknown"
+
+  echo ${version}
+}
