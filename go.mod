@@ -19,7 +19,7 @@ require (
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v0.0.0-20180320133207-05fbef0ca5da // indirect
-	github.com/openshift/library-go v0.0.0-20190927184318-c355e2019bb3
+	github.com/openshift/library-go master
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/spf13/cobra v0.0.0-20180319062004-c439c4fa0937
 	github.com/spf13/pflag v1.0.1
@@ -34,9 +34,9 @@ require (
 	google.golang.org/appengine v0.0.0-20160301025000-12d5545dc1cf // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/inf.v0 v0.9.0 // indirect
-	k8s.io/api v0.0.0-20181128191700-6db15a15d2d3
-	k8s.io/apimachinery v0.0.0-20181128191346-49ce2735e507
-	k8s.io/apiserver v0.0.0-20181207191401-9601a7bf41ef
-	k8s.io/cli-runtime v0.0.0-20181217194651-53e1874de09f
-	k8s.io/client-go v0.0.0-20181205110444-5e6a3d4e34f6
+	k8s.io/api kubernetes-1.16.0
+	k8s.io/apimachinery kubernetes-1.16.0
+	k8s.io/apiserver kubernetes-1.16.0
+	k8s.io/cli-runtime kubernetes-1.16.0
+	k8s.io/client-go kubernetes-1.16.0
 )
