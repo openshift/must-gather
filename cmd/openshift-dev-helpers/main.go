@@ -23,7 +23,7 @@ type DevHelpersOptions struct {
 
 func NewDevHelpersOptions(streams genericclioptions.IOStreams) *DevHelpersOptions {
 	return &DevHelpersOptions{
-		configFlags: genericclioptions.NewConfigFlags(),
+		configFlags: genericclioptions.NewConfigFlags(true),
 		IOStreams:   streams,
 	}
 }
