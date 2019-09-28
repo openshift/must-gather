@@ -31,8 +31,8 @@ resources+=(networks.operator.openshift.io)
 
 # Run the Collection of Resources using must-gather
 # running accross all-namespaces for the few "Autoscaler" resouces.
-for resource in ${resources[@]}; do
-    /usr/bin/openshift-must-gather inspect ${resource}
+for resource in "${resources[@]}"; do
+    oc adm inspect --dest-dir must-gather ${resource}
 done
 
 # Collect System Audit Logs
