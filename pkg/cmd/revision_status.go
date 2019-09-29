@@ -9,7 +9,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/cli-runtime/pkg/genericclioptions/resource"
+	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
@@ -38,7 +38,7 @@ func NewRevisionStatusOptions(streams genericclioptions.IOStreams) *RevisionStat
 			WithLabelSelector("").
 			WithLocal(false).
 			WithScheme(scheme.Scheme),
-		configFlags: genericclioptions.NewConfigFlags(),
+		configFlags: genericclioptions.NewConfigFlags(true),
 		IOStreams:   streams,
 	}
 }

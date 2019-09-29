@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/cli-runtime/pkg/genericclioptions/resource"
+	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/cert"
 )
@@ -49,7 +49,7 @@ func NewCertInspectionOptions(streams genericclioptions.IOStreams) *CertInspecti
 			WithLabelSelector("").
 			WithLocal(false).
 			WithScheme(scheme.Scheme),
-		configFlags: genericclioptions.NewConfigFlags(),
+		configFlags: genericclioptions.NewConfigFlags(true),
 		IOStreams:   streams,
 	}
 }
