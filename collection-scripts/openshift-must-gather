@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+echo "WARNING: openshift-must-gather has been DEPRECATED. Use \`oc adm inspect\` instead."
+exec oc adm inspect "$@"
