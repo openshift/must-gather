@@ -23,7 +23,7 @@ var (
 	%[1]s event -f event.json --user=system:serviceaccount:kube-system:generic-garbage-collector --resource=deployments.*
 
 	# find all failed calls to kube-system and olm namespaces
-	%[1]s event -f event.json --namespace=kube-system --namespace=openshift-operator-lifecycle-manager --failed-only
+	%[1]s event -f event.json --namespace=kube-system --namespace=openshift-operator-lifecycle-manager --warning-only
 
 	# find all GETs against deployments and any resource under config.openshift.io
 	%[1]s event -f event.json --resource=deployments.* --resource=*.config.openshift.io --verb=get
