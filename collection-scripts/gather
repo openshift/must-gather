@@ -38,5 +38,8 @@ done
 # Collect System Audit Logs
 /usr/bin/gather_audit_logs
 
+# Collect host files
+/usr/bin/gather_host_files
+
 # Gather Service Logs (using a suplamental Script); Scoped to Masters.
 /usr/bin/gather_service_logs master

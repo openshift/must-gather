@@ -12,7 +12,7 @@ NODE_SERVICES+=()          ### Placeholder to extend Node only services
 # Collect System Service Logs
 SERVICE_LOG_PATH="${BASE_COLLECTION_PATH}/host_service_logs/"
 
-function collect_serivce_logs {  ## Takes a node role input (master or worker)
+function collect_service_logs {  ## Takes a node role input (master or worker)
     PIDS=()
     DIR_PATH=${SERVICE_LOG_PATH}/${1}s
     echo "WARNING: Collecting one or more service logs on ALL $1 nodes in your cluster. This could take a large amount of time." >&2
@@ -28,12 +28,12 @@ function collect_serivce_logs {  ## Takes a node role input (master or worker)
 }
 
 if [[ $ROLES == "master" ]]; then
-    collect_serivce_logs master
+    collect_service_logs master
 elif [[ $ROLES == "worker" ]]; then
-    collect_serivce_logs worker
+    collect_service_logs worker
 elif [[ $ROLES == "master,worker" ]] || [[ $ROLES == "worker,master" ]] ; then
-    collect_serivce_logs master
-    collect_serivce_logs worker
+    collect_service_logs master
+    collect_service_logs worker
 else
     echo "Error: no role supplied or an invalid role was supplied." >&2
     echo "Error: valid roles are 'master', 'worker', 'master,worker' or 'worker,master'." >&2

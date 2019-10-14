@@ -1,0 +1,26 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="/must-gather"
+HOSTFILES_LOG_PATH="${BASE_COLLECTION_PATH}/hostfiles/"
+
+mkdir -p ${HOSTFILES_LOG_PATH}/
+
+if [ $# -eq 0 ]; then
+    echo "WARNING: Collecting host files on ALL nodes in your cluster. This could take a large amount of time." >&2
+fi
+
+NODES="${@:-$(oc get nodes --no-headers -o custom-columns=':metadata.name')}"
+PIDS=()
+
+for NODE in $NODES; do
+    MCD_POD=$(oc -n openshift-machine-config-operator get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=$NODE -l k8s-app=machine-config-daemon)
+    oc -n openshift-machine-config-operator exec $MCD_POD -- bash -c "cat /rootfs/etc/kubernetes/kubelet.conf" > ${HOSTFILES_LOG_PATH}/${NODE}_kubelet.conf &
+    PIDS+=($!)
+    oc -n openshift-machine-config-operator exec $MCD_POD -- bash -c "cat /rootfs/etc/containers/registries.conf" > ${HOSTFILES_LOG_PATH}/${NODE}_registries.conf &
+    PIDS+=($!)
+    oc -n openshift-machine-config-operator exec $MCD_POD -- bash -c "cat /rootfs/etc/crio/crio.conf" > ${HOSTFILES_LOG_PATH}/${NODE}_crio.conf &
+    PIDS+=($!)
+done
+
+echo "INFO: Waiting for node host files log collection to complete ..."
+wait ${PIDS[@]}
+echo "INFO: Hostfiles log collection completed."
