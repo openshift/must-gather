@@ -5,37 +5,42 @@
 echo "openshift/must-gather" > /must-gather/version
 version >> /must-gather/version
 
-# Resource List
-resources=()
+# Named resource list, eg. ns/openshift-config
+named_resources=()
+
+# Resource groups list, eg. pods
+group_resources=()
 
 # Cluster Version Information
-resources+=(clusterversion ns/openshift-cluster-version)
+named_resources+=(ns/openshift-cluster-version)
+group_resources+=(clusterversion)
 
 # Operator Resources
-resources+=(clusteroperators)
+group_resources+=(clusteroperators)
 
 # Certificate Resources
-resources+=(certificatesigningrequests)
+group_resources+=(certificatesigningrequests)
 
 # Machine/Node Resources
-resources+=(nodes)
+group_resources+=(nodes)
 
 # Namespaces/Project Resources
-resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd ns/openshift-kni-infra)
+named_resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd ns/openshift-kni-infra)
 
 # Storage Resources
-resources+=(storageclasses persistentvolumes volumeattachments csidrivers csinodes volumesnapshotclasses volumesnapshotcontents)
+group_resources+=(storageclasses persistentvolumes volumeattachments csidrivers csinodes volumesnapshotclasses volumesnapshotcontents)
 
 # Image-source Resources
-resources+=(imagecontentsourcepolicies.operator.openshift.io)
+group_resources+=(imagecontentsourcepolicies.operator.openshift.io)
 
 # Networking Resources
-resources+=(networks.operator.openshift.io)
+group_resources+=(networks.operator.openshift.io)
 
 # Run the Collection of Resources using inspect
-for resource in "${resources[@]}"; do
-    oc adm inspect --dest-dir must-gather ${resource}
-done
+# running accross all-namespaces for the few "Autoscaler" resouces.
+oc adm inspect --dest-dir must-gather "${named_resources[@]}"
+group_resources_text=$(IFS=, ; echo "${group_resources[*]}")
+oc adm inspect --dest-dir must-gather "${group_resources_text}"
 
 # Gather optional operator resources from all namespaces
 /usr/bin/gather_olm
