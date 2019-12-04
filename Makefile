@@ -14,4 +14,4 @@ IMAGE_REGISTRY :=registry.svc.ci.openshift.org
 # $2 - image ref
 # $3 - Dockerfile path
 # $4 - context directory for image build
-$(call build-image,ocp-must-gather,$(IMAGE_REGISTRY)/ocp/4.2:ocp-must-gater, ./Dockerfile.rhel7,.)
+$(call build-image,ocp-must-gather,$(IMAGE_REGISTRY)/ocp/4.2:ocp-must-gather, ./Dockerfile.rhel7,.)
