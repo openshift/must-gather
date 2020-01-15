@@ -38,6 +38,9 @@ for resource in "${resources[@]}"; do
     oc adm inspect --dest-dir must-gather ${resource}
 done
 
+# Gather network Logs (using a supplemental script)
+/usr/bin/gather_network_logs
+
 # Collect System Audit Logs
 /usr/bin/gather_audit_logs
 
