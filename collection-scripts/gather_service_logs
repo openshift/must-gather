@@ -2,11 +2,13 @@
 BASE_COLLECTION_PATH="/must-gather"
 ROLES=${1:-master}         ### Defaults to only collecting things from Masters
 
+SINCE_TIMEFRAME=${2:-1w}
+
 # Service Lists
 GENERAL_SERVICES=(kubelet crio)
-MASTER_SERVICES+=${2:-${GENERAL_SERVICES[@]}}
+MASTER_SERVICES+=${3:-${GENERAL_SERVICES[@]}}
 MASTER_SERVICES+=()        ### Placeholder to extend Master only services
-NODE_SERVICES+=${2:-${GENERAL_SERVICES[@]}}
+NODE_SERVICES+=${3:-${GENERAL_SERVICES[@]}}
 NODE_SERVICES+=()          ### Placeholder to extend Node only services
 
 # Collect System Service Logs
@@ -19,7 +21,7 @@ function collect_serivce_logs {  ## Takes a node role input (master or worker)
     mkdir -p ${DIR_PATH}
     for service in ${NODE_SERVICES[@]}; do
         echo "INFO: Collecting host service logs for $service"
-        /usr/bin/oc adm node-logs --role=$1 -u $service > ${DIR_PATH}/${service}_service.log &
+        /usr/bin/oc adm node-logs --since ${SINCE_TIMEFRAME} --role=$1 -u $service > ${DIR_PATH}/${service}_service.log &
 	PIDS+=($!)
     done
     echo "INFO: Waiting for worker host service log collection to complete ..."
