@@ -1,5 +1,5 @@
 #!/bin/bash
-BASE_COLLECTION_PATH="/must-gather"
+BASE_COLLECTION_PATH="must-gather"
 NETWORK_LOG_PATH="${BASE_COLLECTION_PATH}/network_logs"
 
 mkdir -p ${NETWORK_LOG_PATH}/
@@ -120,7 +120,7 @@ NODES="${@:-$(oc get nodes --no-headers -o custom-columns=':metadata.name')}"
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
 if [[ "${NETWORK_TYPE}" == "openshiftsdn" ]]; then
     gather_openshiftsdn_nodes_data
-elif [[ "{$NETWORK_TYPE}" == "kuryr" ]]; then
+elif [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
     gather_kuryr_nodes_data
     gather_kuryr_data
 elif [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
