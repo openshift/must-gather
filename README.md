@@ -3,7 +3,7 @@ must-gather
 
 `openshift-must-gather` is a tool for collecting cluster data.
 It dumps `clusteroperator` data, and associated namespace data, into a specified `--base-dir` location.
-The directory structure, as well as specific details behind this tool can be found [in this enhancement](https://github.com/openshift/enhancements/blob/master/enhancements/must-gather.md).
+The directory structure, as well as specific details behind this tool can be found [in this enhancement](https://github.com/openshift/enhancements/blob/master/enhancements/oc/must-gather.md).
 
 ## Collection Scripts
 Data collection scripts are kept in `./collection-scripts`.  The content of that folder is placed in `/usr/bin` in the image.
