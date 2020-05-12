@@ -1,6 +1,6 @@
 #!/bin/bash
 BASE_COLLECTION_PATH="must-gather"
-NETWORK_LOG_PATH="${BASE_COLLECTION_PATH}/network_logs"
+NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
 
 mkdir -p ${NETWORK_LOG_PATH}/
 
@@ -13,9 +13,9 @@ function gather_openshiftsdn_nodes_data {
       PIDS+=($!)
 
       OVS_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=${NODE} -l app=ovs)
-      oc -n openshift-sdn exec ${OVS_POD} -- bash -c "cat /var/log/openvswitch/ovs-vswitchd.log" > ${NETWORK_LOG_PATH}/${OVS_POD}_vswitchd_log &
+      oc -n openshift-sdn exec ${OVS_POD} -- bash -c "cat /var/log/openvswitch/ovs-vswitchd.log" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_POD}_vswitchd_log &
       PIDS+=($!)
-      oc -n openshift-sdn exec ${OVS_POD} -- bash -c "cat /var/log/openvswitch/ovsdb-server.log" > ${NETWORK_LOG_PATH}/${OVS_POD}_ovsdb_log &
+      oc -n openshift-sdn exec ${OVS_POD} -- bash -c "cat /var/log/openvswitch/ovsdb-server.log" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_POD}_ovsdb_log &
       PIDS+=($!)
   done
 }
@@ -33,32 +33,43 @@ function gather_kuryr_nodes_data {
 function gather_ovn_kubernetes_nodes_data {
   for NODE in ${NODES}; do
       OVNKUBE_NODE_POD=$(oc -n openshift-ovn-kubernetes get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=${NODE} -l app=ovnkube-node)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "iptables-save -c" > ${NETWORK_LOG_PATH}/${OVNKUBE_NODE_POD}_iptables &
+      oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "iptables-save -c" > ${NETWORK_LOG_PATH}/${NODE}_${OVNKUBE_NODE_POD}_iptables &
       PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "ip addr" > ${NETWORK_LOG_PATH}/${OVNKUBE_NODE_POD}_ip_addr &
+      oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "ip addr" > ${NETWORK_LOG_PATH}/${NODE}_${OVNKUBE_NODE_POD}_ip_addr &
       PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "ip route" > ${NETWORK_LOG_PATH}/${OVNKUBE_NODE_POD}_ip_route &
+      oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "ip route" > ${NETWORK_LOG_PATH}/${NODE}_${OVNKUBE_NODE_POD}_ip_route &
       PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "ip -6 route" > ${NETWORK_LOG_PATH}/${OVNKUBE_NODE_POD}_ip_6_route &
+      oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "ip -6 route" > ${NETWORK_LOG_PATH}/${NODE}_${OVNKUBE_NODE_POD}_ip_6_route &
       PIDS+=($!)
 
       
       OVS_NODE_POD=$(oc -n openshift-ovn-kubernetes get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=${NODE} -l app=ovs-node)
       oc -n openshift-ovn-kubernetes exec ${OVS_NODE_POD} -- bash -c \
-      "ovs-ofctl dump-ports-desc br-int" > ${NETWORK_LOG_PATH}/${OVS_NODE_POD}_ovs_ofctl_dump_ports_br_int &
+      "ovs-ofctl dump-ports-desc br-int" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_ofctl_dump_ports_br_int &
       PIDS+=($!)
       oc -n openshift-ovn-kubernetes exec ${OVS_NODE_POD} -- bash -c \
-      "ovs-ofctl dump-flows br-int" > ${NETWORK_LOG_PATH}/${OVS_NODE_POD}_ovs_ofctl_dump_flows_br_int &
+      "ovs-ofctl dump-flows br-int" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_ofctl_dump_flows_br_int &
       PIDS+=($!)
       oc -n openshift-ovn-kubernetes exec ${OVS_NODE_POD} -- bash -c \
-      "ovs-ofctl dump-ports-desc br-local" > ${NETWORK_LOG_PATH}/${OVS_NODE_POD}_ovs_ofctl_dump_ports_br_local &
+      "ovs-ofctl dump-ports-desc br-local" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_ofctl_dump_ports_br_local &
       PIDS+=($!)
       oc -n openshift-ovn-kubernetes exec ${OVS_NODE_POD} -- bash -c \
-      "ovs-ofctl dump-flows br-local" > ${NETWORK_LOG_PATH}/${OVS_NODE_POD}_ovs_ofctl_dump_flows_br_local &
+      "ovs-ofctl dump-flows br-local" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_ofctl_dump_flows_br_local &
       PIDS+=($!)
       oc -n openshift-ovn-kubernetes exec ${OVS_NODE_POD} -- bash -c \
-      "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${OVS_NODE_POD}_ovs_dump &
+      "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_dump &
       PIDS+=($!)
+
+      OVNKUBE_MASTER=$(oc --insecure-skip-tls-verify --request-timeout=20s -n openshift-ovn-kubernetes \
+          get pods --no-headers -o custom-columns=':metadata.name' --field-selector spec.nodeName=${NODE} -l app=ovnkube-master)
+
+      if [[ ${OVNKUBE_MASTER} != "" ]] ; then
+        oc cp openshift-ovn-kubernetes/${OVNKUBE_MASTER}:/etc/openvswitch/ovnsb_db.db ${NETWORK_LOG_PATH}/${NODE}_ovnsb_db.db > ${NETWORK_LOG_PATH}/${NODE}_sbdb &
+        PIDS+=($!)
+        oc cp openshift-ovn-kubernetes/${OVNKUBE_MASTER}:/etc/openvswitch/ovnnb_db.db ${NETWORK_LOG_PATH}/${NODE}_ovnnb_db.db > ${NETWORK_LOG_PATH}/${NODE}_nbdb &
+        PIDS+=($!)
+      fi
+
   done
 }
 
