@@ -60,7 +60,7 @@ function gather_ovn_kubernetes_nodes_data {
       "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_dump &
       PIDS+=($!)
 
-      OVNKUBE_MASTER=$(oc --insecure-skip-tls-verify --request-timeout=20s -n openshift-ovn-kubernetes \
+      OVNKUBE_MASTER=$(oc -n openshift-ovn-kubernetes \
           get pods --no-headers -o custom-columns=':metadata.name' --field-selector spec.nodeName=${NODE} -l app=ovnkube-master)
 
       if [[ ${OVNKUBE_MASTER} != "" ]] ; then
