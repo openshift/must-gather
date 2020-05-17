@@ -43,3 +43,6 @@ done
 
 # Gather Service Logs (using a suplamental Script); Scoped to Masters.
 /usr/bin/gather_service_logs master
+
+# Gather etcd information
+/usr/bin/gather_etcd
