@@ -38,10 +38,6 @@ echo "INFO: Getting etcdctl alarm list"
 ocp4etcdctl alarm list > ${ETCD_LOG_PATH}/alarm_list.txt
 ocp4etcdctl alarm list -w json > ${ETCD_LOG_PATH}/alarm_list.json
 
-# List all etcd keys
-echo "INFO: Getting list of keys in etcd"
-ocp4etcdctl get --keys-only --from-key / > ${ETCD_LOG_PATH}/etcd_keys.txt
-
 # Check perf
 echo "INFO: Performing etcdctl check perf"
 ocp4etcdctl check perf --load="s" > ${ETCD_LOG_PATH}/etcd_check_perf.txt
