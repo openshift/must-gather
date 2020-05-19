@@ -38,11 +38,11 @@ for resource in "${resources[@]}"; do
     oc adm inspect --dest-dir must-gather ${resource}
 done
 
+# Gather etcd information
+/usr/bin/gather_etcd
+
 # Collect System Audit Logs
 /usr/bin/gather_audit_logs
 
 # Gather Service Logs (using a suplamental Script); Scoped to Masters.
 /usr/bin/gather_service_logs master
-
-# Gather etcd information
-/usr/bin/gather_etcd
