@@ -26,24 +26,36 @@ mkdir -p ${ETCD_LOG_PATH}
 
 echo "INFO: Starting getting etcd information"
 
+PIDS=()
+
 # member list
 echo "INFO: Getting etcdctl member list"
-ocp4etcdctl member list -w table > ${ETCD_LOG_PATH}/member_list.txt
-ocp4etcdctl member list -w json > ${ETCD_LOG_PATH}/member_list.json
+ocp4etcdctl member list -w table > ${ETCD_LOG_PATH}/member_list.txt &
+PIDS+=($!)
+ocp4etcdctl member list -w json > ${ETCD_LOG_PATH}/member_list.json &
+PIDS+=($!)
 
 # endpoint status
 echo "INFO: Getting etcdctl endpoint status"
-ocp4etcdctl endpoint status -w table > ${ETCD_LOG_PATH}/endpoint_status.txt
-ocp4etcdctl endpoint status -w json > ${ETCD_LOG_PATH}/endpoint_status.json
+ocp4etcdctl endpoint status -w table > ${ETCD_LOG_PATH}/endpoint_status.txt &
+PIDS+=($!)
+ocp4etcdctl endpoint status -w json > ${ETCD_LOG_PATH}/endpoint_status.json &
+PIDS+=($!)
 
 # endpoint health
 echo "INFO: Getting etcdctl endpoint health"
-ocp4etcdctl endpoint health -w table > ${ETCD_LOG_PATH}/endpoint_health.txt
-ocp4etcdctl endpoint health -w json > ${ETCD_LOG_PATH}/endpoint_health.json
+ocp4etcdctl endpoint health -w table > ${ETCD_LOG_PATH}/endpoint_health.txt &
+PIDS+=($!)
+ocp4etcdctl endpoint health -w json > ${ETCD_LOG_PATH}/endpoint_health.json &
+PIDS+=($!)
 
 # alarm list
 echo "INFO: Getting etcdctl alarm list"
-ocp4etcdctl alarm list > ${ETCD_LOG_PATH}/alarm_list.txt
-ocp4etcdctl alarm list -w json > ${ETCD_LOG_PATH}/alarm_list.json
+ocp4etcdctl alarm list > ${ETCD_LOG_PATH}/alarm_list.txt &
+PIDS+=($!)
+ocp4etcdctl alarm list -w json > ${ETCD_LOG_PATH}/alarm_list.json &
+PIDS+=($!)
 
-echo "INFO: Done gathering etcd information"
+echo "INFO: Waiting for etcd info collection to complete ..."
+wait ${PIDS[@]}
+echo "INFO: Done collecting etcd information"
