@@ -8,10 +8,10 @@ ETCDCTL_CONTAINER='etcdctl'
 RUNNING_ETCD_POD=$(oc get pod -n openshift-etcd --no-headers|grep Running| grep -o -m 1 '\S*etcd\S*')
 
 # We cannot rely on ETCDCTL_ENDPOINTS on container because it may contain bootstrap VM
-ETCDCTL_ENDPOINTS=$(oc exec ${RUNNING_ETCD_POD}  -n openshift-etcd -c ${ETCDCTL_CONTAINER} -- /bin/sh -c "etcdctl member list" | awk -F', ' '{printf "%s%s",sep,$5; sep=","}')
+ETCDCTL_ENDPOINTS=$(oc exec "${RUNNING_ETCD_POD}"  -n openshift-etcd -c ${ETCDCTL_CONTAINER} -- /bin/sh -c "etcdctl member list" | awk -F', ' '{printf "%s%s",sep,$5; sep=","}')
 
 function ocp4etcdctl {
-    oc -n openshift-etcd exec -c ${ETCDCTL_CONTAINER} ${RUNNING_ETCD_POD} -- env ETCDCTL_ENDPOINTS=${ETCDCTL_ENDPOINTS} etcdctl $@
+    oc -n openshift-etcd exec -c "${ETCDCTL_CONTAINER}" "${RUNNING_ETCD_POD}" -- env "ETCDCTL_ENDPOINTS=${ETCDCTL_ENDPOINTS}" etcdctl "$@"
 }
 
 if [[ -z $RUNNING_ETCD_POD ]];then
@@ -57,5 +57,5 @@ ocp4etcdctl alarm list -w json > ${ETCD_LOG_PATH}/alarm_list.json &
 PIDS+=($!)
 
 echo "INFO: Waiting for etcd info collection to complete ..."
-wait ${PIDS[@]}
+wait "${PIDS[@]}"
 echo "INFO: Done collecting etcd information"
