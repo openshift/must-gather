@@ -1,0 +1,146 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="must-gather"
+NETWORK_TRACE_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_trace"}
+
+mkdir -p ${NETWORK_TRACE_PATH}/
+
+# Convert the date and add the prefix
+function convert_log_timestamp {
+  grep -e "^I" -e "^E" -e "^W" -e "^N" | \
+  sed 's/ /-/;s/^[IEWDN]/& /' | \
+  gawk '{ print $2  " | "  $0; }' | \
+  sed "s/|/ ${1} ${2} ${3} | /" | \
+  sed '/^[+a-zA-Z/]/d'
+}
+
+function convert_ovs_timestamp {
+  sed 's/2020-//;s/-//;s/T/-/;s/Z//' | \
+  sed "s/|/ ${1} ${2} ${3} | /" | \
+  sed '/^[+a-zA-Z/]/d'
+}
+
+# Collect the log files
+function gather_ovn_kubernetes_data {
+  for NODE in ${NODES}; do
+    OVNKUBE_NODE_POD=$(oc -n openshift-ovn-kubernetes \
+      get pods --no-headers -o custom-columns=":metadata.name" \
+      --field-selector spec.nodeName=${NODE} -l app=ovnkube-node)
+
+
+    OVNKUBE_MASTER=$(oc -n openshift-ovn-kubernetes \
+      get pods --no-headers -o custom-columns=':metadata.name' \
+      --field-selector spec.nodeName=${NODE} -l app=ovnkube-master)
+
+    OVS_POD=$(oc -n openshift-ovn-kubernetes \
+      get pods --no-headers -o custom-columns=':metadata.name' \
+      --field-selector spec.nodeName=${NODE} -l app=ovs-node)
+
+    echo "NODE $NODE    OVNKUBE_NODE_POD $OVNKUBE_NODE_POD     OVS_POD $OVS_POD     OVNKUBE_MASTER $OVNKUBE_MASTER" 
+
+    oc -n openshift-ovn-kubernetes logs ${OVS_POD} 2>/dev/null | \
+      convert_ovs_timestamp "${NODE}" "${OVS_POD}" "ovs-daemons" \
+      > ${NETWORK_TRACE_PATH}/${NODE}_${OVS_POD}_ovs-daemons.log &
+    PIDS+=($!)
+
+    oc -n openshift-ovn-kubernetes logs ${OVS_POD} -p 2>/dev/null | \
+      convert_ovs_timestamp "${NODE}" "${OVS_POD}" "ovs-daemons" \
+      > ${NETWORK_TRACE_PATH}/${NODE}_${OVS_POD}_ovs-daemons-previous.log &
+    PIDS+=($!)
+
+    oc -n openshift-ovn-kubernetes logs ${OVNKUBE_NODE_POD} -c ovn-controller 2>/dev/null | \
+      convert_ovs_timestamp "${NODE}" "${OVNKUBE_NODE_POD}" "ovn-controller" \
+      > ${NETWORK_TRACE_PATH}/${NODE}_${OVNKUBE_NODE_POD}_ovn-controller.log &
+    PIDS+=($!)
+
+    oc -n openshift-ovn-kubernetes logs ${OVNKUBE_NODE_POD} -c ovn-controller -p 2>/dev/null | \
+      convert_ovs_timestamp "${NODE}" "${OVNKUBE_NODE_POD}" "ovn-controller" \
+      > ${NETWORK_TRACE_PATH}/${NODE}_${OVNKUBE_NODE_POD}_ovn-controller-previous.log &
+    PIDS+=($!)
+
+    oc -n openshift-ovn-kubernetes logs ${OVNKUBE_NODE_POD} -c ovnkube-node 2>/dev/null | \
+      convert_log_timestamp "${NODE}" "${OVNKUBE_NODE_POD}" "ovnkube-node" \
+      > ${NETWORK_TRACE_PATH}/${NODE}_${OVNKUBE_NODE_POD}_ovnkube-node.log 2>/dev/null &
+    PIDS+=($!)
+
+    oc -n openshift-ovn-kubernetes logs ${OVNKUBE_NODE_POD} -c ovnkube-node -p 2>/dev/null | \
+      convert_log_timestamp "${NODE}" "${OVNKUBE_NODE_POD}" "ovnkube-node" \
+      > ${NETWORK_TRACE_PATH}/${NODE}_${OVNKUBE_NODE_POD}_ovnkube-node-previous.log  &
+    PIDS+=($!)
+
+    if [[ ${OVNKUBE_MASTER} != "" ]] ; then
+       # northd nbdb sbdb ovnkube-master
+      oc -n openshift-ovn-kubernetes logs ${OVNKUBE_MASTER} -c northd 2>/dev/null | \
+        convert_ovs_timestamp "${NODE}" "${OVNKUBE_MASTER}" "northd" \
+	> ${NETWORK_TRACE_PATH}/${NODE}_${OVNKUBE_MASTER}_northd.log &
+      PIDS+=($!)
+
+      oc -n openshift-ovn-kubernetes logs ${OVNKUBE_MASTER} -c nbdb 2>/dev/null | \
+        convert_ovs_timestamp "${NODE}" "${OVNKUBE_MASTER}" "nbdb" \
+        > ${NETWORK_TRACE_PATH}/${NODE}_${OVNKUBE_MASTER}_nbdb.log &
+      PIDS+=($!)
+
+      oc -n openshift-ovn-kubernetes logs ${OVNKUBE_MASTER} -c sbdb 2>/dev/null | \
+        convert_ovs_timestamp "${NODE}" "${OVNKUBE_MASTER}" "sbdb" \
+        > ${NETWORK_TRACE_PATH}/${NODE}_${OVNKUBE_MASTER}_sbdb.log &
+      PIDS+=($!)
+
+      oc -n openshift-ovn-kubernetes logs ${OVNKUBE_MASTER} -c ovnkube-master 2>/dev/null | \
+        convert_log_timestamp "${NODE}" "${OVNKUBE_MASTER}" "ovnkube-master" \
+        > ${NETWORK_TRACE_PATH}/${NODE}_${OVNKUBE_MASTER}_ovnkube-master.log &
+      PIDS+=($!)
+
+     fi
+
+   done
+}
+
+function convert_journal_timestamp {
+  sed 's/Jan /01/; s/Feb /02/; s/Mar /03/; s/Apr /04/; s/May /05/; s/Jun /06/;
+  s/Jul /07/; s/Aug /08/; s/Sep /09/; s/Oct /10/; s/Nov /11/; s/Dec /12/;
+  s/ /-/' | sed '/^---/d'
+}
+
+function gather_service_data {
+  # master worker - kubelet crio
+
+  oc adm node-logs --role="master" -u crio | \
+    convert_journal_timestamp \
+    > ${NETWORK_TRACE_PATH}/master_crio.log &
+  PIDS+=($!)
+
+  oc adm node-logs --role="worker" -u crio | \
+    convert_journal_timestamp \
+    > ${NETWORK_TRACE_PATH}/worker_crio.log &
+  PIDS+=($!)
+
+  oc adm node-logs --role="master" -u kubelet | \
+    grep -e "SyncLoop" -e "\]: E" | \
+    convert_journal_timestamp \
+    > ${NETWORK_TRACE_PATH}/master_kubelet.log &
+  PIDS+=($!)
+
+  oc adm node-logs --role="worker" -u kubelet | \
+    grep -e "SyncLoop" -e "\]: E" | \
+    convert_journal_timestamp \
+    > ${NETWORK_TRACE_PATH}/worker_kubelet.log &
+  PIDS+=($!)
+}
+
+if [ $# -eq 0 ]; then
+    echo "WARNING: Collecting network logs on ALL nodes in your cluster to make the trace. This could take a long time." >&2
+fi
+
+PIDS=()
+NODES="${@:-$(oc get nodes --no-headers -o custom-columns=':metadata.name')}"
+NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
+if [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
+    gather_ovn_kubernetes_data
+    gather_service_data
+    echo "INFO: Waiting for network log collection to complete ..."
+    wait ${PIDS[@]}
+    echo "INFO: Network log collection complete."
+    tr_date=$(date "+%Y%m%d-%H%m%S")
+    sort ${NETWORK_TRACE_PATH}/*log > ${NETWORK_TRACE_PATH}/trace-${tr_date}
+    rm ${NETWORK_TRACE_PATH}/*log
+fi
+
