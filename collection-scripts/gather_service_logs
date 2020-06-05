@@ -2,8 +2,8 @@
 BASE_COLLECTION_PATH="/must-gather"
 ROLES=${1:-master}         ### Defaults to only collecting things from Masters
 
-# Service Lists
-GENERAL_SERVICES=(kubelet crio)
+# Service Lists; see also https://github.com/openshift/machine-config-operator/issues/1365
+GENERAL_SERVICES=(kubelet crio machine-config-daemon-firstboot machine-config-daemon-host)
 MASTER_SERVICES+=${2:-${GENERAL_SERVICES[@]}}
 MASTER_SERVICES+=()        ### Placeholder to extend Master only services
 NODE_SERVICES+=${2:-${GENERAL_SERVICES[@]}}
