@@ -126,6 +126,45 @@ function gather_service_data {
   PIDS+=($!)
 }
 
+out=${NETWORK_TRACE_PATH}/ovn_startup_trace
+
+# generate a trace of key parts of ovn startup
+function ovn_generate_startup_trace {
+	rm -f ${out}
+
+	# The trace records node-start, container start, election results, container ready
+
+	gawk '/Starting MCO environment/{ print $1 " " $2 "  Starting MCO environment on node"}' ${tf} >> ${out}
+	echo " "
+
+	# Find first line in each ovn container and assume its the start.
+	grep -e "00001|vlog|INFO|opened log file" -e "ovn-controller | 00001|" -e "northd | 00001|reconnect" -e "Parsed config file" ${tf} \
+		| gawk '{ print $1 " " $2 " " $3 " " $4 "  Container starting" }' >> ${out}
+
+	# container is "ready" when it transitions to handling requests
+	# sometimes we can tell, other times we assume we know.
+	# ovs is ready when br_int is set
+	grep -e "bridge br-int: added interface br-int on port" ${tf} | gawk '{ print $1 " " $2 " " $3 " " $4 "  OVS Ready" }' >> ${out}
+	# ovn-controller ready
+	grep 'rconn|INFO|unix:/var/run/openvswitch/br-int.mgmt: connected' ${tf} | gawk '{ print $1 " " $2 " " $3 " " $4 "  Ready" }' >> ${out}
+	# nbdb and sbdb - assumed ready after "peak resident set size after 10.0"
+	grep "peak resident set size after 10.0" ${tf} | grep " nbdb " |gawk '{ print $1 " " $2 " " $3 " " $4 "  nbdb Ready" }' >> ${out}
+	grep "peak resident set size after 10.0" ${tf} | grep " sbdb " |gawk '{ print $1 " " $2 " " $3 " " $4 "  sbdb Ready" }' >> ${out}
+	# ovnkube-master, ovnkube-node are ready when start watching config.
+	grep "Watching config file /run/ovnkube-config/ovnkube.conf" ${tf} | gawk '{ print $1 " " $2 " " $3 " " $4 "  Ready" }' >> ${out}
+
+	# find the containers that won the election
+	# ovnkube-master
+	grep -e "won leader election" ${tf} | gawk '{ print $1 " " $2 " " $3 " " $4 "  ACTIVE" }' >> ${out}
+	# nbdb and sbdb - the container that starts the election wins
+	grep -e "starting election" ${tf} | gawk '{ print $1 " " $2 " " $3 " " $4 "  ACTIVE" }' >> ${out}
+	# northd - the active container does "Assigned dynamic"
+	grep -e "ovn_northd|INFO|Assigned dynamic" ${tf} | head -1 | gawk '{ print $1 " " $2 " " $3 " " $4 "  ACTIVE" }' >> ${out}
+
+	sort ${out} > ${NETWORK_TRACE_PATH}/ovn-startup_trace
+	rm -f ${out}
+}
+
 if [ $# -eq 0 ]; then
     echo "WARNING: Collecting network logs on ALL nodes in your cluster to make the trace. This could take a long time." >&2
 fi
@@ -140,7 +179,10 @@ if [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
     wait ${PIDS[@]}
     echo "INFO: Network log collection complete."
     tr_date=$(date "+%Y%m%d-%H%m%S")
-    sort ${NETWORK_TRACE_PATH}/*log > ${NETWORK_TRACE_PATH}/trace-${tr_date}
+    tf=${NETWORK_TRACE_PATH}/trace-${tr_date}
+    sort ${NETWORK_TRACE_PATH}/*log > ${tf}
+    # generate ovn startup trace
+    ovn_generate_startup_trace
     rm ${NETWORK_TRACE_PATH}/*log
 fi
 
