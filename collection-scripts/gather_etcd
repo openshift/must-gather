@@ -1,0 +1,61 @@
+#!/bin/bash
+
+#Safeguards
+set -o nounset
+set -o errexit
+set -o pipefail
+
+BASE_COLLECTION_PATH="/must-gather"
+ETCD_LOG_PATH="${BASE_COLLECTION_PATH}/etcd_info"
+
+ETCDCTL_CONTAINER='etcdctl'
+
+RUNNING_ETCD_POD=$(oc get pod -n openshift-etcd --no-headers|grep Running| grep -o -m 1 '\S*etcd\S*')
+
+# We cannot rely on ETCDCTL_ENDPOINTS on container because it may contain bootstrap VM
+ETCDCTL_ENDPOINTS=$(oc exec "${RUNNING_ETCD_POD}"  -n openshift-etcd -c ${ETCDCTL_CONTAINER} -- /bin/sh -c "etcdctl member list" | awk -F', ' '{printf "%s%s",sep,$5; sep=","}')
+
+function ocp4etcdctl {
+    oc -n openshift-etcd exec -c "${ETCDCTL_CONTAINER}" "${RUNNING_ETCD_POD}" -- env "ETCDCTL_ENDPOINTS=${ETCDCTL_ENDPOINTS}" etcdctl "$@"
+}
+
+if [[ -z $RUNNING_ETCD_POD ]];then
+    echo "ERROR: No running etcd pods found" >&2
+    exit 1
+fi
+
+echo "Getting information from pod \"${RUNNING_ETCD_POD}\", container \"${ETCDCTL_CONTAINER}\""
+echo "Using endpoints: ${ETCDCTL_ENDPOINTS}"
+
+mkdir -p ${ETCD_LOG_PATH}
+
+echo "INFO: Starting getting etcd information"
+
+# If one ocp4etcdctl execution fails, the other ones should be tried anyway.
+set +o errexit
+
+PIDS=()
+
+# member list
+echo "INFO: Getting etcdctl member list"
+ocp4etcdctl member list -w json > ${ETCD_LOG_PATH}/member_list.json &
+PIDS+=($!)
+
+# endpoint status
+echo "INFO: Getting etcdctl endpoint status"
+ocp4etcdctl endpoint status -w json > ${ETCD_LOG_PATH}/endpoint_status.json &
+PIDS+=($!)
+
+# endpoint health
+echo "INFO: Getting etcdctl endpoint health"
+ocp4etcdctl endpoint health -w json > ${ETCD_LOG_PATH}/endpoint_health.json &
+PIDS+=($!)
+
+# alarm list
+echo "INFO: Getting etcdctl alarm list"
+ocp4etcdctl alarm list -w json > ${ETCD_LOG_PATH}/alarm_list.json &
+PIDS+=($!)
+
+echo "INFO: Waiting for etcd info collection to complete ..."
+wait "${PIDS[@]}"
+echo "INFO: Done collecting etcd information"

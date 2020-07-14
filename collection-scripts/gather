@@ -18,10 +18,10 @@ resources+=(clusteroperators)
 resources+=(certificatesigningrequests)
 
 # Machine/Node Resources
-resources+=(nodes machineconfigs machineconfigpools)
+resources+=(nodes)
 
 # Namespaces/Project Resources
-resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd)
+resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd ns/openshift-kni-infra)
 
 # Storage Resources
 resources+=(storageclasses persistentvolumes volumeattachments)
@@ -37,6 +37,12 @@ resources+=(networks.operator.openshift.io)
 for resource in "${resources[@]}"; do
     oc adm inspect --dest-dir must-gather ${resource}
 done
+
+# Gather etcd information
+/usr/bin/gather_etcd
+
+# Collect System Audit Logs
+/usr/bin/gather_audit_logs
 
 # Gather Service Logs (using a suplamental Script); Scoped to Masters.
 /usr/bin/gather_service_logs master
