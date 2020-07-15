@@ -25,7 +25,7 @@ function collect_audit_logs {  ### Takes an input of PATH
 
     echo "WARNING: Collecting one or more audit logs on ALL masters in your cluster. This could take a large amount of time." >&2
     mkdir -p ${AUDIT_LOG_PATH}/${1}
-    /usr/bin/oc adm node-logs --role=master --path=${1}/ > ${AUDIT_LOG_PATH}/${1}.audit_logs_listing
+    /usr/bin/oc adm node-logs --role=master --path=${1}/ | grep -v ".terminating" > ${AUDIT_LOG_PATH}/${1}.audit_logs_listing
     while IFS=$'\n' read -r line; do
         IFS=' ' read -ra log <<< "${line}"
 	FILTER=gzip queue ${AUDIT_LOG_PATH}/${1}/"${log[0]}"-"${log[1]}".gz /usr/bin/oc adm node-logs "${log[0]}" --path=${1}/"${log[1]}"
