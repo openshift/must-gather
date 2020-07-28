@@ -24,7 +24,7 @@ resources+=(nodes)
 resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd ns/openshift-kni-infra)
 
 # Storage Resources
-resources+=(storageclasses persistentvolumes volumeattachments)
+resources+=(storageclasses persistentvolumes volumeattachments csidrivers)
 
 # Image-source Resources
 resources+=(imagecontentsourcepolicies.operator.openshift.io)
