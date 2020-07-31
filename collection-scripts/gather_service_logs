@@ -16,14 +16,14 @@ function collect_serivce_logs {  ## Takes a node role input (master or worker)
     PIDS=()
     DIR_PATH=${SERVICE_LOG_PATH}/${1}s
     echo "WARNING: Collecting one or more service logs on ALL linux $1 nodes in your cluster. This could take a large amount of time." >&2
-    mkdir -p ${DIR_PATH}
-    for service in ${NODE_SERVICES[@]}; do
+    mkdir -p "${DIR_PATH}"
+    for service in "${NODE_SERVICES[@]}"; do
         echo "INFO: Collecting host service logs for $service"
-        /usr/bin/oc adm node-logs --role=$1 -l kubernetes.io/os=linux -u $service > ${DIR_PATH}/${service}_service.log &
+        /usr/bin/oc adm node-logs --role=$1 -l kubernetes.io/os=linux -u "$service" --since "${SINCE_TIMEFRAME:--7d}"> "${DIR_PATH}/${service}_service.log" &
 	PIDS+=($!)
     done
     echo "INFO: Waiting for worker host service log collection to complete ..."
-    wait ${PIDS[@]}
+    wait "${PIDS[@]}"
     echo "INFO: Worker host service log collection to complete."
 }
 
