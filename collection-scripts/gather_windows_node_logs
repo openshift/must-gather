@@ -1,0 +1,22 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="/must-gather"
+WINDOWS_NODE_LOGS=$BASE_COLLECTION_PATH/host_service_logs/windows
+
+# Logfile list
+LOGS=(kube-proxy/kube-proxy.exe.INFO kube-proxy/kube-proxy.exe.ERROR kube-proxy/kube-proxy.exe.WARNING)
+LOGS+=(hybrid-overlay/hybrid-overlay.log kubelet/kubelet.log)
+
+# if the cluster has no Windows nodes skip this script
+WIN_NODES=$(/usr/bin/oc get no -l kubernetes.io/os=windows)
+if [ -z "$WIN_NODES" ]; then
+    exit 0
+fi
+
+echo INFO: Collecting logs for all Windows nodes
+for log in ${LOGS[@]}; do
+    LOG_DIR=${WINDOWS_NODE_LOGS}/$(dirname $log)
+    mkdir -p ${LOG_DIR}
+    /usr/bin/oc adm node-logs -l kubernetes.io/os=windows --path=$log > ${LOG_DIR}/$(basename $log) &
+    PIDS+=($!)
+done
+wait ${PIDS[@]}

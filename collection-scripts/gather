@@ -46,3 +46,6 @@ done
 
 # Gather Service Logs (using a suplamental Script); Scoped to Masters.
 /usr/bin/gather_service_logs master
+
+# Gather Windows Kubernetes component logs
+/usr/bin/gather_windows_node_logs

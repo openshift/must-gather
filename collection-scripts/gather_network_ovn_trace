@@ -108,7 +108,7 @@ function gather_service_data {
     > ${NETWORK_TRACE_PATH}/master_crio.log &
   PIDS+=($!)
 
-  oc adm node-logs --role="worker" -u crio | \
+  oc adm node-logs --role="worker" -l kubernetes.io/os=linux -u crio | \
     convert_journal_timestamp \
     > ${NETWORK_TRACE_PATH}/worker_crio.log &
   PIDS+=($!)
@@ -119,7 +119,7 @@ function gather_service_data {
     > ${NETWORK_TRACE_PATH}/master_kubelet.log &
   PIDS+=($!)
 
-  oc adm node-logs --role="worker" -u kubelet | \
+  oc adm node-logs --role="worker" -l kubernetes.io/os=linux -u kubelet | \
     grep -e "SyncLoop" -e "\]: E" | \
     convert_journal_timestamp \
     > ${NETWORK_TRACE_PATH}/worker_kubelet.log &
