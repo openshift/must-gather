@@ -10,7 +10,7 @@ NODE_SERVICES+=${2:-${GENERAL_SERVICES[@]}}
 NODE_SERVICES+=()          ### Placeholder to extend Node only services
 
 # Collect System Service Logs
-SERVICE_LOG_PATH="${BASE_COLLECTION_PATH}/host_service_logs/"
+SERVICE_LOG_PATH="${BASE_COLLECTION_PATH}/host_service_logs/linux"
 
 function collect_serivce_logs {  ## Takes a node role input (master or worker)
     PIDS=()
