@@ -56,6 +56,13 @@ function gather_ovn_kubernetes_nodes_data {
       oc -n openshift-ovn-kubernetes exec ${OVS_NODE_POD} -- bash -c \
       "ovs-ofctl dump-flows br-local" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_ofctl_dump_flows_br_local &
       PIDS+=($!)
+       oc -n openshift-ovn-kubernetes exec ${OVS_NODE_POD} -- bash -c \
+      "ovs-ofctl dump-ports-desc br-ex" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_ofctl_dump_ports_br_ex &
+      PIDS+=($!)
+      oc -n openshift-ovn-kubernetes exec ${OVS_NODE_POD} -- bash -c \
+      "ovs-ofctl dump-flows br-ex" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_ofctl_dump_flows_br_ex &
+      PIDS+=($!)
+
       oc -n openshift-ovn-kubernetes exec ${OVS_NODE_POD} -- bash -c \
       "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_dump &
       PIDS+=($!)
@@ -65,11 +72,13 @@ function gather_ovn_kubernetes_nodes_data {
 
       if [[ ${OVNKUBE_MASTER} != "" ]] ; then
         oc cp openshift-ovn-kubernetes/${OVNKUBE_MASTER}:/etc/openvswitch/ovnsb_db.db ${NETWORK_LOG_PATH}/${NODE}_ovnsb_db.db > ${NETWORK_LOG_PATH}/${NODE}_sbdb &
+        gzip ${NETWORK_LOG_PATH}/${NODE}_sbdb &        
         PIDS+=($!)
+        
         oc cp openshift-ovn-kubernetes/${OVNKUBE_MASTER}:/etc/openvswitch/ovnnb_db.db ${NETWORK_LOG_PATH}/${NODE}_ovnnb_db.db > ${NETWORK_LOG_PATH}/${NODE}_nbdb &
+        gzip ${NETWORK_LOG_PATH}/${NODE}_nbdb &
         PIDS+=($!)
       fi
-
   done
 }
 
@@ -123,11 +132,11 @@ function gather_kuryr_data {
 
 
 if [ $# -eq 0 ]; then
-    echo "WARNING: Collecting network logs on ALL nodes in your cluster. This could take a long time." >&2
+    echo "WARNING: Collecting network logs on ALL linux nodes in your cluster. This could take a long time." >&2
 fi
 
 PIDS=()
-NODES="${@:-$(oc get nodes --no-headers -o custom-columns=':metadata.name')}"
+NODES="${@:-$(oc get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {.status.nodeInfo.operatingSystem==linux}')}"
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
 if [[ "${NETWORK_TYPE}" == "openshiftsdn" ]]; then
     gather_openshiftsdn_nodes_data
