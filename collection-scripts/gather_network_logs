@@ -41,6 +41,8 @@ function gather_ovn_kubernetes_nodes_data {
       PIDS+=($!)
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "ip -6 route" > ${NETWORK_LOG_PATH}/${NODE}_${OVNKUBE_NODE_POD}_ip_6_route &
       PIDS+=($!)
+      oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "ip -s -d link" > ${NETWORK_LOG_PATH}/${NODE}_${OVNKUBE_NODE_POD}_ip_-s_-d_link &
+      PIDS+=($!)
 
       
       OVS_NODE_POD=$(oc -n openshift-ovn-kubernetes get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=${NODE} -l app=ovs-node)
