@@ -1,0 +1,58 @@
+#!/bin/bash
+
+set -o errexit
+set -o pipefail
+
+BASE_COLLECTION_PATH="/must-gather"
+LOG_PATH="${BASE_COLLECTION_PATH}/sos_info/networking"
+
+# use quorum-guard becuase it is privileged and uses hostNetwork
+QUORUM_GUARD_DATA=($(oc get pods -n openshift-etcd -l name=etcd-quorum-guard -o jsonpath='{range .items[*]}{.metadata.name}{","}{.status.hostIP}{" "}{end}')) || {
+  echo "ERROR: Skipping network data collection"
+  exit 0
+}
+
+if [[ -z "$QUORUM_GUARD_DATA" ]];then
+  echo "ERROR: Skipping network data collection"
+  exit 0
+fi
+
+set -o nounset
+
+COMMANDS=(
+  "ip -4 rule"
+  "ip -6 rule"
+  "ip maddr show"
+  "ip neigh show nud noarp"
+  "ip -o addr"
+  "ip -s -d link"
+  "ip -6 route show table all"
+  "ip -d address"
+  "ip mroute show"
+  "ip netns"
+  "ip route show table all"
+  "ip -s -s neigh show"
+)
+
+run_command(){
+  local pod="$1"
+  local node="$2"
+  local command="$3"
+  oc rsh -n openshift-etcd $pod $command 1> "$LOG_PATH/${node}-${command//_/ }.log" || true
+}
+
+mkdir -p ${LOG_PATH}
+echo "INFO: Start getting networking information"
+
+for pod in "${QUORUM_GUARD_DATA[@]}"; do
+  # create array element [0] is pod name [1] is node ip
+  IFS=',' read -r -a data <<< "$pod"
+  echo "Getting networking data from hostNetwork on \"${data[1]}\" via \"${data[0]}\""
+  for command in "${COMMANDS[@]}"; do
+    run_command "${data[0]}" "${data[1]}" "$command" &
+  done
+done
+
+echo "INFO: Waiting for networking info collection to complete ..."
+wait
+echo "INFO: Done collecting networking information"
