@@ -1,0 +1,24 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="must-gather"
+CORE_DUMP_PATH=${OUT:-"${BASE_COLLECTION_PATH}/node_core_dumps"}
+
+mkdir -p ${CORE_DUMP_PATH}/
+
+function gather_core_dump_data {
+  for NODE in ${NODES}; do
+    oc debug node/${NODE} -- chroot /host /bin/bash -c "coredumpctl info" > ${CORE_DUMP_PATH}/${NODE}_core_dump & PIDS+=($!)
+  done
+}
+
+if [ $# -eq 0 ]; then
+    echo "WARNING: Collecting network logs on ALL linux nodes in your cluster. This could take a long time." >&2
+fi
+
+PIDS=()
+NODES="${@:-$(oc get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {.status.nodeInfo.operatingSystem==linux}')}"
+
+gather_core_dump_data
+
+echo "INFO: Waiting for node core dump collection to complete ..."
+wait ${PIDS[@]}
+echo "INFO: Node core dump collection to complete."
