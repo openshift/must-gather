@@ -4,10 +4,35 @@ CORE_DUMP_PATH=${OUT:-"${BASE_COLLECTION_PATH}/node_core_dumps"}
 
 mkdir -p ${CORE_DUMP_PATH}/
 
+function get_dump_off_node { 
+    #Start Debug pod force it to stay up for 60 seconds, supress Stdout 
+    oc debug node/$1 -- /bin/bash -c 'sleep 60' > /dev/null 2>&1 &
+    
+    #Clear local variables before assignment
+    local n=0
+    local debug=""
+
+    # Make sure pod is avaliable exit after 5 seconds if not 
+    while [[ -z "$debug"  && $n -le 10 ]]
+    do    
+        #Get name of Debug Pod for relevant node 
+        debug=$(oc get pods | grep $1-debug | awk -F' ' '{print $2}')
+        (( n++))
+        sleep 1
+    done 
+
+    # Make sure debug pod is ready
+    oc wait --for=condition=Ready pod/$debug --timeout=10s
+
+    #Copy Core Dumps out of Nodes suppress Stdout
+    oc cp $debug:/host/var/lib/systemd/coredump ${CORE_DUMP_PATH}/$1_core_dump > /dev/null 2>&1 && PIDS+=($!)
+}
+
 function gather_core_dump_data {
-  for NODE in ${NODES}; do
-    oc debug node/${NODE} -- chroot /host /bin/bash -c "coredumpctl info" > ${CORE_DUMP_PATH}/${NODE}_core_dump & PIDS+=($!)
-  done
+  #Run coredump pull function on all nodes in parallel
+  for NODE in ${NODES}; do 
+    get_dump_off_node ${NODE} & 
+  done 
 }
 
 if [ $# -eq 0 ]; then
