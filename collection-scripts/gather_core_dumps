@@ -5,27 +5,24 @@ CORE_DUMP_PATH=${OUT:-"${BASE_COLLECTION_PATH}/node_core_dumps"}
 mkdir -p ${CORE_DUMP_PATH}/
 
 function get_dump_off_node { 
-    #Start Debug pod force it to stay up for 60 seconds, supress Stdout 
-    oc debug node/$1 -- /bin/bash -c 'sleep 60' > /dev/null 2>&1 &
+    local debugPod=""
     
-    #Clear local variables before assignment
-    local n=0
-    local debug=""
-
-    # Make sure pod is avaliable exit after 5 seconds if not 
-    while [[ -z "$debug"  && $n -le 10 ]]
-    do    
-        #Get name of Debug Pod for relevant node 
-        debug=$(oc get pods | grep $1-debug | awk -F' ' '{print $2}')
-        (( n++))
-        sleep 1
-    done 
+    #Start Debug pod force it to stay up for 60 seconds, get debug pod's name
+    debugPod=$(oc debug node/$1 -- /bin/bash -c 'sleep 60' 2>&1 | head -n 1 | sed 's/.*\/\(.*\) .../\1/' &) 
 
     # Make sure debug pod is ready
-    oc wait --for=condition=Ready pod/$debug --timeout=10s
+    oc wait --for=condition=Ready pod/$debugPod --timeout=10s
 
     #Copy Core Dumps out of Nodes suppress Stdout
-    oc cp $debug:/host/var/lib/systemd/coredump ${CORE_DUMP_PATH}/$1_core_dump > /dev/null 2>&1 && PIDS+=($!)
+    if [ -z "$debugPod" ]
+    then
+      echo "Debug pod for node $1 never activated"
+    else 
+      oc cp $debugPod:/host/var/lib/systemd/coredump ${CORE_DUMP_PATH}/$1_core_dump > /dev/null 2>&1 && PIDS+=($!)
+
+      #clean up debug pod after we are done using them  
+      oc delete pod $debugPod    
+    fi
 }
 
 function gather_core_dump_data {
