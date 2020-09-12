@@ -69,6 +69,11 @@ function gather_ovn_kubernetes_nodes_data {
       "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_dump &
       PIDS+=($!)
 
+      oc cp openshift-ovn-kubernetes/${OVS_NODE_POD}:/host/var/log/openvswitch/ovs-vswitchd.log ${NETWORK_LOG_PATH}/${NODE}_ovs_vswitchd_log &
+      PIDS+=($!)
+      oc cp openshift-ovn-kubernetes/${OVS_NODE_POD}:/host/var/log/openvswitch/ovsdb-server.log ${NETWORK_LOG_PATH}/${NODE}_ovsdb_log &
+      PIDS+=($!)
+
       OVNKUBE_MASTER=$(oc -n openshift-ovn-kubernetes \
           get pods --no-headers -o custom-columns=':metadata.name' --field-selector spec.nodeName=${NODE} -l app=ovnkube-master)
 
