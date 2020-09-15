@@ -35,7 +35,7 @@ function gather_ovn_kubernetes_data {
       get pods --no-headers -o custom-columns=':metadata.name' \
       --field-selector spec.nodeName=${NODE} -l app=ovs-node)
 
-    echo "NODE $NODE    OVNKUBE_NODE_POD $OVNKUBE_NODE_POD     OVS_POD $OVS_POD     OVNKUBE_MASTER $OVNKUBE_MASTER" 
+    echo "NODE $NODE    OVNKUBE_NODE_POD $OVNKUBE_NODE_POD     OVS_POD $OVS_POD     OVNKUBE_MASTER $OVNKUBE_MASTER"
 
     oc -n openshift-ovn-kubernetes logs ${OVS_POD} 2>/dev/null | \
       convert_ovs_timestamp "${NODE}" "${OVS_POD}" "ovs-daemons" \
@@ -186,3 +186,5 @@ if [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
     rm ${NETWORK_TRACE_PATH}/*log
 fi
 
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync

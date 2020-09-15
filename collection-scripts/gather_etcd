@@ -59,3 +59,6 @@ PIDS+=($!)
 echo "INFO: Waiting for etcd info collection to complete ..."
 wait "${PIDS[@]}"
 echo "INFO: Done collecting etcd information"
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync

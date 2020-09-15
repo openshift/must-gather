@@ -4,7 +4,7 @@ CORE_DUMP_PATH=${OUT:-"${BASE_COLLECTION_PATH}/node_core_dumps"}
 
 mkdir -p "${CORE_DUMP_PATH}"/
 
-function get_dump_off_node { 
+function get_dump_off_node {
     local debugPod=""
     local debugNamespace=""
 
@@ -22,20 +22,20 @@ function get_dump_off_node {
     if [ -z "$debugPod" ]
     then
       echo "Debug pod for node ""$1"" never activated"
-    else 
+    else
       #Copy Core Dumps out of Nodes suppress Stdout
       oc cp -n "$debugNamespace" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump > /dev/null 2>&1 && PIDS+=($!)
 
-      #clean up debug pod after we are done using them  
-      oc delete pod "$debugPod" -n "$debugNamespace"  
+      #clean up debug pod after we are done using them
+      oc delete pod "$debugPod" -n "$debugNamespace"
     fi
 }
 
 function gather_core_dump_data {
   #Run coredump pull function on all nodes in parallel
-  for NODE in ${NODES}; do 
-    get_dump_off_node "${NODE}" & 
-  done 
+  for NODE in ${NODES}; do
+    get_dump_off_node "${NODE}" &
+  done
 }
 
 if [ $# -eq 0 ]; then
@@ -50,3 +50,6 @@ gather_core_dump_data
 echo "INFO: Waiting for node core dump collection to complete ..."
 wait "${PIDS[@]}"
 echo "INFO: Node core dump collection to complete."
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
