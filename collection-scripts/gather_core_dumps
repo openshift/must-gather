@@ -2,33 +2,39 @@
 BASE_COLLECTION_PATH="must-gather"
 CORE_DUMP_PATH=${OUT:-"${BASE_COLLECTION_PATH}/node_core_dumps"}
 
-mkdir -p ${CORE_DUMP_PATH}/
+mkdir -p "${CORE_DUMP_PATH}"/
 
 function get_dump_off_node { 
     local debugPod=""
-    
-    #Start Debug pod force it to stay up for 60 seconds, get debug pod's name
-    debugPod=$(oc debug node/$1 -- /bin/bash -c 'sleep 60' 2>&1 | head -n 1 | sed 's/.*\/\(.*\) .../\1/' &) 
+    local debugNamespace=""
 
-    # Make sure debug pod is ready
-    oc wait --for=condition=Ready pod/$debugPod --timeout=10s
+    #Get debug pod's name and
+    debugPod=$(oc debug node/"$1" -o jsonpath='{.metadata.name}')
+    debugNamespace=$(oc debug node/"$1" -o jsonpath='{.metadata.namespace}')
 
-    #Copy Core Dumps out of Nodes suppress Stdout
+    #Start Debug pod force it to stay up for 5 minutes max
+    oc debug node/"$1" -- /bin/bash -c 'sleep 300' > /dev/null 2>&1 &
+
+    #Mimic a normal oc call, i.e pause between two successive calls to allow pod to register
+    sleep 2
+    oc wait -n "$debugNamespace" --for=condition=Ready pod/"$debugPod" --timeout=10s
+
     if [ -z "$debugPod" ]
     then
-      echo "Debug pod for node $1 never activated"
+      echo "Debug pod for node ""$1"" never activated"
     else 
-      oc cp $debugPod:/host/var/lib/systemd/coredump ${CORE_DUMP_PATH}/$1_core_dump > /dev/null 2>&1 && PIDS+=($!)
+      #Copy Core Dumps out of Nodes suppress Stdout
+      oc cp -n "$debugNamespace" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump > /dev/null 2>&1 && PIDS+=($!)
 
       #clean up debug pod after we are done using them  
-      oc delete pod $debugPod    
+      oc delete pod "$debugPod" -n "$debugNamespace"  
     fi
 }
 
 function gather_core_dump_data {
   #Run coredump pull function on all nodes in parallel
   for NODE in ${NODES}; do 
-    get_dump_off_node ${NODE} & 
+    get_dump_off_node "${NODE}" & 
   done 
 }
 
@@ -37,10 +43,10 @@ if [ $# -eq 0 ]; then
 fi
 
 PIDS=()
-NODES="${@:-$(oc get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {.status.nodeInfo.operatingSystem==linux}')}"
+NODES="${*:-$(oc get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {.status.nodeInfo.operatingSystem==linux}')}"
 
 gather_core_dump_data
 
 echo "INFO: Waiting for node core dump collection to complete ..."
-wait ${PIDS[@]}
+wait "${PIDS[@]}"
 echo "INFO: Node core dump collection to complete."
