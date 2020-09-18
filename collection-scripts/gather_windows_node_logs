@@ -20,3 +20,6 @@ for log in ${LOGS[@]}; do
     PIDS+=($!)
 done
 wait ${PIDS[@]}
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync

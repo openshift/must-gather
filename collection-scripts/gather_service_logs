@@ -38,3 +38,6 @@ else
     echo "Error: no role supplied or an invalid role was supplied." >&2
     echo "Error: valid roles are 'master', 'worker', 'master,worker' or 'worker,master'." >&2
 fi
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync

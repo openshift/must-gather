@@ -44,7 +44,7 @@ function gather_ovn_kubernetes_nodes_data {
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node $OVNKUBE_NODE_POD -- bash -c "ip -s -d link" > ${NETWORK_LOG_PATH}/${NODE}_${OVNKUBE_NODE_POD}_ip_-s_-d_link &
       PIDS+=($!)
 
-      
+
       OVS_NODE_POD=$(oc -n openshift-ovn-kubernetes get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=${NODE} -l app=ovs-node)
       oc -n openshift-ovn-kubernetes exec ${OVS_NODE_POD} -- bash -c \
       "ovs-ofctl dump-ports-desc br-int" > ${NETWORK_LOG_PATH}/${NODE}_${OVS_NODE_POD}_ovs_ofctl_dump_ports_br_int &
@@ -74,9 +74,9 @@ function gather_ovn_kubernetes_nodes_data {
 
       if [[ ${OVNKUBE_MASTER} != "" ]] ; then
         oc cp openshift-ovn-kubernetes/${OVNKUBE_MASTER}:/etc/openvswitch/ovnsb_db.db ${NETWORK_LOG_PATH}/${NODE}_ovnsb_db.db > ${NETWORK_LOG_PATH}/${NODE}_sbdb &
-        gzip ${NETWORK_LOG_PATH}/${NODE}_sbdb &        
+        gzip ${NETWORK_LOG_PATH}/${NODE}_sbdb &
         PIDS+=($!)
-        
+
         oc cp openshift-ovn-kubernetes/${OVNKUBE_MASTER}:/etc/openvswitch/ovnnb_db.db ${NETWORK_LOG_PATH}/${NODE}_ovnnb_db.db > ${NETWORK_LOG_PATH}/${NODE}_nbdb &
         gzip ${NETWORK_LOG_PATH}/${NODE}_nbdb &
         PIDS+=($!)
@@ -153,3 +153,6 @@ fi
 echo "INFO: Waiting for node network log collection to complete ..."
 wait ${PIDS[@]}
 echo "INFO: Node network log collection to complete."
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync

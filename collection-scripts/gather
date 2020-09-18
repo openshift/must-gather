@@ -8,7 +8,7 @@ version >> /must-gather/version
 # Resource List
 resources=()
 
-# Cluster Version Information 
+# Cluster Version Information
 resources+=(clusterversion ns/openshift-cluster-version)
 
 # Operator Resources
@@ -49,3 +49,6 @@ done
 
 # Gather Windows Kubernetes component logs
 /usr/bin/gather_windows_node_logs
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
