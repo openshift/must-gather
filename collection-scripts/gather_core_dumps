@@ -6,28 +6,27 @@ mkdir -p "${CORE_DUMP_PATH}"/
 
 function get_dump_off_node {
     local debugPod=""
-    local debugNamespace=""
+    
+    #Get debug pod's name
+    debugPod=$(oc debug --to-namespace="default" node/"$1" -o jsonpath='{.metadata.name}')
 
-    #Get debug pod's name and
-    debugPod=$(oc debug node/"$1" -o jsonpath='{.metadata.name}')
-    debugNamespace=$(oc debug node/"$1" -o jsonpath='{.metadata.namespace}')
-
-    #Start Debug pod force it to stay up for 5 minutes max
-    oc debug node/"$1" -- /bin/bash -c 'sleep 300' > /dev/null 2>&1 &
+    #Start Debug pod force it to stay up until removed in "default" namespace
+    oc debug --to-namespace="default" node/"$1" -- /bin/bash -c 'sleep 300' > /dev/null 2>&1 &
 
     #Mimic a normal oc call, i.e pause between two successive calls to allow pod to register
     sleep 2
-    oc wait -n "$debugNamespace" --for=condition=Ready pod/"$debugPod" --timeout=10s
+    oc wait -n "default" --for=condition=Ready pod/"$debugPod" --timeout=30s
 
     if [ -z "$debugPod" ]
     then
       echo "Debug pod for node ""$1"" never activated"
     else
       #Copy Core Dumps out of Nodes suppress Stdout
-      oc cp -n "$debugNamespace" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump > /dev/null 2>&1 && PIDS+=($!)
+      echo "Copying core dumps on node ""$1"""
+      oc cp  --loglevel 1 -n "default" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump > /dev/null 2>&1 && PIDS+=($!)
 
-      #clean up debug pod after we are done using them
-      oc delete pod "$debugPod" -n "$debugNamespace"
+      #clean up debug pod after we are done using them  
+      oc delete pod "$debugPod" -n "default"  
     fi
 }
 
@@ -39,7 +38,7 @@ function gather_core_dump_data {
 }
 
 if [ $# -eq 0 ]; then
-    echo "WARNING: Collecting network logs on ALL linux nodes in your cluster. This could take a long time." >&2
+    echo "WARNING: Collecting network logs on ALL linux nodes in your cluster. This could take a long time."
 fi
 
 PIDS=()
