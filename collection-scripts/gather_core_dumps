@@ -2,30 +2,32 @@
 BASE_COLLECTION_PATH="must-gather"
 CORE_DUMP_PATH=${OUT:-"${BASE_COLLECTION_PATH}/node_core_dumps"}
 
-mkdir -p ${CORE_DUMP_PATH}/
+mkdir -p "${CORE_DUMP_PATH}"/
 
-function get_dump_off_node { 
-    #Start Debug pod force it to stay up for 60 seconds, supress Stdout 
-    oc debug node/$1 -- /bin/bash -c 'sleep 60' > /dev/null 2>&1 &
+function get_dump_off_node {
+    local debugPod=""
     
-    #Clear local variables before assignment
-    local n=0
-    local debug=""
+    #Get debug pod's name
+    debugPod=$(oc debug --to-namespace="default" node/"$1" -o jsonpath='{.metadata.name}')
 
-    # Make sure pod is avaliable exit after 5 seconds if not 
-    while [[ -z "$debug"  && $n -le 10 ]]
-    do    
-        #Get name of Debug Pod for relevant node 
-        debug=$(oc get pods | grep $1-debug | awk -F' ' '{print $2}')
-        (( n++))
-        sleep 1
-    done 
+    #Start Debug pod force it to stay up until removed in "default" namespace
+    oc debug --to-namespace="default" node/"$1" -- /bin/bash -c 'sleep 300' > /dev/null 2>&1 &
 
-    # Make sure debug pod is ready
-    oc wait --for=condition=Ready pod/$debug --timeout=10s
+    #Mimic a normal oc call, i.e pause between two successive calls to allow pod to register
+    sleep 2
+    oc wait -n "default" --for=condition=Ready pod/"$debugPod" --timeout=30s
 
-    #Copy Core Dumps out of Nodes suppress Stdout
-    oc cp $debug:/host/var/lib/systemd/coredump ${CORE_DUMP_PATH}/$1_core_dump > /dev/null 2>&1 && PIDS+=($!)
+    if [ -z "$debugPod" ]
+    then
+      echo "Debug pod for node ""$1"" never activated"
+    else
+      #Copy Core Dumps out of Nodes suppress Stdout
+      echo "Copying core dumps on node ""$1"""
+      oc cp  --loglevel 1 -n "default" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump > /dev/null 2>&1 && PIDS+=($!)
+
+      #clean up debug pod after we are done using them  
+      oc delete pod "$debugPod" -n "default"  
+    fi
 }
 
 function gather_core_dump_data {
@@ -36,7 +38,7 @@ function gather_core_dump_data {
 }
 
 if [ $# -eq 0 ]; then
-    echo "WARNING: Collecting network logs on ALL linux nodes in your cluster. This could take a long time." >&2
+    echo "WARNING: Collecting network logs on ALL linux nodes in your cluster. This could take a long time."
 fi
 
 PIDS=()
