@@ -38,7 +38,7 @@ function gather_core_dump_data {
 }
 
 if [ $# -eq 0 ]; then
-    echo "WARNING: Collecting network logs on ALL linux nodes in your cluster. This could take a long time."
+    echo "WARNING: Collecting core dumps on ALL linux nodes in your cluster. This could take a long time."
 fi
 
 PIDS=()
