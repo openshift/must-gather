@@ -7,9 +7,9 @@ mkdir -p ${NETWORK_LOG_PATH}/
 function gather_openshiftsdn_nodes_data {
   for NODE in ${NODES}; do
       SDN_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=${NODE} -l app=sdn)
-      oc -n openshift-sdn exec ${SDN_POD} -- bash -c "iptables-save -c" > ${NETWORK_LOG_PATH}/${NODE}_iptables &
+      oc -n openshift-sdn exec ${SDN_POD} -c sdn -- bash -c "iptables-save -c" > ${NETWORK_LOG_PATH}/${NODE}_iptables &
       PIDS+=($!)
-      oc -n openshift-sdn exec ${SDN_POD} -- bash -c "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${NODE}_ovs_dump &
+      oc -n openshift-sdn exec ${SDN_POD} -c sdn -- bash -c "ovs-vsctl show" > ${NETWORK_LOG_PATH}/${NODE}_ovs_dump &
       PIDS+=($!)
 
       OVS_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=${NODE} -l app=ovs)
