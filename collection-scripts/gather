@@ -52,7 +52,7 @@ oc adm inspect --dest-dir must-gather "${group_resources_text}"
 /usr/bin/gather_admission_webhooks
 
 # Gather Service Logs (using a supplemental Script); Scoped to Masters.
-/usr/bin/gather_service_logs master
+/usr/bin/gather_service_logs master,worker
 
 # Gather Windows Kubernetes component logs
 /usr/bin/gather_windows_node_logs
