@@ -33,10 +33,12 @@ resources+=(imagecontentsourcepolicies.operator.openshift.io)
 resources+=(networks.operator.openshift.io)
 
 # Run the Collection of Resources using inspect
-# running accross all-namespaces for the few "Autoscaler" resouces.
 for resource in "${resources[@]}"; do
     oc adm inspect --dest-dir must-gather ${resource}
 done
+
+# Gather optional operator resources from all namespaces
+/usr/bin/gather_olm
 
 # Gather etcd information
 /usr/bin/gather_etcd
