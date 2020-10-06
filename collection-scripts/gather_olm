@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+oc adm inspect --dest-dir=must-gather -A olm
