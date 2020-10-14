@@ -4,6 +4,19 @@ NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
 
 mkdir -p ${NETWORK_LOG_PATH}/
 
+function gather_multus_data { 
+  for NODE in ${NODES}; do
+    MULTUS_POD = $(oc get pods -n openshift-multus --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=${NODE} --selector app=multus,component=network)
+
+  done 
+  #Should we store this on a per namespace basis? 
+  oc get net-attach-def -o yaml --all-namespaces > ${NETWORK_LOG_PATH}/net_attach_def & PIDS=($!)
+
+  oc describe ippools.whereabouts.cni.cncf.io -A > ${NETWORK_LOG_PATH}/ippools & PIDS=($!)
+
+  oc describe overlappingrangeipreservations.whereabouts.cni.cncf.io -A > ${NETWORK_LOG_PATH}/overlappingrangeipreservations $ PIDS=($!)
+}
+
 function gather_openshiftsdn_nodes_data {
   for NODE in ${NODES}; do
       SDN_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=${NODE} -l app=sdn)
