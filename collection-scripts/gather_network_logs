@@ -7,7 +7,7 @@ mkdir -p ${NETWORK_LOG_PATH}/
 function gather_multus_data { 
   for NODE in ${NODES}; do
     MULTUS_POD = $(oc get pods -n openshift-multus --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName=${NODE} --selector app=multus,component=network)
-
+    # Is there anything more that's not collected by the generic namespace gathering? 
   done 
   #Should we store this on a per namespace basis? 
   oc get net-attach-def -o yaml --all-namespaces > ${NETWORK_LOG_PATH}/net_attach_def & PIDS=($!)
@@ -15,6 +15,20 @@ function gather_multus_data {
   oc describe ippools.whereabouts.cni.cncf.io -A > ${NETWORK_LOG_PATH}/ippools & PIDS=($!)
 
   oc describe overlappingrangeipreservations.whereabouts.cni.cncf.io -A > ${NETWORK_LOG_PATH}/overlappingrangeipreservations $ PIDS=($!)
+}
+
+#This might be better situated in default must-gather scripts 
+function gather_namespace_specific_data { 
+  NAMESPACES = $(oc get namespaces --no-headers -o custom-columns=":metadata.name")
+
+  for NAMESPACE in ${NAMESPACES}; do 
+    oc describe NetworkPolicy -n ${NAMESPACE} > ${NETWORK_LOG_PATH}/${NAMESPACE}_network_policies
+
+    oc describe EgressFirewall -n ${NAMESPACE} > ${NETWORK_LOG_PATH}/${NAMESPACE}_egress_firewalls 
+
+    oc describe EgressIP -n {NAMESPACE} > ${NETWORK_LOG_PATH}/${NAMESPACE}_egress_ips
+
+  done
 }
 
 function gather_openshiftsdn_nodes_data {
