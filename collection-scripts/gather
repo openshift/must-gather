@@ -57,5 +57,8 @@ oc adm inspect --dest-dir must-gather "${group_resources_text}"
 # Gather Windows Kubernetes component logs
 /usr/bin/gather_windows_node_logs
 
+# Gather HAProxy config files
+/usr/bin/gather_haproxy_config
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

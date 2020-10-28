@@ -1,0 +1,28 @@
+#!/bin/bash
+
+BASE_COLLECTION_PATH="must-gather"
+HAPROXY_CONFIG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/ingress_controllers"}
+
+mkdir -p "${HAPROXY_CONFIG_PATH}"/
+
+function gather_haproxy_config {
+    echo "INFO: Gathering HAProxy config files"
+    INGRESS_CONTROLLERS=$(oc get ingresscontroller -n openshift-ingress-operator --no-headers -o custom-columns=":metadata.name")
+    for IC in ${INGRESS_CONTROLLERS}; do
+        PODS=$(oc get pods -n openshift-ingress --no-headers -o custom-columns=":metadata.name" --selector ingresscontroller.operator.openshift.io/deployment-ingresscontroller="${IC}")
+        for POD in ${PODS}; do
+            oc cp openshift-ingress/"${POD}":/var/lib/haproxy/conf/haproxy.config "${HAPROXY_CONFIG_PATH}"/"${IC}"/"${POD}"/haproxy.config &
+            PIDS+=($!)
+        done
+    done
+}
+
+PIDS=()
+gather_haproxy_config
+
+echo "INFO: Waiting for HAProxy config collection to complete ..."
+wait "${PIDS[@]}"
+echo "INFO: HAProxy config collection complete."
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
