@@ -2,3 +2,4 @@ reviewers:
   - sferich888
 approvers:
   - sferich888
+component: "oc"
