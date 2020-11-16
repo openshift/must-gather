@@ -14,32 +14,6 @@ function gather_multus_data {
   oc describe overlappingrangeipreservations.whereabouts.cni.cncf.io -A > "${NETWORK_LOG_PATH}"/overlappingrangeipreservations  2>&1 & PIDS=($!)
 }
 
-#This might be better situated in default must-gather scripts 
-function gather_namespace_specific_data { 
-  echo "INFO: Gathering Namespace specific data"
-  POLICY_LOG_PATH="${NETWORK_LOG_PATH}/policies"
-  EGRESS_FIREWALL_LOG_PATH="${NETWORK_LOG_PATH}/egressFirewalls"
-  EGRESSIP_LOG_PATH="${NETWORK_LOG_PATH}/egressips"
-  
-  mkdir -p "${POLICY_LOG_PATH}"
-  mkdir -p "${EGRESS_FIREWALL_LOG_PATH}" 
-  mkdir -p "${EGRESSIP_LOG_PATH}"
-
-  NAMESPACES=$(oc get namespaces --no-headers -o custom-columns=":metadata.name")
-
-  for NAMESPACE in ${NAMESPACES}; do 
-    oc describe NetworkPolicy -n "${NAMESPACE}" \
-    > "${POLICY_LOG_PATH}"/"${NAMESPACE}"_NetworkPolicies 2>&1 & PIDS=($!)
-
-    oc describe EgressFirewall -n "${NAMESPACE}" \
-    > "${EGRESS_FIREWALL_LOG_PATH}"/"${NAMESPACE}"_EgressFirewalls 2>&1 & PIDS=($!)
-
-    oc describe EgressIP -n "${NAMESPACE}" \
-    > "${EGRESSIP_LOG_PATH}"/"${NAMESPACE}"_EgressIPs 2>&1 & PIDS=($!)
-
-  done
-}
-
 function gather_openshiftsdn_nodes_data {
   echo "INFO: Gathering Openshift-SDN data"
   for NODE in ${NODES}; do
@@ -217,14 +191,12 @@ NODES="${@:-$(oc get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {.sta
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
 if [[ "${NETWORK_TYPE}" == "openshiftsdn" ]]; then
     gather_multus_data
-    gather_namespace_specific_data
     gather_openshiftsdn_nodes_data
 elif [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
     gather_kuryr_nodes_data
     gather_kuryr_data
 elif [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
     gather_multus_data
-    gather_namespace_specific_data
     gather_ovn_kubernetes_nodes_data
     gather_ovn_kubernetes_master_data
 fi
