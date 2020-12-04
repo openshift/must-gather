@@ -14,6 +14,40 @@ function gather_multus_data {
   oc describe overlappingrangeipreservations.whereabouts.cni.cncf.io -A > "${NETWORK_LOG_PATH}"/overlappingrangeipreservations  2>&1 & PIDS=($!)
 }
 
+function gather_ovn_ipsec_data { 
+  echo "INFO: Gathering ovn-ipsec data"
+  for IPSEC_POD in ${IPSEC_PODS[@]}; do 
+    oc -n openshift-ovn-kubernetes exec "${IPSEC_POD}" -- bash -c "ovs-appctl -t ovs-monitor-ipsec tunnels/show" \
+    > "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_ovs-monitor-ipsec_tunnels-show & 
+    PIDS+=($!)
+
+    oc -n openshift-ovn-kubernetes exec "${IPSEC_POD}" -- bash -c "ipsec status" \
+    > "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_ipsec_status & 
+    PIDS+=($!)
+
+    oc -n openshift-ovn-kubernetes exec "${IPSEC_POD}" -- bash -c "certutil -L -d sql:/etc/ipsec.d" \
+    > "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_active_libreswan_certs & 
+    PIDS+=($!)
+
+    oc -n openshift-ovn-kubernetes exec "${IPSEC_POD}" -- bash -c "ovs-vsctl list Open_vSwitch" \
+    > "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_list_Open_vSwitch & 
+    PIDS+=($!)
+
+    oc -n openshift-ovn-kubernetes exec "${IPSEC_POD}" -- bash -c "ovn-nbctl list nb_global" \
+    > "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_list_nb_global & 
+    PIDS+=($!)
+
+    oc cp openshift-ovn-kubernetes/"${IPSEC_POD}":/etc/openvswitch/keys "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_keys/ &
+    PIDS+=($!) 
+
+    oc cp openshift-ovn-kubernetes/"${IPSEC_POD}":/var/log/openvswitch/libreswan.log "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_libreswan_log &
+    PIDS+=($!) 
+
+    oc cp openshift-ovn-kubernetes/"${IPSEC_POD}":/var/log/openvswitch/ovs-monitor-ipsec.log "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_ovs_monitor_ipsec &
+    PIDS+=($!)
+  done
+}
+
 function gather_openshiftsdn_nodes_data {
   echo "INFO: Gathering Openshift-SDN data"
   for NODE in ${NODES}; do
@@ -189,6 +223,8 @@ fi
 PIDS=()
 NODES="${@:-$(oc get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {.status.nodeInfo.operatingSystem==linux}')}"
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
+IPSEC_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovn-ipsec -o=jsonpath='{.items[*].metadata.name}'))
+
 if [[ "${NETWORK_TYPE}" == "openshiftsdn" ]]; then
     gather_multus_data
     gather_openshiftsdn_nodes_data
@@ -196,6 +232,12 @@ elif [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
     gather_kuryr_nodes_data
     gather_kuryr_data
 elif [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
+    if [-z "$IPSEC_PODS"]; then
+        echo "INFO: No ovn-ipsec pods exist, tunnel traffic will be unencrypted"
+    else 
+        echo "INFO: ovn-ipsec is enabled, tunnel traffic should be encryted"  
+        gather_ovn_ipsec_data
+    fi 
     gather_multus_data
     gather_ovn_kubernetes_nodes_data
     gather_ovn_kubernetes_master_data
