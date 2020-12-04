@@ -36,6 +36,9 @@ group_resources+=(imagecontentsourcepolicies.operator.openshift.io)
 # Networking Resources
 group_resources+=(networks.operator.openshift.io)
 
+# NodeNetworkState
+resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
+
 # Run the Collection of Resources using inspect
 # running accross all-namespaces for the few "Autoscaler" resouces.
 oc adm inspect --dest-dir must-gather "${named_resources[@]}"
