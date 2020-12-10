@@ -14,17 +14,23 @@ NODE_SERVICES+=()          ### Placeholder to extend Node only services
 # Collect System Service Logs
 SERVICE_LOG_PATH="${BASE_COLLECTION_PATH}/host_service_logs/"
 
+# collect service logs expects PIDS to be an already defined array
+PIDS=()
 if [[ $ROLES == "master" ]]; then
-    collect_service_logs master ${MASTER_SERVICES[@]}
+    collect_service_logs --role=master ${MASTER_SERVICES[@]}
 elif [[ $ROLES == "worker" ]]; then
-    collect_service_logs worker ${NODE_SERVICES[@]}
-elif [[ $ROLES == "master,worker" ]] || [[ $ROLES == "worker,master" ]] ; then
-    collect_service_logs master ${MASTER_SERVICES[@]}
-    collect_service_logs worker ${NODE_SERVICES[@]}
+    collect_service_logs --role=worker ${NODE_SERVICES[@]}
+elif [[ $ROLES == "master,worker" ]] || [[ $ROLES == "worker,master" ]]; then
+    collect_service_logs --role=master ${MASTER_SERVICES[@]}
+    collect_service_logs --role=worker ${NODE_SERVICES[@]}
 else
-    echo "Error: no role supplied or an invalid role was supplied." >&2
-    echo "Error: valid roles are 'master', 'worker', 'master,worker' or 'worker,master'." >&2
+    echo "Error: no selector supplied or an invalid selector was supplied." >&2
+    echo "Error: valid selectors are '--role=master', '--role=worker', '--rolemaster,worker', '--role=worker,master' the node name." >&2
 fi
+
+echo "INFO: Waiting for worker host service log collection to complete ..."
+wait "${PIDS[@]}"
+echo "INFO: Worker host service log collection to complete."
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

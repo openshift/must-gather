@@ -1,18 +1,30 @@
 #!/bin/bash
-function collect_service_logs {  ## Takes a node role input (master or worker) and a list of services
-    role=${1}
+function collect_service_logs {
+# Takes a node role input (master or worker) and a list of services
+# assumes there is a SERVICE_LOG_PATH variable defined used to set the logs
+# destination and a PIDS variable which is an array.
+
+    selector=${1}
     shift
 
-    PIDS=()
-    DIR_PATH=${SERVICE_LOG_PATH}/${role}s
-    echo "WARNING: Collecting one or more service logs on ALL linux $1 nodes in your cluster. This could take a large amount of time." >&2
+    if [[ ${selector} == '--role=master' ]]; then
+        DIR_PATH="${SERVICE_LOG_PATH}/masters"
+    elif [[ ${selector} == '--role=worker' ]]; then
+        DIR_PATH="${SERVICE_LOG_PATH}/workers"
+        echo "WARNING: Collecting one or more service logs on ALL linux $1 workers in your cluster. This could take a large amount of time." >&2
+    else
+        DIR_PATH="${SERVICE_LOG_PATH}/${selector}"
+    fi
+
     mkdir -p "${DIR_PATH}"
     for service in "${@}"; do
         echo "INFO: Collecting host service logs for $service"
-        /usr/bin/oc adm node-logs --role=${role} -l kubernetes.io/os=linux -u "${service}" --since "${SINCE_TIMEFRAME:--7d}"> "${DIR_PATH}/${service}_service.log" &
-	PIDS+=($!)
+        if [[ ${selector} =~ '--role=' ]]; then
+            /usr/bin/oc adm node-logs ${selector} -l kubernetes.io/os=linux -u "${service}" --since "${SINCE_TIMEFRAME:--7d}"> "${DIR_PATH}/${service}_service.log" &
+	    PIDS+=($!)
+        else
+            /usr/bin/oc adm node-logs ${selector} -u "${service}" --since "${SINCE_TIMEFRAME:--7d}"> "${DIR_PATH}/${service}_service.log" &
+	    PIDS+=($!)
+        fi
     done
-    echo "INFO: Waiting for worker host service log collection to complete ..."
-    wait "${PIDS[@]}"
-    echo "INFO: Worker host service log collection to complete."
 }
