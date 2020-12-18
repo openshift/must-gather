@@ -58,9 +58,9 @@ function gather_openshiftsdn_nodes_data {
       PIDS+=($!)
 
       OVS_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName="${NODE}" -l app=ovs)
-      oc -n openshift-sdn exec "${OVS_POD}" -- bash -c "cat /var/log/openvswitch/ovs-vswitchd.log" > "${NETWORK_LOG_PATH}"/"${NODE}"_"${OVS_POD}"_vswitchd_log &
+      oc -n openshift-sdn cp openshift-sdn/"${OVS_POD}":host/var/log/openvswitch/ovs-vswitchd.log "${NETWORK_LOG_PATH}"/"${NODE}"_"${OVS_POD}"_vswitchd_log &
       PIDS+=($!)
-      oc -n openshift-sdn exec "${OVS_POD}" -- bash -c "cat /var/log/openvswitch/ovsdb-server.log" > "${NETWORK_LOG_PATH}"/"${NODE}"_"${OVS_POD}"_ovsdb_log &
+      oc -n openshift-sdn cp openshift-sdn/"${OVS_POD}":host/var/log/openvswitch/ovsdb-server.log "${NETWORK_LOG_PATH}"/"${NODE}"_"${OVS_POD}"_ovsdb_log &
       PIDS+=($!)
   done
 }
