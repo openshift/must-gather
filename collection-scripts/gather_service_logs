@@ -1,4 +1,6 @@
 #!/bin/bash
+. gather_service_logs_util
+
 BASE_COLLECTION_PATH="/must-gather"
 ROLES=${1:-master}         ### Defaults to only collecting things from Masters
 
@@ -12,32 +14,23 @@ NODE_SERVICES+=()          ### Placeholder to extend Node only services
 # Collect System Service Logs
 SERVICE_LOG_PATH="${BASE_COLLECTION_PATH}/host_service_logs/"
 
-function collect_serivce_logs {  ## Takes a node role input (master or worker)
-    PIDS=()
-    DIR_PATH=${SERVICE_LOG_PATH}/${1}s
-    echo "WARNING: Collecting one or more service logs on ALL linux $1 nodes in your cluster. This could take a large amount of time." >&2
-    mkdir -p "${DIR_PATH}"
-    for service in "${NODE_SERVICES[@]}"; do
-        echo "INFO: Collecting host service logs for $service"
-        /usr/bin/oc adm node-logs --role=$1 -l kubernetes.io/os=linux -u "$service" --since "${SINCE_TIMEFRAME:--7d}"> "${DIR_PATH}/${service}_service.log" &
-	PIDS+=($!)
-    done
-    echo "INFO: Waiting for worker host service log collection to complete ..."
-    wait "${PIDS[@]}"
-    echo "INFO: Worker host service log collection to complete."
-}
-
+# collect service logs expects PIDS to be an already defined array
+PIDS=()
 if [[ $ROLES == "master" ]]; then
-    collect_serivce_logs master
+    collect_service_logs --role=master ${MASTER_SERVICES[@]}
 elif [[ $ROLES == "worker" ]]; then
-    collect_serivce_logs worker
-elif [[ $ROLES == "master,worker" ]] || [[ $ROLES == "worker,master" ]] ; then
-    collect_serivce_logs master
-    collect_serivce_logs worker
+    collect_service_logs --role=worker ${NODE_SERVICES[@]}
+elif [[ $ROLES == "master,worker" ]] || [[ $ROLES == "worker,master" ]]; then
+    collect_service_logs --role=master ${MASTER_SERVICES[@]}
+    collect_service_logs --role=worker ${NODE_SERVICES[@]}
 else
-    echo "Error: no role supplied or an invalid role was supplied." >&2
-    echo "Error: valid roles are 'master', 'worker', 'master,worker' or 'worker,master'." >&2
+    echo "Error: no selector supplied or an invalid selector was supplied." >&2
+    echo "Error: valid selectors are '--role=master', '--role=worker', '--rolemaster,worker', '--role=worker,master' the node name." >&2
 fi
+
+echo "INFO: Waiting for worker host service log collection to complete ..."
+wait "${PIDS[@]}"
+echo "INFO: Worker host service log collection to complete."
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
