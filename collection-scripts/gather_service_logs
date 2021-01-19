@@ -1,5 +1,5 @@
 #!/bin/bash
-. collect_service_logs
+. gather_service_logs_util
 
 BASE_COLLECTION_PATH="/must-gather"
 ROLES=${1:-master}         ### Defaults to only collecting things from Masters

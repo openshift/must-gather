@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# This file is a library which should never be executed directly.
+# It doesn't have execution rights but if anyone runs it as 
+# `bash gather_service_logs_util` it will return 0 and won't do anything.
+
 function collect_service_logs {
 # Takes a node role input (master or worker) and a list of services
 # assumes there is a SERVICE_LOG_PATH variable defined used to set the logs
