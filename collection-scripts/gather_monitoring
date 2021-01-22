@@ -1,0 +1,29 @@
+#!/bin/bash
+
+#Safeguards
+set -o nounset
+set -o errexit
+set -o pipefail
+
+BASE_COLLECTION_PATH="../must-gather"
+MONITORING_PATH="${BASE_COLLECTION_PATH}/monitoring"
+
+mkdir -p "${MONITORING_PATH}"
+
+MONITORING_ROUTE="$(oc get routes -n openshift-monitoring prometheus-k8s -o jsonpath={.status.ingress[0].host})"
+SA_TOKEN="$(oc sa get-token default)"
+
+# this is a CA bundle we need to verify the monitoring route, we will write it to disk so we can use it in the flag
+oc -n openshift-config-managed get cm default-ingress-cert -o jsonpath='{.data.ca-bundle\.crt}' > "${MONITORING_PATH}/ca-bundle.crt"
+
+# using oc get --raw because we directly control it and have standardized debugging on it
+oc get\
+  --server="https://${MONITORING_ROUTE}"\
+  --token="${SA_TOKEN}" \
+  --certificate-authority="${MONITORING_PATH}/ca-bundle.crt" \
+  --raw=/api/v1/rules?type=alert 2>"${MONITORING_PATH}/alert.stderr" > "${MONITORING_PATH}/alerts.json"
+
+rm "${MONITORING_PATH}/ca-bundle.crt"
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
