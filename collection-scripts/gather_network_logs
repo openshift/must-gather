@@ -192,9 +192,10 @@ function gather_kuryr_data {
   'kuryr-gather-openstack-data --config-dir /etc/kuryr' > "${NETWORK_LOG_PATH}"/get_openstack_data &
   PIDS+=($!)
   oc get pods -A -o wide --show-labels > "${NETWORK_LOG_PATH}"/get_pods & PIDS+=($!)
-  oc get kuryrnets > "${NETWORK_LOG_PATH}"/get_kuryrnets & PIDS+=($!)
-  oc get kuryrnetworks -A > "${NETWORK_LOG_PATH}"/get_kuryrnetworks & PIDS+=($!)
-  oc get kuryrnetpolicy -A > "${NETWORK_LOG_PATH}"/get_kuryrnetpolicy & PIDS+=($!)
+  oc get kuryrnetworks -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrnetworks & PIDS+=($!)
+  oc get kuryrnetworkpolicy -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrnetworkpolicy & PIDS+=($!)
+  oc get kuryrport -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrport & PIDS+=($!)
+  oc get kuryrloadbalancer -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrloadbalancer & PIDS+=($!)
   oc get svc -A > "${NETWORK_LOG_PATH}"/get_svc & PIDS+=($!)
 }
 
