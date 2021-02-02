@@ -58,6 +58,10 @@ function gather_openshiftsdn_nodes_data {
       PIDS+=($!)
       oc -n openshift-sdn exec "${SDN_POD}" -c sdn -- bash -c "ovs-vsctl show" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_dump &
       PIDS+=($!)
+      oc -n openshift-sdn exec "${SDN_POD}" -c sdn -- bash -c "ethtool -i $(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_driver &
+      PIDS+=($!)
+      oc -n openshift-sdn exec "${SDN_POD}" -c sdn -- bash -c "ethtool -k $(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_offload &
+      PIDS+=($!)
       collect_service_logs "${NODE}" openvswitch ovs-vswitchd ovsdb-server ovs-configuration
   done
 }
@@ -99,6 +103,13 @@ function gather_ovn_kubernetes_nodes_data {
 
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
       "ovs-vsctl show" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_dump &
+      PIDS+=($!)
+
+      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
+      "ethtool -i $(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_driver &
+      PIDS+=($!)
+      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
+      "ethtool -k $(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_offload &
       PIDS+=($!)
 
       collect_service_logs "${NODE}" openvswitch ovs-vswitchd ovsdb-server ovs-configuration
