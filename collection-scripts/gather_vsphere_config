@@ -1,0 +1,16 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="must-gather"
+VSPHERE_CONFIG_EVENTS_PATH=$BASE_COLLECTION_PATH/vsphere_config_events
+
+if [ -z "$(oc get deployment -n openshift-cluster-storage-operator vsphere-problem-detector-operator | grep vsphere-problem-detector-operator)" ]; then
+exit
+fi
+
+METRICS="vsphere_vcenter_info vsphere_features vsphere_cluster_check_total vsphere_cluster_check_errors vsphere_node_check_errors vsphere_node_check_total vsphere_node_hw_version_total"
+mkdir -p $VSPHERE_CONFIG_EVENTS_PATH
+for METRIC in $METRICS; do
+/usr/bin/oc exec -c prometheus -n openshift-monitoring prometheus-k8s-0 -- curl -s --data-urlencode "query=$METRIC" http://localhost:9090/api/v1/query > $VSPHERE_CONFIG_EVENTS_PATH/$METRIC.json
+done
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
