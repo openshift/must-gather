@@ -25,7 +25,7 @@ group_resources+=(certificatesigningrequests)
 group_resources+=(nodes)
 
 # Namespaces/Project Resources
-named_resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd ns/openshift-kni-infra)
+named_resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd ns/openshift-kni-infra ns/openshift-openstack-infra ns/openshift-vsphere-infra ns/openshift-ovirt-infra)
 
 # Storage Resources
 group_resources+=(storageclasses persistentvolumes volumeattachments csidrivers csinodes volumesnapshotclasses volumesnapshotcontents)
