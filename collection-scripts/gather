@@ -45,6 +45,9 @@ oc adm inspect --dest-dir must-gather "${named_resources[@]}"
 group_resources_text=$(IFS=, ; echo "${group_resources[*]}")
 oc adm inspect --dest-dir must-gather "${group_resources_text}"
 
+# Gather monitoring data from the cluster
+/usr/bin/gather_monitoring
+
 # Gather optional operator resources from all namespaces
 /usr/bin/gather_olm
 
@@ -52,6 +55,7 @@ oc adm inspect --dest-dir must-gather "${group_resources_text}"
 /usr/bin/gather_etcd
 
 # Gather Validation and Mutating Admission Webhook Objects
+# TODO the kube-apiserver operator should list these as related resources
 /usr/bin/gather_admission_webhooks
 
 # Gather Service Logs (using a supplemental Script); Scoped to Masters.
