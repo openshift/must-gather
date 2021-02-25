@@ -70,5 +70,8 @@ oc adm inspect --dest-dir must-gather "${group_resources_text}"
 # Gather HAProxy config files
 /usr/bin/gather_haproxy_config
 
+# Gather Monitoring metrics
+/usr/bin/gather_monitoring
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
