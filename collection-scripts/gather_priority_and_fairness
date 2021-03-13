@@ -1,0 +1,85 @@
+#!/bin/bash
+# We don't want to collect /debug/api_priority_and_fairness in oc adm inspect,
+# https://github.com/openshift/oc/blob/master/pkg/cli/admin/inspect/pod.go#L58-L62
+# because the tokens could be used in a replay attack,
+# thus the route we are taking here is forced by this.
+
+# Safeguards
+set -o nounset
+set -o errexit
+set -o pipefail
+
+BASE_COLLECTION_PATH="/must-gather"
+NAMESPACE_PATH="namespaces/openshift-kube-apiserver"
+POD_PATH="kube-apiserver/kube-apiserver/api_priority_and_fairness"
+APF_PATH="${BASE_COLLECTION_PATH}/${NAMESPACE_PATH}"
+
+# If the cluster version is < 4.6 skip this test
+
+# If cluster version is >=4.6 then the COMPARE will always == 4.6
+#  For example cluster version 4.7:
+#  VERSION=4.7
+#  COMPARE=$(echo -e "4.6\n${VERSION}" | sort -V | head -n1)
+#  echo $COMPARE
+#  4.6
+
+# If cluster version is <4.6 then the COMPARE will be the always the cluster version.
+#  VERSION=4.4
+#  COMPARE=$(echo -e "4.6\n${VERSION}" | sort -V | head -n1)
+#  echo $COMPARE
+#  4.4
+
+VERSION=$(oc get clusterversion version -o jsonpath='{.status.desired.version}')
+COMPARE=$(echo -e "4.6\n${VERSION}" | sort -V | head -n1)
+if [[ ${COMPARE} != "4.6" ]]; then
+  echo "INFO: Cluster version is ${VERSION}. Skipping."
+  exit 0
+fi
+
+# Fetches the POD_NAME where app label is apiserver.
+# Example:
+#  oc get po -n openshift-kube-apiserver -l apiserver -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}'
+#  kube-apiserver-master-0.example.com
+#  kube-apiserver-master-1.example.com
+#  kube-apiserver-master-2.example.com
+KUBE_API_SERVERS=$(oc get po -n openshift-kube-apiserver -l apiserver -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}')
+if [[ -z ${KUBE_API_SERVERS} ]]; then
+    echo "ERROR: No running kube-apiserver pods found" >&2
+    exit 1
+fi
+
+for API_SERVER in ${KUBE_API_SERVERS}
+do
+  OUTPUT_DIR="${APF_PATH}/pods/${API_SERVER}/${POD_PATH}"
+  mkdir -p "${OUTPUT_DIR}"
+
+  # Fetches the POD_IP from the apiserver pod.
+  # Example:
+  #  oc get po -n openshift-kube-apiserver kube-apiserver-master-0.example.com -o jsonpath='{.status.podIP}'
+  #  192.168.9.43
+  POD_IP=$(oc get po -n openshift-kube-apiserver "${API_SERVER}" -o jsonpath='{.status.podIP}')
+  if [[ -z ${POD_IP} ]]; then
+      echo "ERROR: ${API_SERVER}: unable to get .status.podIP" >&2
+      continue
+  fi
+
+  # Fetches the POD_PORT where container name is kube-apiserver.
+  # Example:
+  #  oc get po -n openshift-kube-apiserver kube-apiserver-master-0.example.com -o jsonpath='{range .spec.containers[?(.name=="kube-apiserver")]}{.ports[0].hostPort}'
+  #  6443
+  POD_PORT=$(oc get po -n openshift-kube-apiserver "${API_SERVER}" -o jsonpath='{range .spec.containers[?(.name=="kube-apiserver")]}{.ports[0].hostPort}')
+  if [[ -z ${POD_PORT} ]]; then
+      echo "ERROR: ${API_SERVER}: unable to get .spec.containers.ports[0].hostPort" >&2
+      continue
+  fi
+
+  echo "INFO: Collecting /debug/api_priority_and_fairness endpoint from ${API_SERVER}"
+
+  oc get --raw https://"${POD_IP}":"${POD_PORT}"/debug/api_priority_and_fairness/dump_priority_levels \
+               > "${OUTPUT_DIR}"/priority_levels
+  oc get --raw https://"${POD_IP}":"${POD_PORT}"/debug/api_priority_and_fairness/dump_queues \
+               > "${OUTPUT_DIR}"/queues
+  oc get --raw https://"${POD_IP}":"${POD_PORT}"/debug/api_priority_and_fairness/dump_requests \
+               > "${OUTPUT_DIR}"/requests
+
+done

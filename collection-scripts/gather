@@ -51,6 +51,9 @@ oc adm inspect --dest-dir must-gather "${group_resources_text}"
 # Gather optional operator resources from all namespaces
 /usr/bin/gather_olm
 
+# Gather API Priority and Fairness Endpoints
+/usr/bin/gather_priority_and_fairness
+
 # Gather etcd information
 /usr/bin/gather_etcd
 
