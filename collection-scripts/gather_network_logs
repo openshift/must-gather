@@ -66,6 +66,32 @@ function gather_openshiftsdn_nodes_data {
   done
 }
 
+function get_ovsdb_off_node {
+    local debugPod=""
+
+    #Get debug pod's name
+    debugPod=$(oc debug --to-namespace="default" node/"$1" -o jsonpath='{.metadata.name}')
+
+    #Start Debug pod force it to stay up until removed in "default" namespace
+    oc debug --to-namespace="default" node/"$1" -- /bin/bash -c 'sleep 300' > /dev/null 2>&1 &
+
+    #Mimic a normal oc call, i.e pause between two successive calls to allow pod to register
+    sleep 2
+    oc wait -n "default" --for=condition=Ready pod/"$debugPod" --timeout=30s
+
+    if [ -z "$debugPod" ]
+    then
+      echo "Debug pod for node ""$1"" never activated"
+    else
+      #Copy Core Dumps out of Nodes suppress Stdout
+      echo "Copying ovsdb on node ""$1"""
+      oc cp  --loglevel 1 -n "default" "$debugPod":/host/etc/openvswitch/conf.db "${NETWORK_LOG_PATH}"/"$1"_conf.db > /dev/null 2>&1 && PIDS+=($!)
+
+      #clean up debug pod after we are done using them
+      oc delete pod "$debugPod" -n "default"
+    fi
+}
+
 function gather_ovn_kubernetes_nodes_data {
   echo "INFO: Gathering ovn-kubernetes node data"
   for NODE in ${NODES}; do
@@ -104,6 +130,8 @@ function gather_ovn_kubernetes_nodes_data {
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
       "ovs-vsctl show" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_dump &
       PIDS+=($!)
+
+      get_ovsdb_off_node "${NODE}" &
 
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
       "ethtool -i $(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_driver &
