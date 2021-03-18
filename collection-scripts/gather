@@ -48,6 +48,9 @@ oc adm inspect --dest-dir must-gather "${group_resources_text}"
 # Gather monitoring data from the cluster
 /usr/bin/gather_monitoring
 
+# Collect Kube Termination Logs
+/usr/bin/gather_kubeapi_termination_logs
+
 # Gather optional operator resources from all namespaces
 /usr/bin/gather_olm
 

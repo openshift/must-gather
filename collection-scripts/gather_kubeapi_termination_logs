@@ -1,0 +1,28 @@
+#!/bin/bash
+# Downloads the termination.log (and its rotated copies) from
+# /var/logs/{kube-apiserver,openshift-apiserver} on each master node.
+BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
+echo "WARNING: Collecting one or more watch termination logs on ALL masters in your cluster." >&2
+# the command executed by xargs below expects four parameters:
+# $1 - node path under /var/logs to download
+# $2 - local output path
+# $3 - node name
+# $4 - log file name
+paths=(kube-apiserver)
+for path in "${paths[@]}" ; do
+  output_dir="${BASE_COLLECTION_PATH}/kube-watch-termination-logs/$path"
+  mkdir -p "$output_dir"
+  oc adm node-logs --role=master --path="$path" | \
+  tee "${BASE_COLLECTION_PATH}/kube-watch-termination-logs/$path.watch_logs_listing" | \
+  grep "termination.log" | \
+  sed "s|^|$path $output_dir |"
+done | \
+xargs --max-args=4 --max-procs=45 bash -c \
+  'echo "INFO: Started downloading $1/$4 from $3";
+  oc adm node-logs $3 --path=$1/$4 | gzip > $2/$3-$4.gz;
+  echo "INFO: Finished downloading $1/$4 from $3"' \
+  bash
+echo "INFO: Kube termination logs collected."
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
