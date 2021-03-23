@@ -105,8 +105,8 @@ function gather_ovn_kubernetes_nodes_data {
       "ovs-vsctl show" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_dump &
       PIDS+=($!)
 
-     oc cp openshift-ovn-kubernetes/"${OVNKUBE_NODE_POD}":/etc/openvswitch/conf.db -c ovnkube-node \
-    "${NETWORK_LOG_PATH}"/"${OVNKUBE_NODE_POD}"_conf.db 2>&1
+      oc cp openshift-ovn-kubernetes/"${OVNKUBE_NODE_POD}":/etc/openvswitch/conf.db -c ovnkube-node \
+      "${NETWORK_LOG_PATH}"/"${OVNKUBE_NODE_POD}"_conf.db 2>&1
 
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
       "ethtool -i $(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_driver &
