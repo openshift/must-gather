@@ -5,7 +5,8 @@ BASE_COLLECTION_PATH="/must-gather"
 ROLES=${1:-master}         ### Defaults to only collecting things from Masters
 
 # Service Lists
-GENERAL_SERVICES=(kubelet crio machine-config-daemon-firstboot machine-config-daemon-host)
+GENERAL_SERVICES=(crio kubelet machine-config-daemon-firstboot machine-config-daemon-host NetworkManager openvswitch
+                  ovs-configuration ovsdb-server ovs-vswitchd)
 MASTER_SERVICES+=(${2:-"${GENERAL_SERVICES[@]}"})
 MASTER_SERVICES+=()        ### Placeholder to extend Master only services
 NODE_SERVICES+=(${2:-"${GENERAL_SERVICES[@]}"})
