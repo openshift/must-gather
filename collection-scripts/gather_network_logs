@@ -19,6 +19,8 @@ function gather_multus_data {
 	  oc -n openshift-multus logs ${MULTUS_POD} > "${NETWORK_LOG_PATH}"/"${MULTUS_POD}".log 2>&1 & PIDS=($!)
   done
 
+  oc get multi-networkpolicy -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/multi_networkpolicy 2>&1 & PIDS=($!)
+
   MULTI_NETWORKPOLICY_PODS=($(oc -n openshift-multus get pods --no-headers -o custom-columns=":metadata.name" -l app=multus-networkpolicy))
   for MULTI_NETWORKPOLICY_POD in ${MULTI_NETWORKPOLICY_PODS[@]}; do
           oc -n openshift-multus logs ${MULTI_NETWORKPOLICY_POD} > "${NETWORK_LOG_PATH}"/"${MULTI_NETWORKPOLICY_POD}".log 2>&1 & PIDS=($!)
