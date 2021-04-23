@@ -18,8 +18,10 @@ update-gofmt:
 .PHONY: update-gofmt
 
 
+# FIXME: go vet needs to use $(GO_MOD_FLAGS) when this is fixed https://github.com/golang/go/issues/35955
+# It will be enforced in CI by setting the env var there, so this remains to fix the dev experience
 verify-govet:
-	$(GO) vet $(GO_PACKAGES)
+	$(GO) vet $(GO_MOD_FLAGS) $(GO_PACKAGES)
 .PHONY: verify-govet
 
 verify-golint:
@@ -28,7 +30,7 @@ verify-golint:
 
 # We need to be careful to expand all the paths before any include is done
 # or self_dir could be modified for the next include by the included file.
-# Also doing this at the end of the file allows us to user self_dir before it could be modified.
+# Also doing this at the end of the file allows us to use self_dir before it could be modified.
 include $(addprefix $(self_dir), \
 	../../lib/golang.mk \
 )
