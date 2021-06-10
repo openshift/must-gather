@@ -9,7 +9,7 @@ echo "WARNING: Collecting one or more audit logs on ALL masters in your cluster.
 # $2 - local output path
 # $3 - node name
 # $4 - log file name
-paths=(openshift-apiserver kube-apiserver oauth-apiserver)
+paths=(openshift-apiserver kube-apiserver oauth-apiserver etcd)
 for path in "${paths[@]}" ; do
   output_dir="${BASE_COLLECTION_PATH}/audit_logs/$path"
   mkdir -p "$output_dir"
