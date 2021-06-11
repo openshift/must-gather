@@ -4,6 +4,8 @@
 set -o nounset
 set -o errexit
 set -o pipefail
+set -o nounset
+set -o errexit
 
 declare -r BASE_COLLECTION_PATH="../must-gather"
 declare -r MONITORING_PATH="${BASE_COLLECTION_PATH}/monitoring"
