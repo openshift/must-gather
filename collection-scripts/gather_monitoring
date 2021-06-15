@@ -21,26 +21,41 @@ oc get\
   --server="https://${MONITORING_ROUTE}"\
   --token="${SA_TOKEN}" \
   --certificate-authority="${MONITORING_PATH}/ca-bundle.crt" \
-  --raw=/api/v1/rules?type=alert 2>"${MONITORING_PATH}/alert.stderr" > "${MONITORING_PATH}/alerts.json"
+  --raw=/api/v1/rules?type=alert \
+  2>"${MONITORING_PATH}/alert.stderr" \
+  > "${MONITORING_PATH}/alerts.json" || true
 
 rm "${MONITORING_PATH}/ca-bundle.crt"
 
 function get_top_nodes {
-    oc adm top nodes --sort-by='cpu' &> "${MONITORING_PATH}/adm-top-nodes.out"
+    oc adm top node &> "${MONITORING_PATH}/adm-top-nodes.out"
 }
 
 function get_top_pods {
-    oc adm top pods --sort-by='cpu' &> "${MONITORING_PATH}/adm-top-pods.out"
+    oc adm top pod -A &> "${MONITORING_PATH}/adm-top-pods.out"
+}
+
+function get_top_images {
+    oc adm top images &> "${MONITORING_PATH}/adm-top-images.out"
+}
+
+function get_top_is {
+    oc adm top imagestreams &> "${MONITORING_PATH}/adm-top-imagestreams.out"
 }
 
 function get_top {
     
-    echo "INFO: Collecting 'oc adm top nodes'"
+    echo "INFO: Collecting 'oc adm top node'"
     get_top_nodes || true
 
-    echo "INFO: Collecting 'oc adm top pods'"
+    echo "INFO: Collecting 'oc adm top pod'"
     get_top_pods || true
 
+    echo "INFO: Collecting 'oc adm top images'"
+    get_top_images || true
+
+    echo "INFO: Collecting 'oc adm top imagestreams'"
+    get_top_is || true
 }
 
 get_top
