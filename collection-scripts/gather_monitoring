@@ -25,5 +25,17 @@ oc get\
 
 rm "${MONITORING_PATH}/ca-bundle.crt"
 
+function get_top {
+    
+    echo "INFO: Collecting 'oc adm top nodes'"
+    oc adm top nodes --sort-by='cpu' &> "${MONITORING_PATH}/adm-top-nodes.out"
+
+    echo "INFO: Collecting 'oc adm top pods'"
+    oc adm top pods --sort-by='cpu' &> "${MONITORING_PATH}/adm-top-pods.out"
+
+}
+
+get_adm_top
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
