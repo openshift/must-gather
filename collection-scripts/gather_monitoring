@@ -25,13 +25,21 @@ oc get\
 
 rm "${MONITORING_PATH}/ca-bundle.crt"
 
+function get_top_nodes {
+    oc adm top nodes --sort-by='cpu' &> "${MONITORING_PATH}/adm-top-nodes.out"
+}
+
+function get_top_pods {
+    oc adm top pods --sort-by='cpu' &> "${MONITORING_PATH}/adm-top-pods.out"
+}
+
 function get_top {
     
     echo "INFO: Collecting 'oc adm top nodes'"
-    oc adm top nodes --sort-by='cpu' &> "${MONITORING_PATH}/adm-top-nodes.out"
+    get_top_nodes || true
 
     echo "INFO: Collecting 'oc adm top pods'"
-    oc adm top pods --sort-by='cpu' &> "${MONITORING_PATH}/adm-top-pods.out"
+    get_top_pods || true
 
 }
 
