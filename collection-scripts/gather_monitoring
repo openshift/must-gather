@@ -43,7 +43,7 @@ function get_top {
 
 }
 
-get_adm_top
+get_top
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
