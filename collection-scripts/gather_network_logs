@@ -129,9 +129,6 @@ function gather_ovn_kubernetes_nodes_data {
       "ethtool -k \$(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_offload &
       PIDS+=($!)
 
-      # collect ovs log files from node
-      collect_node_log_files "${NODE}" openvswitch/ovs-vswitchd.log openvswitch/ovsdb-server.log
-
       # collect_service_logs queries logs from systemd journal (default syslog log level for ovs modules is ERR)
       collect_service_logs "${NODE}" openvswitch ovs-vswitchd ovsdb-server ovs-configuration
   done
@@ -240,22 +237,6 @@ function gather_kuryr_nodes_data {
           nsenter --net=/host_proc/\$pid/ns/net ip -d addr; \
           done" > "${NETWORK_LOG_PATH}"/"${CNI_POD}"_interfaces & PIDS+=($!)
   done
-}
-
-function collect_node_log_files {
-# Call format: NODE [file_paths]
-# Collects log files from given paths,
-# path should be relative to the node's /var/logs/ folder,
-# e.g. openvswitch/ovs-vswitchd.log will be collected to "$NETWORK_LOG_PATH"/"$NODE"_ovs-vswitchd.log
-    NODE=${1}
-    shift
-
-    for path in "${@}"; do
-        echo "INFO: Collecting logs from $path"
-        IFS='/' read -ra splitted_filename <<< "$path"
-        /usr/bin/oc adm node-logs ${NODE} --path "${path}" --since "${SINCE_TIMEFRAME:--7d}"> "${NETWORK_LOG_PATH}"/"${NODE}"_"${splitted_filename[1]}" &
-	      PIDS+=($!)
-    done
 }
 
 if [ $# -eq 0 ]; then
