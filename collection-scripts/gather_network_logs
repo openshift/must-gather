@@ -169,32 +169,19 @@ function gather_ovn_kubernetes_master_data {
   PIDS+=($!)
 
   for OVNKUBE_MASTER_POD in ${OVNKUBE_MASTER_PODS[@]}; do
-    #get nbdb and sbdb sizes before and after db compaction, run serially to ensure event timeline 
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}"  -c nbdb -- ls -lht /etc/ovn/ \
-    > "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_nbdb_size_pre_compact
+    # ovsdb-client backup output does not include ephemeral columns, which by design
+    # do not survive across restarts of ovsdb-server.
+    # The database snapshot that it outputs is suitable to be served up directly by
+    # ovsdb-server or used as the input to ovsdb-client restore.
+    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}" -c nbdb -- ovsdb-client backup unix:/var/run/ovn/ovnnb_db.sock > \
+    "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_nbdb
 
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}"  -c sbdb -- ls -lht /etc/ovn/ \
-    > "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb_size_pre_compact
- 
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}" -c sbdb -- ovs-appctl -t /var/run/ovn/ovnsb_db.ctl ovsdb-server/compact 
+    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}" -c sbdb -- ovsdb-client backup unix:/var/run/ovn/ovnsb_db.sock> \
+    "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb
 
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}" -c nbdb -- ovs-appctl -t /var/run/ovn/ovnnb_db.ctl ovsdb-server/compact 
-
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}"  -c nbdb -- ls -lht /etc/ovn/ \
-    > "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_nbdb_size_post_compact
-
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}"  -c sbdb -- ls -lht /etc/ovn/ \
-    > "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb_size_post_compact
-
-    oc cp openshift-ovn-kubernetes/"${OVNKUBE_MASTER_POD}":/etc/ovn/ovnsb_db.db -c sbdb \
-    "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb 2>&1 
-    gzip "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb 2>&1 & PIDS+=($!)
-    
-    oc cp openshift-ovn-kubernetes/"${OVNKUBE_MASTER_POD}":/etc/ovn/ovnnb_db.db -c nbdb \
-    "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_nbdb 2>&1
-    
     gzip "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_nbdb 2>&1 & PIDS+=($!)
-    
+    gzip "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb 2>&1 & PIDS+=($!)
+
     oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}"  -c nbdb --  bash -c "ovn-appctl -t /var/run/ovn/ovnnb_db.ctl cluster/status \
     OVN_Northbound" > "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_ovnnb_status_log & PIDS+=($!)
 
