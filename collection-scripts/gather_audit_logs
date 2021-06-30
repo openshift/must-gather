@@ -3,7 +3,30 @@
 # /var/logs/{kube-apiserver,openshift-apiserver} on each
 # master node.
 BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
+
+profile=$(oc get apiservers.v1.config.openshift.io -o jsonpath=.spec.audit.profile)
+if [ -z "${profile}" ] || [ "${profile}" == None ]; then
+  if [ "${1}" == "--force" ]; then
+    cat <<EOF
+WARNING: To raise a Red Hat support request, it is required to set the top level audit policy to
+         Default, WriteRequestBodies, or AllRequestBodies to generate audit log events that can
+         be analyzed by support. Try `oc edit apiservers` and set `spec.audit.profile` back to
+         Default" and reproduce the issue while gathering audit logs.
+EOF
+  else
+    cat <<EOF
+ERROR: To raise a Red Hat support request, it is required to set the top level audit policy to
+       Default, WriteRequestBodies, or AllRequestBodies to generate audit log events that can
+       be analyzed by support. Try `oc edit apiservers` and set `spec.audit.profile` back to
+       "Default" and reproduce the issue while gathering audit logs. You can use "--force" to
+       override this error.
+EOF
+    exit 1
+  fi
+fi
+
 echo "WARNING: Collecting one or more audit logs on ALL masters in your cluster. This could take a large amount of time." >&2
+
 # the command executed by xargs below expects four parameters:
 # $1 - node path under /var/logs to download
 # $2 - local output path
