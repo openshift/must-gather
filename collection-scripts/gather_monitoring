@@ -1,29 +1,91 @@
 #!/bin/bash
 
-#Safeguards
+# safeguards
 set -o nounset
 set -o errexit
 set -o pipefail
 
-BASE_COLLECTION_PATH="../must-gather"
-MONITORING_PATH="${BASE_COLLECTION_PATH}/monitoring"
+declare -r BASE_COLLECTION_PATH="../must-gather"
+declare -r MONITORING_PATH="${BASE_COLLECTION_PATH}/monitoring"
+declare -r CA_BUNDLE="${MONITORING_PATH}/ca-bundle.crt"
 
-mkdir -p "${MONITORING_PATH}"
+init() {
+  mkdir -p "${MONITORING_PATH}"
 
-MONITORING_ROUTE="$(oc get routes -n openshift-monitoring prometheus-k8s -o jsonpath={.status.ingress[0].host})"
-SA_TOKEN="$(oc sa get-token default)"
+  PROMETHEUS_ROUTE="$(oc get routes \
+    -n openshift-monitoring prometheus-k8s \
+    -o jsonpath='{.status.ingress[0].host}')"
 
-# this is a CA bundle we need to verify the monitoring route, we will write it to disk so we can use it in the flag
-oc -n openshift-config-managed get cm default-ingress-cert -o jsonpath='{.data.ca-bundle\.crt}' > "${MONITORING_PATH}/ca-bundle.crt"
+  ALERT_MANAGER_ROUTE="$(oc get routes \
+    -n openshift-monitoring alertmanager-main \
+    -o jsonpath='{.status.ingress[0].host}')"
 
-# using oc get --raw because we directly control it and have standardized debugging on it
-oc get\
-  --server="https://${MONITORING_ROUTE}"\
-  --token="${SA_TOKEN}" \
-  --certificate-authority="${MONITORING_PATH}/ca-bundle.crt" \
-  --raw=/api/v1/rules?type=alert 2>"${MONITORING_PATH}/alert.stderr" > "${MONITORING_PATH}/alerts.json"
+  # the SA token is used for authentication with Prometheus and Alert Manager
+  # see: prom_get
+  SA_TOKEN="$(oc sa get-token default)"
 
-rm "${MONITORING_PATH}/ca-bundle.crt"
+  # this is a CA bundle we need to verify the monitoring route,
+  # we will write it to disk so we can use it in the flag
+  oc -n openshift-config-managed get cm default-ingress-cert \
+    -o jsonpath='{.data.ca-bundle\.crt}' > "$CA_BUNDLE"
+}
 
-# force disk flush to ensure that all data gathered is accessible in the copy container
-sync
+cleanup() {
+  rm "$CA_BUNDLE"
+}
+
+prom_get() {
+  local object="$1"; shift
+  local path="$1"; shift
+
+  local result_path="$MONITORING_PATH/prometheus/$path"
+  mkdir -p "$(dirname "$result_path")"
+
+  oc get \
+    --certificate-authority="$CA_BUNDLE" \
+    --token="${SA_TOKEN}" \
+    --server="https://$PROMETHEUS_ROUTE" \
+    --raw="/api/v1/$object" \
+      > "$result_path.json" \
+      2> "$result_path.stderr"
+}
+
+alertmanager_get() {
+  local object="$1"; shift
+  local path="$1"; shift
+
+  local result_path="$MONITORING_PATH/alertmanager/$path"
+  mkdir -p "$(dirname "$result_path")"
+
+  oc get \
+    --certificate-authority="$CA_BUNDLE" \
+    --token="${SA_TOKEN}" \
+    --server="https://$ALERT_MANAGER_ROUTE" \
+    --raw="/api/v2/$object" \
+      > "$result_path.json" \
+      2> "$result_path.stderr"
+}
+
+
+monitoring_gather(){
+  init
+
+  # begin gathering
+  # NOTE || true ignores failures
+
+  prom_get rules rules   || true
+  prom_get alertmanagers alertmanagers  || true
+  prom_get status/config status/config || true
+  prom_get status/flags status/flags || true
+  prom_get status/runtimeinfo status/runtimeinfo || true
+  prom_get status/tsdb status/tsdb || true
+
+  alertmanager_get status status || true
+
+  # force disk flush to ensure that all data gathered are written
+  sync
+
+  cleanup
+}
+
+monitoring_gather
