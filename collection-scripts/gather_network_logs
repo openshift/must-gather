@@ -169,15 +169,14 @@ function gather_ovn_kubernetes_master_data {
   PIDS+=($!)
 
   for OVNKUBE_MASTER_POD in ${OVNKUBE_MASTER_PODS[@]}; do
-    # ovsdb-client backup output does not include ephemeral columns, which by design
-    # do not survive across restarts of ovsdb-server.
-    # The database snapshot that it outputs is suitable to be served up directly by
-    # ovsdb-server or used as the input to ovsdb-client restore.
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}" -c nbdb -- ovsdb-client backup unix:/var/run/ovn/ovnnb_db.sock > \
-    "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_nbdb
-
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}" -c sbdb -- ovsdb-client backup unix:/var/run/ovn/ovnsb_db.sock> \
-    "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb
+    # copy .db files, as this is the only way to get db information without interacting with ovsdb
+    # .db files contain both current db state and transactions info.
+    # to restore db from collected file use `ovsdb-tool cluster-to-standalone`
+    # (you will lose transactions data, but it is the only way to restore db) and then overwrite the database file
+    oc cp openshift-ovn-kubernetes/"${OVNKUBE_MASTER_POD}":/etc/ovn/ovnnb_db.db -c nbdb \
+    "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_nbdb 2>&1
+    oc cp openshift-ovn-kubernetes/"${OVNKUBE_MASTER_POD}":/etc/ovn/ovnsb_db.db -c sbdb \
+    "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb 2>&1
 
     gzip "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_nbdb 2>&1 & PIDS+=($!)
     gzip "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb 2>&1 & PIDS+=($!)
