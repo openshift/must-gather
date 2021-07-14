@@ -40,7 +40,7 @@ group_resources+=(networks.operator.openshift.io)
 resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
 
 # Run the Collection of Resources using inspect
-# running accross all-namespaces for the few "Autoscaler" resouces.
+# running across all-namespaces for the few "Autoscaler" resources.
 oc adm inspect --dest-dir must-gather "${named_resources[@]}"
 group_resources_text=$(IFS=, ; echo "${group_resources[*]}")
 oc adm inspect --dest-dir must-gather "${group_resources_text}"

@@ -10,3 +10,7 @@ Data collection scripts are kept in `./collection-scripts`.  The content of that
 The data collection scripts should only include collection logic for components that are included as part of the OpenShift
 CVO payload.  Outside components are encouraged to produce a similar "must-gather" image, but this is not the spot to be
 included.
+
+## How to run
+You can run `must-gather` on a cluster with `oc adm must-gather`. 
+Use `-h` flag to see available options.

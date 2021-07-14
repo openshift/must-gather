@@ -101,6 +101,7 @@ function gather_ovn_kubernetes_nodes_data {
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
       "ovs-ofctl dump-flows br-int" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_ofctl_dump_flows_br_int &
       PIDS+=($!)
+      # TODO delete br-local gathering after full deprecation of local gw mode (maybe 4.9 release)
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
       "ovs-ofctl dump-ports-desc br-local" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_ofctl_dump_ports_br_local &
       PIDS+=($!)
@@ -122,12 +123,13 @@ function gather_ovn_kubernetes_nodes_data {
       "${NETWORK_LOG_PATH}"/"${OVNKUBE_NODE_POD}"_conf.db 2>&1
 
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ethtool -i $(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_driver &
+      "ethtool -i \$(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_driver &
       PIDS+=($!)
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ethtool -k $(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_offload &
+      "ethtool -k \$(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_offload &
       PIDS+=($!)
 
+      # collect_service_logs queries logs from systemd journal (default syslog log level for ovs modules is ERR)
       collect_service_logs "${NODE}" openvswitch ovs-vswitchd ovsdb-server ovs-configuration
   done
 }
@@ -253,10 +255,10 @@ elif [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
     gather_kuryr_nodes_data
     gather_kuryr_data
 elif [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
-    if [-z "$IPSEC_PODS"]; then
+    if [ -z "$IPSEC_PODS" ]; then
         echo "INFO: No ovn-ipsec pods exist, tunnel traffic will be unencrypted"
     else 
-        echo "INFO: ovn-ipsec is enabled, tunnel traffic should be encryted"  
+        echo "INFO: ovn-ipsec is enabled, tunnel traffic should be encrypted"
         gather_ovn_ipsec_data
     fi 
     gather_multus_data
