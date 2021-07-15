@@ -50,6 +50,33 @@ prom_get() {
       2> "$result_path.stderr"
 }
 
+prom_get_by_replica() {
+  local replica="$1"; shift
+  local object="$1"; shift
+  local path="$1"; shift
+
+  local result_path="${MONITORING_PATH}/prometheus/${path}"
+  mkdir -p "$(dirname "${result_path}")"
+
+  oc --insecure-skip-tls-verify exec pod/${replica} \
+      -c prometheus \
+      -n openshift-monitoring \
+      -- /bin/bash -c "curl -sG http://localhost:9090/api/v1/${object}" \
+        >  "${result_path}.json" \
+        2> "${result_path}.stderr"
+}
+
+prometheus_gather_by_replica(){
+  echo "INFO: Collecting metrics for each replica..."
+  local pods="$(oc get pods -n openshift-monitoring -l prometheus=k8s -o jsonpath='{.items[*].metadata.name}')"
+
+  echo "INFO: Replicas found: $pods"
+  for pod in ${pods}; do
+    prom_get_by_replica ${pod} status/runtimeinfo ${pod}/status/runtimeinfo || true
+    prom_get_by_replica ${pod} status/tsdb ${pod}/status/tsdb || true
+  done
+}
+
 alertmanager_get() {
   local object="$1"; shift
   local path="$1"; shift
@@ -77,8 +104,7 @@ monitoring_gather(){
   prom_get alertmanagers alertmanagers  || true
   prom_get status/config status/config || true
   prom_get status/flags status/flags || true
-  prom_get status/runtimeinfo status/runtimeinfo || true
-  prom_get status/tsdb status/tsdb || true
+  prometheus_gather_by_replica || true
 
   alertmanager_get status status || true
 
