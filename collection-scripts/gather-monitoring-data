@@ -1,0 +1,266 @@
+#!/bin/bash
+
+# Gather Monitoring Metrics and Dashboards.
+# - Discovery and save Grafana dashboards, extracting the metrics' datapoints from Prometheus.
+# - Gather custom metrics (when defined on Config variables).
+# - Discovery metrics from prefix name.
+#
+# Config variables:
+# - GATHER_MONIT_START_DATE: starting human readable date string (date -d). Default: "7 days ago".
+# - GATHER_MONIT_END_DATE: ending human readable date string (date -d). Default: "now".
+# - GATHER_MONIT_QUERY_STEP: metric resolution to get from Prometheus. Default: "1m".
+# - GATHER_PROM_QUERIES_RANGE: list of additional metrics name to be collected. Default: Undefined
+# - GATHER_PROM_QUERIES_RANGE_PREFIX: discovery metrics by prefixes. Default: ''
+# - GATHER_MONIT_TOKEN: optional service account token to gather Prometheus and Grafana API. Default: Undefined
+#
+# To create the ConfigMap:
+# $ echo -e 'GATHER_MONIT_START_DATE="15 days ago"\nGATHER_MONIT_QUERY_STEP="5m"' > env
+# $ echo -e 'GATHER_PROM_QUERIES_RANGE="up"' > env
+# $ echo -e 'GATHER_PROM_QUERIES_RANGE_PREFIX="apiserver_"' > env
+# $ oc create configmap must-gather-env -n openshift-monitoring --from-file=env=env
+#
+# References:
+# - Prometheus API: https://prometheus.io/docs/prometheus/latest/querying/api/
+
+#Safeguards
+set -o pipefail
+set -o nounset
+set -o errexit
+
+function err_report {
+    echo "ERROR: on line $1 from ${0}"
+}
+trap 'err_report $LINENO' ERR
+
+# ######
+# HELPER
+# ######
+
+# Receive a valid string and return as URL Encoded
+function url_encode {
+    echo -n "$@" | curl -Gso /dev/null -w %{url_effective} --data-urlencode @- "" | cut -c 3-
+}
+
+# Remove special chars from a string and return it
+function get_alphanum_str {
+    echo -n "$@" | tr -dc '[:alnum:]-_'
+}
+
+function echo_info {
+    echo "[$(date +%Y%M%d-%H%m%S)] INFO: $@"
+}
+
+# ##############
+# PROMETHEUS API
+# ##############
+
+function oc_get {
+    oc get \
+        --certificate-authority="${CA_BUNDLE}" \
+        --token="${SS_TOKEN}" \
+        "$@"
+}
+
+function prom_get_api {
+    oc_get \
+        --server="https://${PROM_HOST}" \
+        --raw="${PROM_API_PATH}/${1}"
+}
+
+function prom_get_expression_query {
+
+    local api_expression="${1}"; shift
+    local query_param="${1}"; shift
+
+    # create a valid URL encoded query
+    local query=$(url_encode "${query_param}")
+    local req_query="${api_expression}?query=${query}&${PROM_API_QSTR}"
+
+    # create a valid filename (without special chars that comes from complex queries)
+    local file_basename="$(get_alphanum_str ${query_param})"
+    local file_base="${MG_METRICS_PATH}/${api_expression}-${file_basename}"
+    local file_ok="${file_base}.json.gz";
+    local file_err="${file_base}.stderr";
+
+    echo_info "Collecting query /${api_expression}?query=${query}"
+    if [[ ! -f "${MG_PROM_PATH}/${api_expression}.log" ]]; then
+        echo "file_path_prefix;req_expression_query" > "${MG_PROM_PATH}/${api_expression}.log"
+    fi
+    echo "${file_base};${req_query}" >> "${MG_PROM_PATH}/${api_expression}.log"
+
+    prom_get_api "${req_query}" 2> "${file_err}" | gzip > "${file_ok}"
+}
+
+#
+# Gather a query range from a valid expression
+# Env var: GATHER_PROM_QUERIES_RANGE
+#
+function get_query_range {
+
+    if [[ -z "${GATHER_PROM_QUERIES_RANGE:-}" ]]; then
+        echo_info "No queries was found to collect from env GATHER_PROM_QUERIES_RANGE"
+        return
+    fi
+    mkdir -p "${MG_METRICS_PATH}"
+
+    echo_info "Collecting queries range..."
+
+    for query in ${GATHER_PROM_QUERIES_RANGE}; do
+        prom_get_expression_query "query_range" "${query}"
+    done
+}
+
+#
+# Gather a query from a valid expression
+# Env var: GATHER_PROM_QUERIES
+#
+function get_query {
+
+    if [[ -z "${GATHER_PROM_QUERIES:-}" ]]; then
+        echo_info "No queries was found to collect from env GATHER_PROM_QUERIES"
+        return
+    fi
+    mkdir -p "${MG_METRICS_PATH}"
+
+    echo_info "Collecting instant queries..."
+
+    for query in ${GATHER_PROM_QUERIES}; do
+        prom_get_expression_query "query" "${query}"
+    done
+}
+
+#
+# Discovery and gather metrics by prefixes.
+# Env var: GATHER_PROM_QUERIES_RANGE_PREFIX
+#
+function get_query_range_discovery {
+
+    if [[ -z "${GATHER_PROM_QUERIES_RANGE_PREFIX:-}" ]]; then
+        echo_info " No metrics was found to collect from env GATHER_PROM_QUERIES_RANGE_PREFIX"
+        return
+    fi
+    echo_info "Collecting metrics by prefixes..."
+
+    # dump current available metrics to discovery/filter desired as defined on env var
+    prom_get_api "label/__name__/values" \
+        | python2 -c '\
+                import json,sys;\
+                v=[];\
+                [ v.append(d) for d in json.load(sys.stdin)["data"] ];\
+                print( "\n".join(v) );\
+            ' > "${MG_PROM_PATH}/prometheus-metrics.txt"
+
+    # lookup metrics into current dump
+    while read metric; do
+        for prefix in ${GATHER_PROM_QUERIES_RANGE_PREFIX}; do
+            if [[ "${metric}" =~ ^${prefix}.* ]]; then
+                prom_get_expression_query "query_range" "${metric}"
+            fi
+        done
+    done < "${MG_PROM_PATH}/prometheus-metrics.txt"
+}
+
+# #####
+# SETUP
+# #####
+
+function cleanup {
+    rm "${CA_BUNDLE}"
+}
+
+# this is a CA bundle we need to verify the monitoring route,
+# we will write it to disk so we can use it in the flag
+function get_ca_bundle {
+    oc -n openshift-config-managed \
+        get cm default-ingress-cert \
+        -o jsonpath='{.data.ca-bundle\.crt}' > "${CA_BUNDLE}"
+}
+
+function get_env {
+    oc -n "${MONIT_NS}" extract "cm/${MONIT_ENV}" \
+        --keys=env \
+        --to="${MG_MONITORING_PATH}/" 2>&1 >/dev/null || true
+
+    echo_info "Get custom metrics from ConfigMap ${MONIT_ENV} on project ${MONIT_NS}"
+    if [[ -s "${MG_MONITORING_PATH}/env" ]]; then
+        echo_info "Loading custom environments variables from ${MG_MONITORING_PATH}/env"
+        source "${MG_MONITORING_PATH}/env"
+    else
+        echo_info "Unable to load custom environments from ConfigMap, ignoring."
+    fi
+}
+
+function init {
+
+    declare -g GATHER_MONIT_START_DATE_DEFAULT="7 days ago"
+    declare -g GATHER_MONIT_END_DATE_DEFAULT="now"
+    declare -g GATHER_MONIT_QUERY_STEP_DEFAULT="1m"
+
+    declare -g MONIT_NS="openshift-monitoring"
+    declare -g MONIT_ENV="must-gather-env"
+
+    declare -g MG_BASE_PATH="${MG_BASE_PATH:-"/must-gather"}"
+    declare -g MG_MONITORING_PATH="${MG_BASE_PATH}/monitoring"
+    declare -g MG_PROM_PATH="${MG_MONITORING_PATH}/prometheus"
+    declare -g MG_METRICS_PATH="${MG_PROM_PATH}/metrics"
+    declare -g CA_BUNDLE="${MG_MONITORING_PATH}/ca-bundle.crt"
+
+    mkdir -p "${MG_MONITORING_PATH}"
+
+    get_env
+
+    get_ca_bundle
+
+    # Setting: Session token, overwriten by GATHER_MONIT_TOKEN
+    declare -g SS_TOKEN="${GATHER_MONIT_TOKEN:-$(oc whoami -t)}"
+    declare -g PROM_HOST=$(oc -n "${MONIT_NS}" get route prometheus-k8s -o jsonpath='{.spec.host}{"\n"}')
+    declare -g PROM_API_PATH="/api/v1"
+
+    # Query Param: 'start' and 'end' timestamp
+    local date_start_human=${GATHER_MONIT_START_DATE:-${GATHER_MONIT_START_DATE_DEFAULT}}
+    local date_end_human=${GATHER_MONIT_END_DATE:-${GATHER_MONIT_END_DATE_DEFAULT}}
+    declare -g DATE_START=$(date -d "${date_start_human}" +%s)
+    declare -g DATE_END=$(date -d "${date_end_human}" +%s)
+
+    # Query Param: 'step'. Low metric resolution with long range could be limited to 11k datapoints.
+    declare -g QUERY_STEP=${GATHER_MONIT_QUERY_STEP:-${GATHER_MONIT_QUERY_STEP_DEFAULT}}
+
+    declare -g PROM_API_QSTR="start=${DATE_START}&end=${DATE_END}&step=${QUERY_STEP}"
+
+    cat <<-EOF
+INFO: Metrics config time range from=${DATE_START} to=${DATE_END} step=${QUERY_STEP}
+INFO: Metrics human  time range from=[$(date -d "@${DATE_START}")] to [$(date -d "@${DATE_END}")]
+INFO: Config Env GATHER_MONIT_START_DATE: ${GATHER_MONIT_START_DATE:-""}
+INFO: Config Env GATHER_MONIT_END_DATE: ${GATHER_MONIT_END_DATE:-""}
+INFO: Config Env GATHER_MONIT_QUERY_STEP: ${GATHER_MONIT_QUERY_STEP:-""}
+INFO: Config Env GATHER_PROM_QUERIES_RANGE: ${GATHER_PROM_QUERIES_RANGE:-""}
+INFO: Config Env GATHER_PROM_QUERIES: ${GATHER_PROM_QUERIES:-""}
+INFO: Config Env GATHER_PROM_QUERIES_RANGE_PREFIX: ${GATHER_PROM_QUERIES_RANGE_PREFIX:-""}
+INFO: Prometheus endpoint: https://${PROM_HOST}
+INFO: Prometheus base query: ${PROM_API_PATH}/<expression>?query=<metric>&${PROM_API_QSTR}"
+EOF
+}
+
+# ####
+# MAIN
+# ####
+function main {
+
+    init
+
+    # Gather a query
+    get_query
+
+    # Gather a query range
+    get_query_range
+
+    # Gather a query range by prefix (discovery)
+    get_query_range_discovery
+
+    # force disk flush to ensure that all data gathered is accessible in the copy container
+    cleanup
+    sync
+
+    echo_info "Done"
+}
+main

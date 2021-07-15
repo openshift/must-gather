@@ -4,8 +4,6 @@
 set -o nounset
 set -o errexit
 set -o pipefail
-set -o nounset
-set -o errexit
 
 declare -r BASE_COLLECTION_PATH="../must-gather"
 declare -r MONITORING_PATH="${BASE_COLLECTION_PATH}/monitoring"
@@ -67,7 +65,6 @@ alertmanager_get() {
       > "$result_path.json" \
       2> "$result_path.stderr"
 }
-
 
 monitoring_gather(){
   init
