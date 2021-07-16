@@ -106,7 +106,7 @@ function get_query_range {
     echo_info "Collecting queries range..."
 
     for query in ${GATHER_PROM_QUERIES_RANGE}; do
-        prom_get_expression_query "query_range" "${query}"
+        prom_get_expression_query "query_range" "${query}" || true
     done
 }
 
@@ -125,7 +125,7 @@ function get_query {
     echo_info "Collecting instant queries..."
 
     for query in ${GATHER_PROM_QUERIES}; do
-        prom_get_expression_query "query" "${query}"
+        prom_get_expression_query "query" "${query}" || true
     done
 }
 
@@ -154,7 +154,7 @@ function get_query_range_discovery {
     while read metric; do
         for prefix in ${GATHER_PROM_QUERIES_RANGE_PREFIX}; do
             if [[ "${metric}" =~ ^${prefix}.* ]]; then
-                prom_get_expression_query "query_range" "${metric}"
+                prom_get_expression_query "query_range" "${metric}" || true
             fi
         done
     done < "${MG_PROM_PATH}/prometheus-metrics.txt"
@@ -213,7 +213,7 @@ function init {
 
     # Setting: Session token, overwriten by GATHER_MONIT_TOKEN
     declare -g SS_TOKEN="${GATHER_MONIT_TOKEN:-$(oc whoami -t)}"
-    declare -g PROM_HOST=$(oc -n "${MONIT_NS}" get route prometheus-k8s -o jsonpath='{.spec.host}{"\n"}')
+    declare -g PROM_HOST=$(oc -n "${MONIT_NS}" get route thanos-querier -o jsonpath='{.spec.host}{"\n"}')
     declare -g PROM_API_PATH="/api/v1"
 
     # Query Param: 'start' and 'end' timestamp
