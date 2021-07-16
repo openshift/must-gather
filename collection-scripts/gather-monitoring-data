@@ -199,6 +199,10 @@ function init {
     declare -g MONIT_NS="openshift-monitoring"
     declare -g MONIT_ENV="must-gather-env"
 
+    # prometheus-k8s | thanos-querier : TODO need to validate thanos-querier endpoints
+    local prom_route_name="${PROM_ROUTE_NAME:-"prometheus-k8s"}"
+    declare -g PROM_API_PATH="/api/v1"
+
     declare -g MG_BASE_PATH="${MG_BASE_PATH:-"/must-gather"}"
     declare -g MG_MONITORING_PATH="${MG_BASE_PATH}/monitoring"
     declare -g MG_PROM_PATH="${MG_MONITORING_PATH}/prometheus"
@@ -213,8 +217,7 @@ function init {
 
     # Setting: Session token, overwriten by GATHER_MONIT_TOKEN
     declare -g SS_TOKEN="${GATHER_MONIT_TOKEN:-$(oc whoami -t)}"
-    declare -g PROM_HOST=$(oc -n "${MONIT_NS}" get route thanos-querier -o jsonpath='{.spec.host}{"\n"}')
-    declare -g PROM_API_PATH="/api/v1"
+    declare -g PROM_HOST=$(oc -n "${MONIT_NS}" get route "${prom_route_name}" -o jsonpath='{.spec.host}{"\n"}')
 
     # Query Param: 'start' and 'end' timestamp
     local date_start_human=${GATHER_MONIT_START_DATE:-${GATHER_MONIT_START_DATE_DEFAULT}}
