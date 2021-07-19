@@ -65,7 +65,7 @@ function gather_ovn_ipsec_data {
 
 function gather_openshiftsdn_nodes_data {
   echo "INFO: Gathering Openshift-SDN data"
-  for NODE in ${NODES}; do
+  for NODE in "${NODES[@]}"; do
       SDN_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName="${NODE}" -l app=sdn)
       oc -n openshift-sdn exec "${SDN_POD}" -c sdn -- bash -c "iptables-save -c" > "${NETWORK_LOG_PATH}"/"${NODE}"_iptables &
       PIDS+=($!)
@@ -81,7 +81,7 @@ function gather_openshiftsdn_nodes_data {
 
 function gather_ovn_kubernetes_nodes_data {
   echo "INFO: Gathering ovn-kubernetes node data"
-  for NODE in ${NODES}; do
+  for NODE in "${NODES[@]}"; do
       OVNKUBE_NODE_POD=$(oc -n openshift-ovn-kubernetes get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName="${NODE}" -l app=ovnkube-node)
       oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c "iptables-save -c" > "${NETWORK_LOG_PATH}"/"${NODE}"_"${OVNKUBE_NODE_POD}"_iptables &
       PIDS+=($!)
@@ -228,21 +228,41 @@ function gather_kuryr_data {
 
 function gather_kuryr_nodes_data {
   echo "INFO: Gathering kuryr nodes data"
-  for NODE in ${NODES}; do
-      CNI_POD=$(oc -n openshift-kuryr get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName="${NODE}" -l app=kuryr-cni)
+  for NODE in "${NODES[@]}"; do
+      CNI_POD=($(oc -n openshift-kuryr get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName="${NODE}" -l app=kuryr-cni))
       oc exec -n openshift-kuryr "${CNI_POD}" -- bash -c "for pid in $(find /host_proc/[1-9]*/ns/net | cut -d/ -f3); do \
           echo 'Namespace: \$pid'; \
           nsenter --net=/host_proc/\$pid/ns/net ip -d addr; \
           done" > "${NETWORK_LOG_PATH}"/"${CNI_POD}"_interfaces & PIDS+=($!)
   done
 }
-
-if [ $# -eq 0 ]; then
+ 
+ARGS=($@) #args passed in by the user
+IFS=" " read -r -a NODES <<< $(oc get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {.status.nodeInfo.operatingSystem==linux}')
+ELEMENTS=${#ARGS[@]} #length of args passed in by the user
+NODE_LENGTH=${#NODES[@]}
+TMP_ARR=() #tmp array to place the args that are nodes when they are checked against the cluster nodes
+if [ $# -eq 0 ]; then 
     echo "WARNING: Collecting network logs on ALL linux nodes in your cluster. This could take a long time." >&2
+else
+    for (( i=0; i<ELEMENTS; i++));do
+      for (( j=0; j<NODE_LENGTH; j++));do
+        if [[ "${ARGS[$i]}" == "${NODES[$j]}" ]]; then
+        echo  ${ARGS[$i]} "->node exists in nodes"
+        TMP_ARR[${#TMP_ARR[@]}]+="${NODES[$j]}"
+        fi
+      done
+   done
+fi
+TMP_ARR_LENGTH=${#TMP_ARR[@]}
+if [[ TMP_ARR_LENGTH -gt 0 ]]; then
+    NODES=()
+    for (( i=0; i<TMP_ARR_LENGTH; i++ )); do
+      NODES[$i]="${TMP_ARR[${i}]}"
+    done
 fi
 
 PIDS=()
-NODES="${@:-$(oc get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {.status.nodeInfo.operatingSystem==linux}')}"
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
 IPSEC_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovn-ipsec -o=jsonpath='{.items[*].metadata.name}'))
 
