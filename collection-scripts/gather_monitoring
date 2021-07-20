@@ -72,7 +72,6 @@ prometheus_gather_by_replica(){
 
   echo "INFO: Replicas found: $pods"
   for pod in ${pods}; do
-    prom_get_by_replica ${pod} status/runtimeinfo ${pod}/status/runtimeinfo || true
     prom_get_by_replica ${pod} status/tsdb ${pod}/status/tsdb || true
   done
 }
@@ -104,6 +103,7 @@ monitoring_gather(){
   prom_get alertmanagers alertmanagers  || true
   prom_get status/config status/config || true
   prom_get status/flags status/flags || true
+  prom_get status/runtimeinfo status/runtimeinfo || true
   prometheus_gather_by_replica || true
 
   alertmanager_get status status || true
