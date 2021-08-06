@@ -1,26 +1,9 @@
 #!/bin/bash
 
-# Gather Monitoring Metrics and Dashboards.
-# - Discovery and save Grafana dashboards, extracting the metrics' datapoints from Prometheus.
-# - Gather custom metrics (when defined on Config variables).
-# - Discovery metrics from prefix name.
 #
-# Config variables:
-# - GATHER_MONIT_START_DATE: starting human readable date string (date -d). Default: "7 days ago".
-# - GATHER_MONIT_END_DATE: ending human readable date string (date -d). Default: "now".
-# - GATHER_MONIT_QUERY_STEP: metric resolution to get from Prometheus. Default: "1m".
-# - GATHER_PROM_QUERIES_RANGE: list of additional metrics name to be collected. Default: Undefined
-# - GATHER_PROM_QUERIES_RANGE_PREFIX: discovery metrics by prefixes. Default: ''
-# - GATHER_MONIT_TOKEN: optional service account token to gather Prometheus and Grafana API. Default: Undefined
+# Collect metrics data from Prometheus API.
+# See helper function (show_help|-h) for more information.
 #
-# To create the ConfigMap:
-# $ echo -e 'GATHER_MONIT_START_DATE="15 days ago"\nGATHER_MONIT_QUERY_STEP="5m"' > env
-# $ echo -e 'GATHER_PROM_QUERIES_RANGE="up"' > env
-# $ echo -e 'GATHER_PROM_QUERIES_RANGE_PREFIX="apiserver_"' > env
-# $ oc create configmap must-gather-env -n openshift-monitoring --from-file=env=env
-#
-# References:
-# - Prometheus API: https://prometheus.io/docs/prometheus/latest/querying/api/
 
 #Safeguards
 set -o pipefail
@@ -55,7 +38,7 @@ function echo_info {
 # ##############
 
 function oc_get {
-    oc get \
+    ${OC_CLI[@]} get \
         --certificate-authority="${CA_BUNDLE}" \
         --token="${SS_TOKEN}" \
         "$@"
@@ -136,10 +119,11 @@ function get_query {
 function get_query_range_discovery {
 
     if [[ -z "${GATHER_PROM_QUERIES_RANGE_PREFIX:-}" ]]; then
-        echo_info " No metrics was found to collect from env GATHER_PROM_QUERIES_RANGE_PREFIX"
+        echo_info "No metrics was found to collect from env GATHER_PROM_QUERIES_RANGE_PREFIX"
         return
     fi
     echo_info "Collecting metrics by prefixes..."
+    mkdir -p "${MG_METRICS_PATH}"
 
     # dump current available metrics to discovery/filter desired as defined on env var
     prom_get_api "label/__name__/values" \
@@ -171,53 +155,104 @@ function cleanup {
 # this is a CA bundle we need to verify the monitoring route,
 # we will write it to disk so we can use it in the flag
 function get_ca_bundle {
-    oc -n openshift-config-managed \
+    ${OC_CLI[@]} -n openshift-config-managed \
         get cm default-ingress-cert \
         -o jsonpath='{.data.ca-bundle\.crt}' > "${CA_BUNDLE}"
 }
 
-function get_env {
-    oc -n "${MONIT_NS}" extract "cm/${MONIT_ENV}" \
-        --keys=env \
-        --to="${MG_MONITORING_PATH}/" 2>&1 >/dev/null || true
+# Handle configuration from ConfigMap (less precedence than CLI)
+function set_env_from_config {
 
-    echo_info "Get custom metrics from ConfigMap ${MONIT_ENV} on project ${MONIT_NS}"
+    if [[ ${OPT_CONFIG} == false ]]; then return; fi
+
+    # parse cm from 'namespace/configMapName' to 'cm_namespace' and 'cm_name'
+    local cm_namespace=$(echo ${OPT_CONFIG_NAME} | awk -F'/' '{print$1}')
+    local cm_name=$(echo ${OPT_CONFIG_NAME} | awk -F'/' '{print$2}')
+
+    ${OC_CLI[@]} -n "${cm_namespace}" \
+        extract "cm/${cm_name}" \
+        --keys=env \
+        --confirm \
+        --to="${MG_MONITORING_PATH}/" 2>&1 >/dev/null
+
+    echo_info "Get custom metrics from ConfigMap ${cm_name} on project ${cm_namespace}"
     if [[ -s "${MG_MONITORING_PATH}/env" ]]; then
         echo_info "Loading custom environments variables from ${MG_MONITORING_PATH}/env"
-        source "${MG_MONITORING_PATH}/env"
+        eval $(cat "${MG_MONITORING_PATH}/env")
     else
         echo_info "Unable to load custom environments from ConfigMap, ignoring."
     fi
 }
 
-function init {
+# Handle configuration from CLI args (more precedence than CM)
+function set_env_from_cli {
 
-    declare -g GATHER_MONIT_START_DATE_DEFAULT="7 days ago"
+    if [[ ! -z "${OPT_GATHER_QUERY}" ]]; then
+        declare -g GATHER_PROM_QUERIES="${OPT_GATHER_QUERY}"
+    fi
+
+    if [[ ! -z "${OPT_GATHER_QUERY_RANGE}" ]]; then
+        declare -g GATHER_PROM_QUERIES_RANGE="${OPT_GATHER_QUERY_RANGE}"
+    fi
+
+    if [[ ! -z "${OPT_GATHER_QUERY_RANGE_PREFIX}" ]]; then
+        declare -g GATHER_PROM_QUERIES_RANGE_PREFIX="${OPT_GATHER_QUERY_RANGE_PREFIX}"
+    fi
+
+}
+
+function set_env_default {
+
+    declare -g OPT_VERBOSE=false
+    declare -g OPT_DEBUG=false
+    declare -g OPT_CONFIG=false
+    declare -g OPT_CONFIG_NAME=
+    declare -g OPT_GATHER_QUERY=
+    declare -g OPT_GATHER_QUERY_RANGE=
+    declare -g OPT_GATHER_QUERY_RANGE_PREFIX=
+
+    declare -g GATHER_BASE_PATH_DEFAULT="/must-gather"
+    declare -g GATHER_MONIT_START_DATE_DEFAULT="1 day ago"
     declare -g GATHER_MONIT_END_DATE_DEFAULT="now"
     declare -g GATHER_MONIT_QUERY_STEP_DEFAULT="1m"
 
-    declare -g MONIT_NS="openshift-monitoring"
-    declare -g MONIT_ENV="must-gather-env"
+    declare -g OC_REQUEST_TIMEOUT_DEFAULT="15s"
 
-    # prometheus-k8s | thanos-querier : TODO need to validate thanos-querier endpoints
-    local prom_route_name="${PROM_ROUTE_NAME:-"prometheus-k8s"}"
+}
+
+function init_env {
+
     declare -g PROM_API_PATH="/api/v1"
 
-    declare -g MG_BASE_PATH="${MG_BASE_PATH:-"/must-gather"}"
+    declare -g MG_BASE_PATH="${GATHER_BASE_PATH_DEFAULT:-"/must-gather"}"
     declare -g MG_MONITORING_PATH="${MG_BASE_PATH}/monitoring"
     declare -g MG_PROM_PATH="${MG_MONITORING_PATH}/prometheus"
     declare -g MG_METRICS_PATH="${MG_PROM_PATH}/metrics"
     declare -g CA_BUNDLE="${MG_MONITORING_PATH}/ca-bundle.crt"
 
+    declare -g OC_CLI=()
+    OC_CLI+=(`which oc`)
+    OC_CLI+=("--request-timeout=${OC_REQUEST_TIMEOUT_DEFAULT}")
+}
+
+function init {
+
+    init_env
     mkdir -p "${MG_MONITORING_PATH}"
 
-    get_env
+    # Set Configurations from dynamic sources (CM or CLI)
+    set_env_from_config
+    set_env_from_cli
 
+    # Cache default ingress CA
     get_ca_bundle
 
-    # Setting: Session token, overwriten by GATHER_MONIT_TOKEN
-    declare -g SS_TOKEN="${GATHER_MONIT_TOKEN:-$(oc whoami -t)}"
-    declare -g PROM_HOST=$(oc -n "${MONIT_NS}" get route "${prom_route_name}" -o jsonpath='{.spec.host}{"\n"}')
+    # Session token, overwriten by GATHER_MONIT_TOKEN
+    declare -g SS_TOKEN="${GATHER_MONIT_TOKEN:-$(${OC_CLI[@]} whoami -t)}"
+
+    # prometheus-k8s | thanos-querier : TODO need to validate thanos-querier endpoints is compatible
+    local prom_route_name="${PROM_ROUTE_NAME:-"prometheus-k8s"}"
+    declare -g PROM_HOST=$(${OC_CLI[@]} -n openshift-monitoring get route "${prom_route_name}" -o jsonpath='{.spec.host}{"\n"}')
 
     # Query Param: 'start' and 'end' timestamp
     local date_start_human=${GATHER_MONIT_START_DATE:-${GATHER_MONIT_START_DATE_DEFAULT}}
@@ -230,14 +265,15 @@ function init {
 
     declare -g PROM_API_QSTR="start=${DATE_START}&end=${DATE_END}&step=${QUERY_STEP}"
 
+    # Dump loaded config
     cat <<-EOF
 INFO: Metrics config time range from=${DATE_START} to=${DATE_END} step=${QUERY_STEP}
 INFO: Metrics human  time range from=[$(date -d "@${DATE_START}")] to [$(date -d "@${DATE_END}")]
 INFO: Config Env GATHER_MONIT_START_DATE: ${GATHER_MONIT_START_DATE:-""}
 INFO: Config Env GATHER_MONIT_END_DATE: ${GATHER_MONIT_END_DATE:-""}
 INFO: Config Env GATHER_MONIT_QUERY_STEP: ${GATHER_MONIT_QUERY_STEP:-""}
-INFO: Config Env GATHER_PROM_QUERIES_RANGE: ${GATHER_PROM_QUERIES_RANGE:-""}
 INFO: Config Env GATHER_PROM_QUERIES: ${GATHER_PROM_QUERIES:-""}
+INFO: Config Env GATHER_PROM_QUERIES_RANGE: ${GATHER_PROM_QUERIES_RANGE:-""}
 INFO: Config Env GATHER_PROM_QUERIES_RANGE_PREFIX: ${GATHER_PROM_QUERIES_RANGE_PREFIX:-""}
 INFO: Prometheus endpoint: https://${PROM_HOST}
 INFO: Prometheus base query: ${PROM_API_PATH}/<expression>?query=<metric>&${PROM_API_QSTR}"
@@ -247,6 +283,67 @@ EOF
 # ####
 # MAIN
 # ####
+function show_help {
+
+    cat <<-EOF
+Usage: ${0} [options]
+
+Available options:
+    -h | --help                 Show this help
+    -c | --use-cm  ns/cm_name   Specify the ConfigMap to load environment variables on the
+                                format namespace/configMapName. Default is: None (load From variables)
+    -s | --start-date date_str  Start date string. Default is: ${GATHER_MONIT_START_DATE_DEFAULT}
+    -e | --end-date date_str    End date string. Default is: ${GATHER_MONIT_END_DATE_DEFAULT}
+    -S | --step duration        Query resolution step width in 'duration' format or float
+                                number of seconds. Default is: ${GATHER_MONIT_QUERY_STEP_DEFAULT}
+    -o | --dest-dir path        Set a specific directory on the local machine to write gathered data to.
+    -t | --timeout value        The length of time to gather data, in seconds. Default is: ${OC_REQUEST_TIMEOUT_DEFAULT}
+    --endpoint (API|tsdb)       TODO. Endpoint to be created, API queries or chunks from TSDB. Default: API.
+    --query PromQuery           Prometheus Query to collect instant query
+    --query-range PromQuery     Prometheus Query to collect time range
+    --query-range-prefix Query  Prometheus Query range prefix to be discovered and collected.
+
+Available environments variables to be used on ConfigMap:
+    GATHER_BASE_PATH_DEFAULT="${GATHER_BASE_PATH_DEFAULT}"
+
+    # Query setup
+    GATHER_MONIT_START_DATE="${GATHER_MONIT_START_DATE_DEFAULT}"
+    GATHER_MONIT_END_DATE="${GATHER_MONIT_END_DATE_DEFAULT}"
+    GATHER_MONIT_QUERY_STEP="${GATHER_MONIT_QUERY_STEP_DEFAULT}"
+
+    # Queries
+    GATHER_PROM_QUERIES=${OPT_GATHER_QUERY}
+    GATHER_PROM_QUERIES_RANGE=${OPT_GATHER_QUERY_RANGE}
+    GATHER_PROM_QUERIES_RANGE_PREFIX=${OPT_GATHER_QUERY_RANGE_PREFIX}
+
+Examples:
+    # Simple collect simple query
+    ${0} --query "up"
+
+    # Simple collect simple query and save to a custom directory
+    ${0} --query "up" --dest-dir ./monitoring-metrics
+
+    # Query range collector from last hour
+    ${0} -s "1 hours ago" -e "now" -o metrics-1h --query-range "up"
+
+    # Query range collector from last hour of metrics with prefix name "etcd_disk_"
+    ${0} -s "1 hours ago" -e "now" -o metrics-1h-prefix --query-range-prefix "etcd_disk_"
+
+    # Create a ConfigMap to store variables
+    echo "GATHER_MONIT_START_DATE='12 hours ago'
+GATHER_MONIT_QUERY_STEP='1m'
+GATHER_PROM_QUERIES='up'
+GATHER_PROM_QUERIES_RANGE='instance:node_load1_per_cpu:ratio
+changes(etcd_server_leader_changes_seen_total[1h])'
+GATHER_PROM_QUERIES_RANGE_PREFIX='etcd_disk_
+apiserver_flowcontrol'" > ./env
+    oc create configmap must-gather-metrics-env -n mgm --from-file=env=env
+    ${0} --use-cm mgm/must-gather-metrics-env
+
+EOF
+
+}
+
 function main {
 
     init
@@ -266,4 +363,44 @@ function main {
 
     echo_info "Done"
 }
-main
+
+function main_cli {
+
+    # NOTE: This requires GNU getopt.
+    # '-> On Mac OS X and FreeBSD need to be installed as: brew install gnu-getopt
+    GETOPT_SET=`getopt -n 'gather-monitoring-data' \
+            -o hvdc:s:e:S:o:t: \
+            --long verbose,debug,help,use-cm:,start-date:,end-date:,step:,path:,dest-dir:,timeout:,query:,query-range:,query-range-prefix: \
+            -- "$@"`
+
+    if [ $? != 0 ] ; then
+        echo "gnu-getopt seems not to be present. Please install it. Terminating..." >&2 ;
+        exit 1 ;
+    fi
+    eval set -- "${GETOPT_SET}"
+
+    set_env_default
+    while true; do
+        case "$1" in
+            -h | --help         ) show_help; exit 2 ;;
+            -v | --verbose      ) OPT_VERBOSE=true; shift ;;
+            -d | --debug        ) OPT_DEBUG=true; shift ;;
+            -c | --use-cm       ) OPT_CONFIG=true; OPT_CONFIG_NAME="$2"; shift 2 ;;
+            -s | --start-date   ) GATHER_MONIT_START_DATE_DEFAULT="$2"; shift 2 ;;
+            -e | --end-date     ) GATHER_MONIT_END_DATE_DEFAULT="$2"; shift 2 ;;
+            -S | --step         ) GATHER_MONIT_QUERY_STEP_DEFAULT="$2"; shift 2 ;;
+            -o | --dest-dir     ) GATHER_BASE_PATH_DEFAULT="$2"; shift 2 ;;
+            -t | --timeout      ) OC_REQUEST_TIMEOUT_DEFAULT="$2"; shift 2 ;;
+            --query             ) OPT_GATHER_QUERY="$2"; shift 2 ;;
+            --query-range       ) OPT_GATHER_QUERY_RANGE="$2"; shift 2 ;;
+            --query-range-prefix) OPT_GATHER_QUERY_RANGE_PREFIX="$2"; shift 2 ;;
+            -- ) shift; break ;;
+            * ) echo "Option not found"; break ;;
+        esac
+    done
+
+    main
+    echo "Done"
+}
+
+main_cli "$@"
