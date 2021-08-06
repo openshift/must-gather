@@ -58,8 +58,7 @@ prom_get_by_replica() {
   local result_path="${MONITORING_PATH}/prometheus/${path}"
   mkdir -p "$(dirname "${result_path}")"
 
-  oc exec pod/${replica} \
-    --certificate-authority="${CA_BUNDLE}" \
+  oc exec ${replica} \
     -c prometheus \
     -n openshift-monitoring \
     -- /bin/bash -c "curl -sG http://localhost:9090/api/v1/${object}" \
