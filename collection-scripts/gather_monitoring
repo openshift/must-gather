@@ -58,12 +58,13 @@ prom_get_by_replica() {
   local result_path="${MONITORING_PATH}/prometheus/${path}"
   mkdir -p "$(dirname "${result_path}")"
 
-  oc --insecure-skip-tls-verify exec pod/${replica} \
-      -c prometheus \
-      -n openshift-monitoring \
-      -- /bin/bash -c "curl -sG http://localhost:9090/api/v1/${object}" \
-        >  "${result_path}.json" \
-        2> "${result_path}.stderr"
+  oc exec pod/${replica} \
+    --certificate-authority="${CA_BUNDLE}" \
+    -c prometheus \
+    -n openshift-monitoring \
+    -- /bin/bash -c "curl -sG http://localhost:9090/api/v1/${object}" \
+      >  "${result_path}.json" \
+      2> "${result_path}.stderr"
 }
 
 prometheus_gather_by_replica(){
