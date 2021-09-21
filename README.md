@@ -14,3 +14,6 @@ included.
 ## How to run
 You can run `must-gather` on a cluster with `oc adm must-gather`. 
 Use `-h` flag to see available options.
+
+## Obfuscate confidential information
+There is a dedicated to obfuscate and omit confidential information. Head over to [openshift/must-gather-clean](https://github.com/openshift/must-gather-clean) for more information.
