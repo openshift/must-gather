@@ -4,7 +4,7 @@
 # master node.
 BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
 
-profile=$(oc get apiservers.v1.config.openshift.io -o jsonpath=.spec.audit.profile)
+profile=$(oc get apiservers.v1.config.openshift.io -o jsonpath='{.items[0].spec.audit.profile}')
 if [ -z "${profile}" ] || [ "${profile}" == None ]; then
   if [ "${1}" == "--force" ]; then
     cat <<EOF
