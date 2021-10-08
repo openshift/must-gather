@@ -82,5 +82,10 @@ oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text
 # Gather metallb logs
 /usr/bin/gather_metallb_logs
 
+arch=$(uname -m)
+if [ $arch == "s390x" ]; then
+    /usr/bin/gather_dbginfo_z
+fi
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

@@ -1,0 +1,56 @@
+#!/bin/bash
+# dbginfo.sh is a script shipped with the s390-utils package on IBM-Z systems that collects system level information for debugging
+BASE_COLLECTION_PATH="must-gather"
+DBGINFO_PATH=${OUT:-"${BASE_COLLECTION_PATH}/node_dbginfo"}
+
+mkdir -p "${DBGINFO_PATH}"/
+
+function get_dbginfo_off_node {
+    local debugPod=""
+
+    #Get debug pod's name
+    debugPod=$(oc debug --to-namespace="default" node/"$1" -o jsonpath='{.metadata.name}')
+
+    #Start Debug pod, execute the dbginfo command to collect the system data and force it to stay up until removed in "default" namespace
+    oc debug --to-namespace="default" node/"$1" -- chroot /host /bin/bash -c 'mkdir -p /tmp/dbginfo && dbginfo.sh -d /tmp/dbginfo && sleep 300' > /dev/null 2>&1 &
+
+    #Mimic a normal oc call, i.e pause between two successive calls to allow pod to register
+    #Wait a minute for the dbginfo script to collect the information
+    sleep 60
+    oc wait -n "default" --for=condition=Ready pod/"$debugPod" --timeout=30s
+
+    if [ -z "$debugPod" ]
+    then
+      echo "Debug pod for node ""$1"" never activated"
+    else
+      #Copy dbginfo out of Nodes suppress Stdout
+      echo "Copying dbginfo on node ""$1"""
+      oc cp  --loglevel 1 -n "default" "$debugPod":/host/tmp/dbginfo/ "${DBGINFO_PATH}"/ > /dev/null 2>&1 && PIDS+=($!)
+
+      #clean up debug pod after we are done using them
+      oc delete pod "$debugPod" -n "default"
+    fi
+}
+
+function gather_dbginfo_data {
+  #Run dbginfo pull function on all nodes in parallel
+  for NODE in ${NODES}; do
+    get_dbginfo_off_node "${NODE}" &
+  done
+}
+
+if [ $# -eq 0 ]; then
+    echo "WARNING: Collecting dbginfo on ALL linux nodes in your cluster."
+fi
+
+PIDS=()
+NODES="${*:-$(oc get nodes --selector=node-role.kubernetes.io/master -o jsonpath='{range .items[*]}{@.metadata.name} {.status.nodeInfo.operatingSystem==linux}')}"
+
+gather_dbginfo_data
+
+echo "INFO: Waiting for node dbginfo collection to complete ..."
+wait "${PIDS[@]}"
+echo "INFO: Node dbginfo collection to complete."
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
