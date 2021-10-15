@@ -38,11 +38,9 @@ fi
 
 # Fetches the POD_NAME where app label is apiserver.
 # Example:
-#  oc get po -n openshift-kube-apiserver -l apiserver -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}'
-#  kube-apiserver-master-0.example.com
-#  kube-apiserver-master-1.example.com
-#  kube-apiserver-master-2.example.com
-KUBE_API_SERVERS=$(oc get po -n openshift-kube-apiserver -l apiserver -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}')
+#  oc get po -n openshift-kube-apiserver -l apiserver -o jsonpath='{.items[*].metadata.name}'
+#  kube-apiserver-master-0.example.com kube-apiserver-master-1.example.com kube-apiserver-master-2.example.com
+KUBE_API_SERVERS=$(oc get po -n openshift-kube-apiserver -l apiserver -o jsonpath='{.items[*].metadata.name}')
 if [[ -z ${KUBE_API_SERVERS} ]]; then
     echo "ERROR: No running kube-apiserver pods found" >&2
     exit 1
@@ -65,9 +63,9 @@ do
 
   # Fetches the POD_PORT where container name is kube-apiserver.
   # Example:
-  #  oc get po -n openshift-kube-apiserver kube-apiserver-master-0.example.com -o jsonpath='{range .spec.containers[?(.name=="kube-apiserver")]}{.ports[0].hostPort}'
+  #  oc get po -n openshift-kube-apiserver kube-apiserver-master-0.example.com -o jsonpath='{.spec.containers[?(.name=="kube-apiserver")].ports[0].hostPort}'
   #  6443
-  POD_PORT=$(oc get po -n openshift-kube-apiserver "${API_SERVER}" -o jsonpath='{range .spec.containers[?(.name=="kube-apiserver")]}{.ports[0].hostPort}')
+  POD_PORT=$(oc get po -n openshift-kube-apiserver "${API_SERVER}" -o jsonpath='{.spec.containers[?(.name=="kube-apiserver")].ports[0].hostPort}')
   if [[ -z ${POD_PORT} ]]; then
       echo "ERROR: ${API_SERVER}: unable to get .spec.containers.ports[0].hostPort" >&2
       continue

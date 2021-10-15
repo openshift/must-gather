@@ -42,7 +42,7 @@ if [ $# -eq 0 ]; then
 fi
 
 PIDS=()
-NODES="${*:-$(oc get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {.status.nodeInfo.operatingSystem==linux}')}"
+NODES="${*:-$(oc get nodes -o jsonpath='{.items[?(@.status.nodeInfo.operatingSystem=="linux")].metadata.name}')}"
 
 gather_core_dump_data
 
