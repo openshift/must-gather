@@ -2,4 +2,5 @@ reviewers:
   - sferich888
 approvers:
   - sferich888
+  - soltysh
 component: "oc"
