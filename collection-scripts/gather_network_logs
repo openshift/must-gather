@@ -230,7 +230,7 @@ if [ $# -eq 0 ]; then
 fi
 
 PIDS=()
-NODES="${@:-$(oc get nodes -o jsonpath='{range .items[*]}{@.metadata.name} {.status.nodeInfo.operatingSystem==linux}')}"
+NODES="${@:-$(oc get nodes -o jsonpath='{.items[?(@.status.nodeInfo.operatingSystem=="linux")].metadata.name}')}"
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
 IPSEC_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovn-ipsec -o=jsonpath='{.items[*].metadata.name}'))
 
