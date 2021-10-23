@@ -1,0 +1,21 @@
+#!/bin/bash
+BASE_COLLECTION_PATH=${BASE_COLLECTION_PATH:-"/must-gather"}
+TARGET_PATH="${BASE_COLLECTION_PATH}/requests/"
+
+mkdir -p ${TARGET_PATH}
+
+echo "Getting apirequestcounts"
+oc get apirequestcounts -o json > ${TARGET_PATH}/apirequestscounts.json
+
+echo "Calculating top20 resources"
+jq -r '.items | map({"name":.metadata.name, "requestCount": .status.requestCount}) | sort_by(-.requestCount)[:20][] | "\(.requestCount): \(.name)"' ${TARGET_PATH}/apirequestscounts.json > ${TARGET_PATH}/top20-resources-last24h
+
+echo "Calculating top20 users"
+jq -r '.items | map(
+  .metadata.name as $resource |
+  .status.last24h | map(.byNode // [] | map(.byUser // [])) | flatten | flatten |
+  group_by(.username) | map(
+    reduce .[] as $username ({"requestCount":0}; {"username":$username.username, "requestCount":(.requestCount + $username.requestCount)})
+  ) | map(. + {"resource":$resource})) | flatten |
+  sort_by(-.requestCount)[:20][] |
+  "\(.requestCount): \(.username) \(.resource)"' ${TARGET_PATH}/apirequestscounts.json > ${TARGET_PATH}/top20-users-last24h
