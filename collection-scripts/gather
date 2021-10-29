@@ -45,6 +45,9 @@ oc adm inspect --dest-dir must-gather "${named_resources[@]}"
 group_resources_text=$(IFS=, ; echo "${group_resources[*]}")
 oc adm inspect --dest-dir must-gather "${group_resources_text}"
 
+# Gather Insights Operator Archives
+/user/bin/gather_insights
+
 # Gather monitoring data from the cluster
 /usr/bin/gather_monitoring
 
