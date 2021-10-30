@@ -8,6 +8,7 @@ set -o pipefail
 declare -r BASE_COLLECTION_PATH="../must-gather"
 declare -r MONITORING_PATH="${BASE_COLLECTION_PATH}/monitoring"
 declare -r CA_BUNDLE="${MONITORING_PATH}/ca-bundle.crt"
+declare -r PROM_PODS="$(oc get pods -n openshift-monitoring -l prometheus=k8s -o jsonpath='{.items[*].metadata.name}')"
 
 init() {
   mkdir -p "${MONITORING_PATH}"
@@ -50,7 +51,7 @@ prom_get() {
       2> "$result_path.stderr"
 }
 
-prom_get_by_replica() {
+prom_get_from_replica() {
   local replica="$1"; shift
   local object="$1"; shift
   local path="$1"; shift
@@ -66,13 +67,14 @@ prom_get_by_replica() {
       2> "${result_path}.stderr"
 }
 
-prometheus_gather_by_replica(){
+prom_get_from_replicas() {
   echo "INFO: Collecting status for each replica..."
-  local pods="$(oc get pods -n openshift-monitoring -l prometheus=k8s -o jsonpath='{.items[*].metadata.name}')"
+  local object="$1"; shift
+  local path="$1"; shift
 
   echo "INFO: Replicas found: $pods"
-  for pod in ${pods}; do
-    prom_get_by_replica ${pod} status/tsdb ${pod}/status/tsdb || true
+  for pod in ${PROM_PODS}; do
+    prom_get_from_replica ${pod} ${object} ${pod}/${path} || true
   done
 }
 
@@ -104,7 +106,7 @@ monitoring_gather(){
   prom_get status/config status/config || true
   prom_get status/flags status/flags || true
   prom_get status/runtimeinfo status/runtimeinfo || true
-  prometheus_gather_by_replica || true
+  prom_get_from_replicas status/tsdb status/tsdb || true
 
   alertmanager_get status status || true
 
