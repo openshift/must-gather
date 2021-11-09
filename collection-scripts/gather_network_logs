@@ -1,203 +1,55 @@
 #!/bin/bash
-. gather_service_logs_util
 BASE_COLLECTION_PATH="must-gather"
 NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
-SERVICE_LOG_PATH="${BASE_COLLECTION_PATH}/host_service_logs/"
 
 mkdir -p "${NETWORK_LOG_PATH}"/
 
 function gather_multus_data { 
-  echo "INFO: Gathering Multus data"
-  #Should we store this on a per namespace basis? 
-  oc get net-attach-def -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/net_attach_def 2>&1 & PIDS=($!)
+  #Should we store this on a per namespace basis?
+  oc get net-attach-def -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/net_attach_def 2>&1 & PIDS+=($!)
 
-  oc describe ippools.whereabouts.cni.cncf.io -A > "${NETWORK_LOG_PATH}"/ippools  2>&1 & PIDS=($!)
+  oc describe ippools.whereabouts.cni.cncf.io -A > "${NETWORK_LOG_PATH}"/ippools 2>&1 & PIDS+=($!)
 
-  oc describe overlappingrangeipreservations.whereabouts.cni.cncf.io -A > "${NETWORK_LOG_PATH}"/overlappingrangeipreservations  2>&1 & PIDS=($!)
-  MULTUS_PODS=($(oc -n openshift-multus get pods --no-headers -o custom-columns=":metadata.name" -l app=multus))
-  for MULTUS_POD in ${MULTUS_PODS[@]}; do
-	  oc -n openshift-multus logs ${MULTUS_POD} > "${NETWORK_LOG_PATH}"/"${MULTUS_POD}".log 2>&1 & PIDS=($!)
-  done
+  oc describe overlappingrangeipreservations.whereabouts.cni.cncf.io -A > "${NETWORK_LOG_PATH}"/overlappingrangeipreservations  2>&1 & PIDS+=($!)
 
-  oc get multi-networkpolicy -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/multi_networkpolicy 2>&1 & PIDS=($!)
-
-  MULTI_NETWORKPOLICY_PODS=($(oc -n openshift-multus get pods --no-headers -o custom-columns=":metadata.name" -l app=multus-networkpolicy))
-  for MULTI_NETWORKPOLICY_POD in ${MULTI_NETWORKPOLICY_PODS[@]}; do
-          oc -n openshift-multus logs ${MULTI_NETWORKPOLICY_POD} > "${NETWORK_LOG_PATH}"/"${MULTI_NETWORKPOLICY_POD}".log 2>&1 & PIDS=($!)
-	  oc cp openshift-multus/${MULTI_NETWORKPOLICY_POD}:/var/lib/multi-networkpolicy \
-		  "${NETWORK_LOG_PATH}"/"${MULTI_NETWORKPOLICY_POD}" > /dev/null 2>&1 & PIDS=($!)
-  done
+  oc get multi-networkpolicy -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/multi_networkpolicy 2>&1 & PIDS+=($!)
 }
 
-function gather_ovn_ipsec_data { 
-  echo "INFO: Gathering ovn-ipsec data"
-  for IPSEC_POD in ${IPSEC_PODS[@]}; do 
-    oc -n openshift-ovn-kubernetes exec "${IPSEC_POD}" -- bash -c "ovs-appctl -t ovs-monitor-ipsec tunnels/show" \
-    > "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_ovs-monitor-ipsec_tunnels-show & 
-    PIDS+=($!)
-
-    oc -n openshift-ovn-kubernetes exec "${IPSEC_POD}" -- bash -c "ipsec status" \
-    > "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_ipsec_status & 
-    PIDS+=($!)
-
-    oc -n openshift-ovn-kubernetes exec "${IPSEC_POD}" -- bash -c "certutil -L -d sql:/etc/ipsec.d" \
-    > "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_active_libreswan_certs & 
-    PIDS+=($!)
-
-    oc -n openshift-ovn-kubernetes exec "${IPSEC_POD}" -- bash -c "ovs-vsctl list Open_vSwitch" \
-    > "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_list_Open_vSwitch & 
-    PIDS+=($!)
-
-    oc -n openshift-ovn-kubernetes exec "${IPSEC_POD}" -- bash -c "ovn-nbctl list nb_global" \
-    > "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_list_nb_global & 
-    PIDS+=($!)
-
-    oc cp openshift-ovn-kubernetes/"${IPSEC_POD}":/etc/openvswitch/keys "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_keys/ &
-    PIDS+=($!) 
-
-    oc cp openshift-ovn-kubernetes/"${IPSEC_POD}":/var/log/openvswitch/libreswan.log "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_libreswan_log &
-    PIDS+=($!) 
-
-    oc cp openshift-ovn-kubernetes/"${IPSEC_POD}":/var/log/openvswitch/ovs-monitor-ipsec.log "${NETWORK_LOG_PATH}"/"${IPSEC_POD}"_ovs_monitor_ipsec &
-    PIDS+=($!)
-  done
-}
-
-function gather_openshiftsdn_nodes_data {
-  echo "INFO: Gathering Openshift-SDN data"
-  for NODE in ${NODES}; do
-      SDN_POD=$(oc -n openshift-sdn get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName="${NODE}" -l app=sdn)
-      oc -n openshift-sdn exec "${SDN_POD}" -c sdn -- bash -c "iptables-save -c" > "${NETWORK_LOG_PATH}"/"${NODE}"_iptables &
-      PIDS+=($!)
-      oc -n openshift-sdn exec "${SDN_POD}" -c sdn -- bash -c "ovs-vsctl show" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_dump &
-      PIDS+=($!)
-      oc -n openshift-sdn exec "${SDN_POD}" -c sdn -- bash -c "ethtool -i $(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_driver &
-      PIDS+=($!)
-      oc -n openshift-sdn exec "${SDN_POD}" -c sdn -- bash -c "ethtool -k $(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_offload &
-      PIDS+=($!)
-      collect_service_logs "${NODE}" openvswitch ovs-vswitchd ovsdb-server ovs-configuration
-  done
-}
-
-function gather_ovn_kubernetes_nodes_data {
-  echo "INFO: Gathering ovn-kubernetes node data"
-  for NODE in ${NODES}; do
-      OVNKUBE_NODE_POD=$(oc -n openshift-ovn-kubernetes get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName="${NODE}" -l app=ovnkube-node)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c "iptables-save -c" > "${NETWORK_LOG_PATH}"/"${NODE}"_"${OVNKUBE_NODE_POD}"_iptables &
-      PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c "ip addr" > "${NETWORK_LOG_PATH}"/"${NODE}"_"${OVNKUBE_NODE_POD}"_ip_addr &
-      PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c "ip route" > "${NETWORK_LOG_PATH}"/"${NODE}"_"${OVNKUBE_NODE_POD}"_ip_route &
-      PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c "ip -6 route" > "${NETWORK_LOG_PATH}"/"${NODE}"_"${OVNKUBE_NODE_POD}"_ip_6_route &
-      PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c "ip -s -d link" > "${NETWORK_LOG_PATH}"/"${NODE}"_"${OVNKUBE_NODE_POD}"_ip_-s_-d_link &
-      PIDS+=($!)
-
-      #Dump flows and ports 
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ovs-ofctl dump-ports-desc br-int" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_ofctl_dump_ports_br_int &
-      PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ovs-ofctl dump-flows br-int" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_ofctl_dump_flows_br_int &
-      PIDS+=($!)
-      # TODO delete br-local gathering after full deprecation of local gw mode (maybe 4.9 release)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ovs-ofctl dump-ports-desc br-local" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_ofctl_dump_ports_br_local &
-      PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ovs-ofctl dump-flows br-local" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_ofctl_dump_flows_br_local &
-      PIDS+=($!)
-       oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ovs-ofctl dump-ports-desc br-ex" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_ofctl_dump_ports_br_ex &
-      PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ovs-ofctl dump-flows br-ex" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_ofctl_dump_flows_br_ex &
-      PIDS+=($!)
-
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ovs-vsctl show" > "${NETWORK_LOG_PATH}"/"${NODE}"_ovs_dump &
-      PIDS+=($!)
-
-      oc cp openshift-ovn-kubernetes/"${OVNKUBE_NODE_POD}":/etc/openvswitch/conf.db -c ovnkube-node \
-      "${NETWORK_LOG_PATH}"/"${OVNKUBE_NODE_POD}"_conf.db 2>&1
-
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ethtool -i \$(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_driver &
-      PIDS+=($!)
-      oc -n openshift-ovn-kubernetes exec -c ovnkube-node "${OVNKUBE_NODE_POD}" -- bash -c \
-      "ethtool -k \$(ip route show default | cut -d ' ' -f5)" > "${NETWORK_LOG_PATH}"/"${NODE}"_ethtool_offload &
-      PIDS+=($!)
-
-      # collect_service_logs queries logs from systemd journal (default syslog log level for ovs modules is ERR)
-      collect_service_logs "${NODE}" openvswitch ovs-vswitchd ovsdb-server ovs-configuration
-  done
-}
-
-function gather_ovn_kubernetes_master_data {
+function gather_ovn_kubernetes_data {
   echo "INFO: Gathering ovn-kubernetes master data"
-  OVNKUBE_MASTER_IPS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-master -o=jsonpath='{.items[*].status.podIP}'))
   OVNKUBE_MASTER_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-master -o=jsonpath='{.items[*].metadata.name}'))
+  # collect only leader dbs to reduce result size
+  for DB in "n" "s"; do
+    if [ "$DB" = "n" ]; then
+      DB_NAME="OVN_Northbound"
+      CONTAINER="nbdb"
+    else
+      DB_NAME="OVN_Southbound"
+      CONTAINER="sbdb"
+    fi
+    i=0
+    PODS_AMOUNT=${#OVNKUBE_MASTER_PODS[@]}
+    # try 2 cycles in case leader has changed during first pass
+    while (( i < 2 * PODS_AMOUNT )) ; do
+      OVNKUBE_MASTER_POD=${OVNKUBE_MASTER_PODS[$(( i % PODS_AMOUNT ))]}
+      # find leader to copy db
+      RAFT_ROLE=$(oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}" -c "${CONTAINER}" -- bash -c \
+        "ovn-appctl -t /var/run/ovn/ovn${DB}b_db.ctl cluster/status ${DB_NAME} 2>&1 | grep \"^Role\"")
+      if echo "${RAFT_ROLE}" | grep -q -i leader; then
+        oc cp openshift-ovn-kubernetes/"${OVNKUBE_MASTER_POD}":/etc/ovn/ovn"${DB}"b_db.db -c "${CONTAINER}" \
+         "${NETWORK_LOG_PATH}/leader_${DB}bdb" 2>&1
+        gzip "${NETWORK_LOG_PATH}/leader_${DB}bdb" 2>&1 & PIDS+=($!)
 
-  oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-nbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9641,ssl:${OVNKUBE_MASTER_IPS[1]}:9641,ssl:${OVNKUBE_MASTER_IPS[2]}:9641 \
-  -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt show" > \
-  "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_nbctl_show &
-  PIDS+=($!)
-  oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-nbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9641,ssl:${OVNKUBE_MASTER_IPS[1]}:9641,ssl:${OVNKUBE_MASTER_IPS[2]}:9641 \
-  -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt list Logical_Switch_Port" > \
-  "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_nbctl_list_lsp &
-  PIDS+=($!)
-  oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-nbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9641,ssl:${OVNKUBE_MASTER_IPS[1]}:9641,ssl:${OVNKUBE_MASTER_IPS[2]}:9641 \
-  -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt list Load_Balancer" > \
-  "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_nbctl_list_lb &
-  PIDS+=($!)
-  oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-nbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9641,ssl:${OVNKUBE_MASTER_IPS[1]}:9641,ssl:${OVNKUBE_MASTER_IPS[2]}:9641 \
-  -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt list Port_Group" > \
-  "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_nbctl_list_pg &
-  PIDS+=($!)
-  oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-nbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9641,ssl:${OVNKUBE_MASTER_IPS[1]}:9641,ssl:${OVNKUBE_MASTER_IPS[2]}:9641 \
-  -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt list ACL" > \
-  "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_nbctl_list_acl &
-  PIDS+=($!)
-  oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-sbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9642,ssl:${OVNKUBE_MASTER_IPS[1]}:9642,ssl:${OVNKUBE_MASTER_IPS[2]}:9642 \
-  -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt show" > \
-  "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_sbctl_show &
-  PIDS+=($!)
-
-  for OVNKUBE_MASTER_POD in ${OVNKUBE_MASTER_PODS[@]}; do
-    # copy .db files, as this is the only way to get db information without interacting with ovsdb
-    # .db files contain both current db state and transactions info.
-    # to restore db from collected file use `ovsdb-tool cluster-to-standalone`
-    # (you will lose transactions data, but it is the only way to restore db) and then overwrite the database file
-    oc cp openshift-ovn-kubernetes/"${OVNKUBE_MASTER_POD}":/etc/ovn/ovnnb_db.db -c nbdb \
-    "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_nbdb 2>&1
-    oc cp openshift-ovn-kubernetes/"${OVNKUBE_MASTER_POD}":/etc/ovn/ovnsb_db.db -c sbdb \
-    "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb 2>&1
-
-    gzip "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_nbdb 2>&1 & PIDS+=($!)
-    gzip "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb 2>&1 & PIDS+=($!)
-
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}"  -c nbdb --  bash -c "ovn-appctl -t /var/run/ovn/ovnnb_db.ctl cluster/status \
-    OVN_Northbound" > "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_ovnnb_status_log & PIDS+=($!)
-
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}"  -c sbdb -- bash -c "ovn-appctl -t /var/run/ovn/ovnsb_db.ctl cluster/status \
-    OVN_Southbound" > "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_ovnsb_status_log & PIDS+=($!)
-
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}"  -c sbdb -- bash -c "cat /proc/sys/kernel/threads-max" \
-    > "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb_threads & PIDS+=($!)
-
-    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}"  -c sbdb -- bash -c  "ps -eo nlwp" \
-    >  "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_POD}"_sbdb_thresd_nlwp & PIDS+=($!)
-
+        oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}" -c "${CONTAINER}" -- bash -c \
+          "ovn-appctl -t /var/run/ovn/ovn${DB}b_db.ctl cluster/status ${DB_NAME}" > \
+          "${NETWORK_LOG_PATH}/leader_ovn${DB}b_status" & PIDS+=($!)
+        break
+      fi
+      ((i++))
+    done
   done
 
-  oc adm top pods -n openshift-ovn-kubernetes --containers > "${NETWORK_LOG_PATH}"/openshift_ovn_kubernetes_top_output & PIDS+=($!)
+  oc adm top pods -n openshift-ovn-kubernetes --containers > "${NETWORK_LOG_PATH}"/ovn_kubernetes_top_pods & PIDS+=($!)
 }
 
 function gather_kuryr_data {
@@ -214,47 +66,28 @@ function gather_kuryr_data {
   oc get svc -A > "${NETWORK_LOG_PATH}"/get_svc & PIDS+=($!)
 }
 
-function gather_kuryr_nodes_data {
-  echo "INFO: Gathering kuryr nodes data"
-  for NODE in ${NODES}; do
-      CNI_POD=$(oc -n openshift-kuryr get pods --no-headers -o custom-columns=":metadata.name" --field-selector spec.nodeName="${NODE}" -l app=kuryr-cni)
-      oc exec -n openshift-kuryr "${CNI_POD}" -- bash -c "for pid in $(find /host_proc/[1-9]*/ns/net | cut -d/ -f3); do \
-          echo 'Namespace: \$pid'; \
-          nsenter --net=/host_proc/\$pid/ns/net ip -d addr; \
-          done" > "${NETWORK_LOG_PATH}"/"${CNI_POD}"_interfaces & PIDS+=($!)
-  done
+function gather_scale_data {
+  touch "${NETWORK_LOG_PATH}"/cluster_scale
+  echo services amount: $(oc get svc -A | wc -l) >> "${NETWORK_LOG_PATH}"/cluster_scale & PIDS+=($!)
+  echo endpoints amount: $(oc get ep -A | wc -l) >> "${NETWORK_LOG_PATH}"/cluster_scale & PIDS+=($!)
+  echo pods amount: $(oc get pods -A | wc -l) >> "${NETWORK_LOG_PATH}"/cluster_scale & PIDS+=($!)
 }
 
-if [ $# -eq 0 ]; then
-    echo "WARNING: Collecting network logs on ALL linux nodes in your cluster. This could take a long time." >&2
-fi
-
 PIDS=()
-NODES="${@:-$(oc get nodes -o jsonpath='{.items[?(@.status.nodeInfo.operatingSystem=="linux")].metadata.name}')}"
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
-IPSEC_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovn-ipsec -o=jsonpath='{.items[*].metadata.name}'))
 
-if [[ "${NETWORK_TYPE}" == "openshiftsdn" ]]; then
-    gather_multus_data
-    gather_openshiftsdn_nodes_data
-elif [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
-    gather_kuryr_nodes_data
+gather_multus_data
+gather_scale_data
+
+if [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
     gather_kuryr_data
 elif [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
-    if [ -z "$IPSEC_PODS" ]; then
-        echo "INFO: No ovn-ipsec pods exist, tunnel traffic will be unencrypted"
-    else 
-        echo "INFO: ovn-ipsec is enabled, tunnel traffic should be encrypted"
-        gather_ovn_ipsec_data
-    fi 
-    gather_multus_data
-    gather_ovn_kubernetes_nodes_data
-    gather_ovn_kubernetes_master_data
+    gather_ovn_kubernetes_data
 fi
 
-echo "INFO: Waiting for node network log collection to complete ..."
+echo "INFO: Waiting for network log collection to complete ..."
 wait "${PIDS[@]}"
-echo "INFO: Node network log collection complete."
+echo "INFO: Network log collection complete."
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

@@ -73,5 +73,8 @@ oc adm inspect --dest-dir must-gather "${group_resources_text}"
 # Gather kas startup and termination logs
 /usr/bin/gather_kas_startup_termination_logs
 
+# Gather network logs
+/usr/bin/gather_network_logs
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
