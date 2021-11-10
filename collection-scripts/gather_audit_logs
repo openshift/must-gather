@@ -47,6 +47,30 @@ xargs --max-args=4 --max-procs=45 bash -c \
   oc adm node-logs $3 --path=$1/$4 | gzip > $2/$3-$4.gz;
   echo "INFO: Finished downloading $1/$4 from $3"' \
   bash
+
+
+# gathers audit logs from prometheus-adapter pod running in openshift-monitoring namespace.
+gather_monitoring_audit_logs() {
+  local prometheus_adapter_pods
+  prometheus_adapter_pods="$(oc get pods \
+    -n openshift-monitoring \
+    -l app.kubernetes.io/name=prometheus-adapter \
+    -o jsonpath='{.items[*].metadata.name}' )"
+
+  # NOTE: there should only be one pod for prometheus-adapter but treating it
+  # as array ensures multiple pods are covered as well.
+  for pod in $prometheus_adapter_pods; do
+    local output_dir="${BASE_COLLECTION_PATH}/audit_logs/monitoring/$pod"
+    mkdir -p "$output_dir"
+
+    echo "Collecting logs from prometheus adapter pod: $pod"
+    oc cp -n openshift-monitoring "$pod:var/log/adapter" "$output_dir"
+  done
+
+}
+
+gather_monitoring_audit_logs
+
 echo "INFO: Audit logs collected."
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
