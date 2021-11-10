@@ -1,0 +1,61 @@
+#!/bin/bash
+. gather_service_logs_util
+BASE_COLLECTION_PATH="must-gather"
+NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/bm_network_logs"}
+SERVICE_LOG_PATH="${NETWORK_LOG_PATH}"
+
+mkdir -p "${NETWORK_LOG_PATH}"/
+
+function gather_bm_network_logs {
+  NODE=${1}
+  mkdir -p "${NETWORK_LOG_PATH}/${NODE}"
+  HOST_POD=$(oc debug --to-namespace="${MG_NAMESPACE}" node/"${NODE}" -o jsonpath='{.metadata.name}')
+  oc debug --to-namespace="${MG_NAMESPACE}" node/"${NODE}" -- /bin/bash -c \
+    'trap : TERM INT; sleep infinity & wait' > /dev/null 2>&1 &
+
+  # wait for pod creation
+  sleep 1
+
+  oc wait -n="${MG_NAMESPACE}" --for=condition=Ready pod/"${HOST_POD}" --timeout=60s
+  if [ $? -ne 0 ]; then
+    echo "ERROR: Timeout waiting for pod to become Ready"
+    oc delete pod -n="${MG_NAMESPACE}" "${HOST_POD}"
+    return
+  fi
+
+  oc exec -n="${MG_NAMESPACE}" "${HOST_POD}" -- bash -c "ip addr" > "${NETWORK_LOG_PATH}/${NODE}/ip-addr.txt"
+  oc exec -n="${MG_NAMESPACE}" "${HOST_POD}" -- bash -c "ip route" > "${NETWORK_LOG_PATH}/${NODE}/ip-route.txt"
+  oc exec -n="${MG_NAMESPACE}" "${HOST_POD}" -- bash -c "hostname" > "${NETWORK_LOG_PATH}/${NODE}/hostname.txt"
+  HOST_COMMAND='for c in $(nmcli -f uuid con show | tail -n +2); do nmcli con show $c; done'
+  oc exec -n="${MG_NAMESPACE}" "${HOST_POD}" -- bash -c \
+    "chroot /host /bin/bash -c '${HOST_COMMAND}'" \ > "${NETWORK_LOG_PATH}/${NODE}/nmcli.txt"
+
+  oc cp -n="${MG_NAMESPACE}" "${HOST_POD}":/host/etc/resolv.conf "${NETWORK_LOG_PATH}/${NODE}/resolv.conf"
+
+  oc delete pod -n="${MG_NAMESPACE}" "${HOST_POD}"
+}
+
+PIDS=()
+NODES=(${@:-$(oc get nodes -o jsonpath='{.items[?(@.status.nodeInfo.operatingSystem=="linux")].metadata.name}')})
+
+echo "WARNING: Collecting network logs on ALL linux nodes in your cluster. This could take a long time."
+
+POD_INFO=($(oc get pods -A -o=custom-columns=name:.metadata.name,ns:metadata.namespace| grep "${POD_NAME}"))
+MG_NAMESPACE=${POD_INFO[1]}
+if [ "${MG_NAMESPACE}" == "ns" ]; then
+  # POD_NAME env variable is passed to must-gather pods since 4.10 version,
+  # if is not defined, command will return the first line of 'get pods' output, which is column name='ns'
+  echo "ERROR: Collection failed, use the latest oc version for it to succeed"
+  exit 1
+fi
+
+for NODE in ${NODES[@]}; do
+  gather_bm_network_logs ${NODE} & PIDS+=($!)
+  # collect_service_logs adds PID to PIDS
+  collect_service_logs "${NODE}" NetworkManager
+done
+
+wait "${PIDS[@]}"
+echo "INFO: BM network log collection complete."
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
