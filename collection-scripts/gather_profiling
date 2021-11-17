@@ -1,0 +1,79 @@
+#!/bin/bash
+
+. gather_node_util
+
+# safeguards
+set -o nounset
+set -o pipefail
+
+# TODO: check which is the right "BASE_COLLECTION_PATH" to use
+BASE_COLLECTION_PATH="must-gather"
+
+
+# _gather_profiling_commands
+# Set the commands to be run on the node to collect profiling data.
+# Add here additional commands to be run on the node to generate profiling data (use "gather_node_util_add_command").
+_gather_profiling_commands() {
+    _gather_profiling_crio_commands
+}
+
+# _gather_profiling_collect_data_loop()
+# Define the remote files to retrieve and the local file to copy to (use "gather_node_util_collect_file").
+# This function will block till all the collection is over.
+_gather_profiling_collect_data_loop() {
+    local pids=()
+    local node
+
+    for node in ${NODES}; do
+        _gather_profiling_crio_collect_data "${node}" & pids+=($!)
+    done
+
+    echo "INFO: wait for profiling collection tasks"
+    wait ${pids[@]}
+    echo "INFO: completed profiling collection tasks"
+}
+
+
+# CRIO profiling
+CRIO_LOG_PATH="${BASE_COLLECTION_PATH}/pprof/crio"
+CRIO_REMOTE_TMP_PATH="/tmp/crio_pprof"
+CRIO_PROFILING_DURATION_SEC=30
+
+mkdir -p "$CRIO_LOG_PATH"
+
+_gather_profiling_crio_commands() {
+    local crio_curl_ep="curl --unix-socket /host/var/run/crio/crio.sock http://localhost/debug/pprof/"
+
+    gather_node_util_add_command "mkdir -p ${CRIO_REMOTE_TMP_PATH}"
+    gather_node_util_add_command "${crio_curl_ep}profile?seconds=${CRIO_PROFILING_DURATION_SEC} > ${CRIO_REMOTE_TMP_PATH}/prof.out"
+    gather_node_util_add_command "${crio_curl_ep}heap > ${CRIO_REMOTE_TMP_PATH}/heap.out"
+}
+
+_gather_profiling_crio_collect_data() {
+    local node="$1"
+
+    gather_node_util_collect_file "${node}" "${CRIO_REMOTE_TMP_PATH}/heap.out" "${CRIO_LOG_PATH}/${node}_heap.out"
+    gather_node_util_collect_file "${node}" "${CRIO_REMOTE_TMP_PATH}/prof.out" "${CRIO_LOG_PATH}/${node}_prof.out" 10
+}
+
+
+NODES="${@:-$(oc get nodes -o jsonpath='{.items[?(@.status.nodeInfo.operatingSystem=="linux")].metadata.name}')}"
+
+echo "INFO: GATHER PROFILING DATA"
+_gather_profiling_commands
+
+for node in ${NODES}; do
+    echo "INFO: start profiling tasks on node ${node}"
+    gather_node_util_start "${node}" &
+done
+
+_gather_profiling_collect_data_loop
+
+for node in ${NODES}; do
+    gather_node_util_stop "${node}" &
+done
+
+echo "INFO: gather profiling data completed"
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
