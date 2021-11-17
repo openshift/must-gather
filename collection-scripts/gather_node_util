@@ -1,0 +1,81 @@
+#!/bin/bash
+# This file provides service functions to allow a common/centralized way to access a cluster node
+# to collect custom information from the host (it executes the requested commands via a debug pod).
+# The intended usage is:
+# 1) first add the commands to generate the files with the desired data/logs on the host (the node):
+#    use the "gather_node_util_add_command" function for that
+# 2) start the actual process by calling "gather_node_util_start" (for each node)
+# 3) retrieve the files from the host (node) with "gather_node_util_collect_file" (per node)
+# 4) stop the running pod with "gather_node_util_stop" (or it will stop by the deadline set on creation)
+# see gather_profiling as an example.
+
+GATHER_NODE_UTIL_CMDS=""
+
+# gather_node_util_reset_command
+gather_node_reutil_set_command() {
+    GATHER_NODE_UTIL_CMDS=""
+}
+
+# gather_node_util_add_command $COMMAND
+gather_node_util_add_command() {
+    local command="$1"
+
+    [ -z "$GATHER_NODE_UTIL_CMDS" ] \
+        && GATHER_NODE_UTIL_CMDS="${command}" \
+        || GATHER_NODE_UTIL_CMDS="${GATHER_NODE_UTIL_CMDS} && ${command}"
+}
+
+# gather_node_util_start $NODE [$TIMEOUT]
+gather_node_util_start() {
+    local node="$1"
+    local timeout="${2:-120}"
+    local debugPod=""
+
+    # Get debug pod's name
+	debugPod=$(oc debug --to-namespace=default node/${node} -o jsonpath='{.metadata.name}')
+    if [ -z "$debugPod" ]
+    then
+        echo "ERROR: cannot start debug pod for node ${node}"
+        return
+    fi
+
+    gather_node_util_add_command "sleep ${timeout}"
+    # Start the privileged pod
+    oc debug --to-namespace="default" node/${node} -- /bin/bash -c "${GATHER_NODE_UTIL_CMDS}" > /dev/null 2>&1 &
+}
+
+# gather_node_util_stop $NODE
+gather_node_util_stop() {
+    local node="$1"
+    local debugPod=""
+
+    # Get debug pod's name
+	debugPod=$(oc debug --to-namespace=default node/${node} -o jsonpath='{.metadata.name}')
+    [ -n "${debugPod}" ] && oc delete pod "$debugPod" -n "default" > /dev/null 2>&1
+}
+
+# gather_node_util_collect_file $NODE $SRC $DST [$TIMEOUT]
+gather_node_util_collect_file() {
+    local node="$1"
+    local file_src="$2"
+    local file_dst="$3"
+    local timeout="${4:-120}"
+    local retry_interval=10
+    local retry_num=$((timeout/retry_interval))
+    local debugPod=""
+
+    # Get debug pod's name
+    debugPod=$(oc debug --to-namespace=default node/${node} -o jsonpath='{.metadata.name}')
+    if [ -z "$debugPod" ]
+    then
+        echo "ERROR: cannot figure out debug pod for node ${node}"
+        return
+    fi
+
+    for i in $(seq 0 $retry_num)
+    do
+        oc cp -n default "${debugPod}:${file_src}" "${file_dst}" > /dev/null 2>&1
+        [ -f "$file_dst" ] && break
+        [ "$i" != "$retry_num" ] && sleep "${retry_interval}"
+    done
+}
