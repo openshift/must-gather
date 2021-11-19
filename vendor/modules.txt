@@ -1,4 +1,5 @@
 # github.com/openshift/build-machinery-go v0.0.0-20210423112049-9415d7ebd33e
+## explicit; go 1.13
 github.com/openshift/build-machinery-go
 github.com/openshift/build-machinery-go/make
 github.com/openshift/build-machinery-go/make/lib
