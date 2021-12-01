@@ -1,0 +1,70 @@
+#!/bin/bash
+
+BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-must-gather}"
+PROFILING_NODE_LOG_PATH="${BASE_COLLECTION_PATH}/pprof"
+PROFILING_NODE_KUBELET_LOG_PATH="${PROFILING_NODE_LOG_PATH}/kubelet"
+
+
+PROFILING_NODE_APISERVER="kubernetes.default.svc"
+PROFILING_NODE_SECONDS="${PROFILING_NODE_SECONDS:-30}"
+
+# _gather_profiling_node_node_exists $NODE
+# returns "true" if $NODE is found among the cluster nodes, "false" otherwise.
+_gather_profiling_node_node_exists() {
+    local node="$1"
+
+    oc get node "$node" > /dev/null 2>&1
+    return "$?"
+}
+
+# _gather_profiling_node_is_apiserver_available
+# returns "true" if the kubernetes apiserver can be reached, returns "false" otherwise.
+_gather_profiling_node_is_apiserver_available() {
+    oc get --raw https://${PROFILING_NODE_APISERVER}/api > /dev/null 2>&1
+    return "$?"
+}
+
+_gather_profiling_node_collect_kubelet_data() {
+    local node="$1"
+    local out_kub_base="${PROFILING_NODE_KUBELET_LOG_PATH}/${node}"
+    local out_kub_heap="${out_kub_base}_heap.out"
+    local out_kub_prof="${out_kub_base}_prof.out"
+    local url_base="https://${PROFILING_NODE_APISERVER}/api/v1/nodes/${node}/proxy/debug/pprof"
+
+    oc get --raw "${url_base}/profile?seconds=${PROFILING_NODE_SECONDS}" > "$out_kub_prof"
+    oc get --raw "${url_base}/heap" > "$out_kub_heap"
+}
+
+_gather_profiling_node_collect_data_loop() {
+    local pids=()
+    local node
+
+    mkdir -p "$PROFILING_NODE_KUBELET_LOG_PATH"
+    for node in ${NODES}; do
+        if _gather_profiling_node_node_exists "$node"; then
+            echo "INFO: start kubelet profiling task on node ${node}"
+            _gather_profiling_node_collect_kubelet_data "${node}" & pids+=($!)
+        else
+            echo "ERROR: node ${node} not found in the cluster"
+        fi
+    done
+
+    [ -z "$pids" ] && return
+    echo "INFO: wait for kubelet profiling tasks"
+    wait ${pids[@]}
+}
+
+NODES="${@}"
+if [ -z "$NODES" ]; then
+    echo -e "\nWARNING: since no nodes have been specified for the profiling task, data will\n"\
+            "be collected on ALL the nodes in the cluster. This may take quite some time.\n"
+    NODES="$(oc get nodes -o jsonpath='{.items[?(@.kind=="Node")].metadata.name}')"
+fi
+
+echo "INFO: GATHER NODE PROFILING DATA [${PROFILING_NODE_SECONDS}s]"
+if _gather_profiling_node_is_apiserver_available; then
+    _gather_profiling_node_collect_data_loop
+else
+    echo "ERROR: failed connecting to the kubernetes apiserver"
+fi
+echo "INFO: gather node profiling data completed"
