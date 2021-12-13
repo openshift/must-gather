@@ -79,5 +79,8 @@ oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text
 # Gather network logs
 /usr/bin/gather_network_logs
 
+# Gather metallb logs
+/usr/bin/gather_metallb_logs
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

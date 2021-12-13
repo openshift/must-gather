@@ -1,0 +1,53 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="must-gather"
+METALLB_NS=($(oc get subs -A --field-selector=metadata.name=metallb-operator -o jsonpath='{.items[*].metadata.namespace}'))
+METALLB_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${METALLB_NS}/pods"
+
+if [ -z "${METALLB_NS}" ]; then
+    echo "INFO: MetalLB not detected. Skipping."
+    exit 0
+fi
+
+function get_metallb_cr() {
+    CR_PATH="${BASE_COLLECTION_PATH}/namespaces/${METALLB_NS}/cr"
+    mkdir ${CR_PATH}
+    declare -a CRS=("addresspools" "bgppeers" "bfdprofiles")
+    for CR in "${CRS[@]}"; do
+        oc get -n ${METALLB_NS} ${CR} -o yaml > ${CR_PATH}/${CR}.yaml
+    done
+}
+
+function gather_frr_logs() {
+    declare -a FILES_TO_GATHER=("frr.conf" "frr.log" "daemons" "vtysh.conf")
+    declare -a COMMANDS=("show running-config" "show bgp ipv4" "show bgp ipv6" "show bgp neighbor" "show bfd peer")
+    LOGS_DIR="${METALLB_PODS_PATH}/${1}/frr/frr/logs"
+
+    for FILE in "${FILES_TO_GATHER[@]}"; do
+        oc -n ${METALLB_NS} exec ${1} -c frr -- sh -c "cat /etc/frr/${FILE}" > ${LOGS_DIR}/${FILE}
+    done
+
+    for COMMAND in "${COMMANDS[@]}"; do
+        echo "###### ${COMMAND}" >> ${LOGS_DIR}/dump_frr
+        echo "$( oc -n ${METALLB_NS} exec ${1} -c frr -- vtysh -c "${COMMAND}")" >> ${LOGS_DIR}/dump_frr
+    done
+}
+
+oc adm inspect --dest-dir must-gather "ns/${METALLB_NS}"
+
+get_metallb_cr
+
+# speaker pods are responsible for IP advertisement
+SPEAKER_PODS="${@:-$(oc -n ${METALLB_NS} get pods -l component=speaker -o jsonpath='{.items[*].metadata.name}')}"
+PIDS=()
+
+for SPEAKER_POD in ${SPEAKER_PODS[@]}; do
+    gather_frr_logs ${SPEAKER_POD} &
+    PIDS+=($!)
+    oc -n ${METALLB_NS} exec ${SPEAKER_POD} -c reloader -- sh -c "cat etc/frr_reloader/reloader.pid" > \
+    ${METALLB_PODS_PATH}/${SPEAKER_POD}/reloader/reloader/logs/reloader.pid &
+    PIDS+=($!)
+done 
+wait ${PIDS[@]}
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
