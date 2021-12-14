@@ -37,7 +37,7 @@ oc adm inspect --dest-dir must-gather "ns/${METALLB_NS}"
 get_metallb_cr
 
 # speaker pods are responsible for IP advertisement
-SPEAKER_PODS="${@:-$(oc -n ${METALLB_NS} get pods -l component=speaker -o jsonpath='{.items[*].metadata.name}')}"
+SPEAKER_PODS="${@:-$(oc -n ${METALLB_NS} get pods -l app.kubernetes.io/component=speaker -o jsonpath='{.items[*].metadata.name}')}"
 PIDS=()
 
 for SPEAKER_POD in ${SPEAKER_PODS[@]}; do
