@@ -1,0 +1,7 @@
+#!/bin/bash
+
+sriov_resources+=(ns/openshift-sriov-network-operator sriovnetworks sriovnetworknodestates sriovnetworknodepolicies sriovnetworks sriovoperatorconfigs network-attachment-definitions)
+
+oc adm inspect --dest-dir must-gather --rotated-pod-logs "${sriov_resources[@]}"
+
+sync
