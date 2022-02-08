@@ -37,7 +37,7 @@ group_resources+=(imagecontentsourcepolicies.operator.openshift.io)
 group_resources+=(networks.operator.openshift.io)
 
 # NodeNetworkState
-resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
+group_resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
 
 # Run the Collection of Resources using inspect
 # running across all-namespaces for the few "Autoscaler" resources.
