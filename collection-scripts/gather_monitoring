@@ -5,11 +5,14 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
+# global readonly constants
 declare -r BASE_COLLECTION_PATH="../must-gather"
 declare -r MONITORING_PATH="${BASE_COLLECTION_PATH}/monitoring"
 declare -r CA_BUNDLE="${MONITORING_PATH}/ca-bundle.crt"
-declare -r PROM_PODS="$(oc get pods -n openshift-monitoring -l prometheus=k8s -o jsonpath='{.items[*].metadata.name}')"
 
+
+# init initializes global variables that need to be computed.
+# E.g. get token of the default ServiceAccount
 init() {
   mkdir -p "${MONITORING_PATH}"
 
@@ -29,15 +32,22 @@ init() {
   # we will write it to disk so we can use it in the flag
   oc -n openshift-config-managed get cm default-ingress-cert \
     -o jsonpath='{.data.ca-bundle\.crt}' > "$CA_BUNDLE"
+
+  readarray -t PROM_PODS < <(
+    oc get pods -n openshift-monitoring  -l prometheus=k8s \
+      --no-headers -o custom-columns=":metadata.name"
+  )
 }
 
 cleanup() {
   rm "$CA_BUNDLE"
 }
 
+# prom_get makes http GET requests to prometheus /api/v1/$object and stores
+# the stdout and stderr results
 prom_get() {
   local object="$1"; shift
-  local path="$1"; shift
+  local path="${1:-$object}"; shift || true
 
   local result_path="$MONITORING_PATH/prometheus/$path"
   mkdir -p "$(dirname "$result_path")"
@@ -51,15 +61,17 @@ prom_get() {
       2> "$result_path.stderr"
 }
 
+# prom_get_from_replica makes http GET requests to prometheus pod $replica
+# /api/v1/$object and stores the stdout and stderr results
 prom_get_from_replica() {
   local replica="$1"; shift
   local object="$1"; shift
-  local path="$1"; shift
+  local path="${1:-$object}"; shift || true
 
   local result_path="${MONITORING_PATH}/prometheus/${path}"
   mkdir -p "$(dirname "${result_path}")"
 
-  oc exec ${replica} \
+  oc exec "${replica}" \
     -c prometheus \
     -n openshift-monitoring \
     -- /bin/bash -c "curl -sG http://localhost:9090/api/v1/${object}" \
@@ -68,19 +80,17 @@ prom_get_from_replica() {
 }
 
 prom_get_from_replicas() {
-  echo "INFO: Collecting status for each replica..."
   local object="$1"; shift
-  local path="$1"; shift
+  local path="${1:-$object}"; shift || true
 
-  echo "INFO: Replicas found: $pods"
-  for pod in ${PROM_PODS}; do
-    prom_get_from_replica ${pod} ${object} ${pod}/${path} || true
+  for pod in "${PROM_PODS[@]}"; do
+    prom_get_from_replica "${pod}" "${object}" "${pod}/${path}" || true
   done
 }
 
 alertmanager_get() {
   local object="$1"; shift
-  local path="$1"; shift
+  local path="${1:-$object}"; shift || true
 
   local result_path="$MONITORING_PATH/alertmanager/$path"
   mkdir -p "$(dirname "$result_path")"
@@ -98,17 +108,22 @@ alertmanager_get() {
 monitoring_gather(){
   init
 
+  echo "INFO: Found ${#PROM_PODS[@]} replicas - ${PROM_PODS[*]}"
+
   # begin gathering
   # NOTE || true ignores failures
 
-  prom_get rules rules   || true
-  prom_get alertmanagers alertmanagers  || true
-  prom_get status/config status/config || true
-  prom_get status/flags status/flags || true
-  prom_get status/runtimeinfo status/runtimeinfo || true
-  prom_get_from_replicas status/tsdb status/tsdb || true
+  prom_get alertmanagers   || true
+  prom_get rules    || true
+  prom_get status/config  || true
+  prom_get status/flags  || true
+  prom_get status/runtimeinfo  || true
 
-  alertmanager_get status status || true
+  # using prom_get_from_replica as the state differs for each replica
+  prom_get_from_replicas 'targets?state=active' active-targets  || true
+  prom_get_from_replicas status/tsdb  || true
+
+  alertmanager_get status  || true
 
   # force disk flush to ensure that all data gathered are written
   sync
