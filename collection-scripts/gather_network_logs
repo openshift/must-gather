@@ -140,32 +140,32 @@ function gather_ovn_kubernetes_master_data {
   OVNKUBE_MASTER_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-master -o=jsonpath='{.items[*].metadata.name}'))
 
   oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-nbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9641,ssl:${OVNKUBE_MASTER_IPS[1]}:9641,ssl:${OVNKUBE_MASTER_IPS[2]}:9641 \
+  "ovn-nbctl --db=ssl:[${OVNKUBE_MASTER_IPS[0]}]:9641,ssl:[${OVNKUBE_MASTER_IPS[1]}]:9641,ssl:[${OVNKUBE_MASTER_IPS[2]}]:9641 \
   -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt show" > \
   "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_nbctl_show &
   PIDS+=($!)
   oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-nbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9641,ssl:${OVNKUBE_MASTER_IPS[1]}:9641,ssl:${OVNKUBE_MASTER_IPS[2]}:9641 \
+  "ovn-nbctl --db=ssl:[${OVNKUBE_MASTER_IPS[0]}]:9641,ssl:[${OVNKUBE_MASTER_IPS[1]}]:9641,ssl:[${OVNKUBE_MASTER_IPS[2]}]:9641 \
   -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt list Logical_Switch_Port" > \
   "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_nbctl_list_lsp &
   PIDS+=($!)
   oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-nbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9641,ssl:${OVNKUBE_MASTER_IPS[1]}:9641,ssl:${OVNKUBE_MASTER_IPS[2]}:9641 \
+  "ovn-nbctl --db=ssl:[${OVNKUBE_MASTER_IPS[0]}]:9641,ssl:[${OVNKUBE_MASTER_IPS[1]}]:9641,ssl:[${OVNKUBE_MASTER_IPS[2]}]:9641 \
   -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt list Load_Balancer" > \
   "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_nbctl_list_lb &
   PIDS+=($!)
   oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-nbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9641,ssl:${OVNKUBE_MASTER_IPS[1]}:9641,ssl:${OVNKUBE_MASTER_IPS[2]}:9641 \
+  "ovn-nbctl --db=ssl:[${OVNKUBE_MASTER_IPS[0]}]:9641,ssl:[${OVNKUBE_MASTER_IPS[1]}]:9641,ssl:[${OVNKUBE_MASTER_IPS[2]}]:9641 \
   -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt list Port_Group" > \
   "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_nbctl_list_pg &
   PIDS+=($!)
   oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-nbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9641,ssl:${OVNKUBE_MASTER_IPS[1]}:9641,ssl:${OVNKUBE_MASTER_IPS[2]}:9641 \
+  "ovn-nbctl --db=ssl:[${OVNKUBE_MASTER_IPS[0]}]:9641,ssl:[${OVNKUBE_MASTER_IPS[1]}]:9641,ssl:[${OVNKUBE_MASTER_IPS[2]}]:9641 \
   -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt list ACL" > \
   "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_nbctl_list_acl &
   PIDS+=($!)
   oc -n openshift-ovn-kubernetes exec -c ovnkube-master "${OVNKUBE_MASTER_PODS[0]}" -- bash -c \
-  "ovn-sbctl --db=ssl:${OVNKUBE_MASTER_IPS[0]}:9642,ssl:${OVNKUBE_MASTER_IPS[1]}:9642,ssl:${OVNKUBE_MASTER_IPS[2]}:9642 \
+  "ovn-sbctl --db=ssl:[${OVNKUBE_MASTER_IPS[0]}]:9642,ssl:[${OVNKUBE_MASTER_IPS[1]}]:9642,ssl:[${OVNKUBE_MASTER_IPS[2]}]:9642 \
   -p /ovn-cert/tls.key -c /ovn-cert/tls.crt -C /ovn-ca/ca-bundle.crt show" > \
   "${NETWORK_LOG_PATH}"/"${OVNKUBE_MASTER_PODS[0]}"_ovn_sbctl_show &
   PIDS+=($!)
