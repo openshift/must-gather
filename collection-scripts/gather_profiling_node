@@ -3,10 +3,12 @@
 BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-must-gather}"
 PROFILING_NODE_LOG_PATH="${BASE_COLLECTION_PATH}/pprof"
 PROFILING_NODE_KUBELET_LOG_PATH="${PROFILING_NODE_LOG_PATH}/kubelet"
-
+PROFILING_NODE_CRIO_LOG_PATH="${PROFILING_NODE_LOG_PATH}/crio"
 
 PROFILING_NODE_APISERVER="kubernetes.default.svc"
 PROFILING_NODE_SECONDS="${PROFILING_NODE_SECONDS:-30}"
+
+PROFILING_NODE_IMAGE="${PROFILING_NODE_IMAGE:-"registry.redhat.io/rhel8/support-tools"}"
 
 # _gather_profiling_node_node_exists $NODE
 # returns "true" if $NODE is found among the cluster nodes, "false" otherwise.
@@ -24,6 +26,63 @@ _gather_profiling_node_is_apiserver_available() {
     return "$?"
 }
 
+_gather_profiling_node_start_crio_collection_pod() {
+    local node="$1"
+    local pod_name="$2"
+
+    cat << EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${pod_name}
+  labels:
+    name: gather-profiling-crio
+spec:
+  restartPolicy: Never
+  nodeName: ${node}
+  containers:
+  - name: crio-prof-expose
+    image: ${PROFILING_NODE_IMAGE}
+    command: ["/bin/bash", "-c", "trap : TERM INT; sleep infinity & wait"]
+    volumeMounts:
+    - mountPath: /tmp/pprof
+      name: pprof-data
+  initContainers:
+  - name: crio-prof-generate
+    image: ${PROFILING_NODE_IMAGE}
+    command: ["/bin/bash", "-c"]
+    args:
+      - curl --unix-socket /run/crio/crio.sock -o /tmp/pprof/${node}_heap.out http://localhost/debug/pprof/heap;
+        curl --unix-socket /run/crio/crio.sock -o /tmp/pprof/${node}_prof.out http://localhost/debug/pprof/profile?seconds=${PROFILING_NODE_SECONDS};
+    securityContext:
+      runAsUser: 0
+      privileged: True
+    volumeMounts:
+    - mountPath: /run/crio/crio.sock
+      name: crio-socket
+    - mountPath: /tmp/pprof
+      name: pprof-data
+  volumes:
+  - name: crio-socket
+    hostPath:
+      path: /run/crio/crio.sock
+  - name: pprof-data
+    emptyDir: {}
+EOF
+}
+
+_gather_profiling_node_collect_crio_data() {
+    local node="$1"
+    local pod_name="pprof.${node}"
+    local extract_timeout=$((PROFILING_NODE_SECONDS+300))
+
+    _gather_profiling_node_start_crio_collection_pod "$node" "$pod_name"
+    oc wait --for=condition=Ready pod/${pod_name} --timeout=${extract_timeout}s \
+        && oc cp -c crio-prof-expose "${pod_name}:/tmp/pprof/" "$PROFILING_NODE_CRIO_LOG_PATH"
+
+    oc delete pod "$pod_name"
+}
+
 _gather_profiling_node_collect_kubelet_data() {
     local node="$1"
     local out_kub_base="${PROFILING_NODE_KUBELET_LOG_PATH}/${node}"
@@ -39,18 +98,20 @@ _gather_profiling_node_collect_data_loop() {
     local pids=()
     local node
 
-    mkdir -p "$PROFILING_NODE_KUBELET_LOG_PATH"
+    mkdir -p "$PROFILING_NODE_KUBELET_LOG_PATH" "$PROFILING_NODE_CRIO_LOG_PATH"
     for node in ${NODES}; do
         if _gather_profiling_node_node_exists "$node"; then
+            echo "INFO: start crio profiling task on node ${node}"
+            _gather_profiling_node_collect_crio_data "$node" & pids+=($!)
             echo "INFO: start kubelet profiling task on node ${node}"
-            _gather_profiling_node_collect_kubelet_data "${node}" & pids+=($!)
+            _gather_profiling_node_collect_kubelet_data "$node" & pids+=($!)
         else
             echo "ERROR: node ${node} not found in the cluster"
         fi
     done
 
     [ -z "$pids" ] && return
-    echo "INFO: wait for kubelet profiling tasks"
+    echo "INFO: wait for crio/kubelet profiling tasks"
     wait ${pids[@]}
 }
 
