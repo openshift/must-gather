@@ -7,6 +7,7 @@ PROFILING_NODE_CRIO_LOG_PATH="${PROFILING_NODE_LOG_PATH}/crio"
 
 PROFILING_NODE_APISERVER="kubernetes.default.svc"
 PROFILING_NODE_SECONDS="${PROFILING_NODE_SECONDS:-30}"
+PROFILING_NODE_TARGET="${PROFILING_NODE_TARGET:-ALL}"
 
 PROFILING_NODE_IMAGE="${PROFILING_NODE_IMAGE:-"registry.redhat.io/rhel8/support-tools"}"
 
@@ -101,10 +102,14 @@ _gather_profiling_node_collect_data_loop() {
     mkdir -p "$PROFILING_NODE_KUBELET_LOG_PATH" "$PROFILING_NODE_CRIO_LOG_PATH"
     for node in ${NODES}; do
         if _gather_profiling_node_node_exists "$node"; then
-            echo "INFO: start crio profiling task on node ${node}"
-            _gather_profiling_node_collect_crio_data "$node" & pids+=($!)
-            echo "INFO: start kubelet profiling task on node ${node}"
-            _gather_profiling_node_collect_kubelet_data "$node" & pids+=($!)
+            if [ "$DO_PROF_CRIO" = true ]; then
+                echo "INFO: start crio profiling task on node ${node}"
+                _gather_profiling_node_collect_crio_data "$node" & pids+=($!)
+            fi
+            if [ "$DO_PROF_KUBELET" = true ]; then
+                echo "INFO: start kubelet profiling task on node ${node}"
+                _gather_profiling_node_collect_kubelet_data "$node" & pids+=($!)
+            fi
         else
             echo "ERROR: node ${node} not found in the cluster"
         fi
@@ -121,6 +126,18 @@ if [ -z "$NODES" ]; then
             "be collected on ALL the nodes in the cluster. This may take quite some time.\n"
     NODES="$(oc get nodes -o jsonpath='{.items[?(@.kind=="Node")].metadata.name}')"
 fi
+
+DO_PROF_CRIO=true
+DO_PROF_KUBELET=true
+
+case "$PROFILING_NODE_TARGET" in
+    all | ALL)    ;;
+    crio | CRIO | CRI-O)    DO_PROF_KUBELET=false ;;
+    kubelet | KUBELET)      DO_PROF_CRIO=false ;;
+    *) echo -e "\nWARNING: PROFILING_NODE_TARGET set to unknown value = [$PROFILING_NODE_TARGET].\n"\
+               "allowed values are: 'all' (default), 'crio' or 'kubelet'.\n"
+               "Running with 'all'"
+esac
 
 echo "INFO: GATHER NODE PROFILING DATA [${PROFILING_NODE_SECONDS}s]"
 if _gather_profiling_node_is_apiserver_available; then
