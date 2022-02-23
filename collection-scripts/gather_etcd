@@ -10,7 +10,7 @@ ETCD_LOG_PATH="${BASE_COLLECTION_PATH}/etcd_info"
 
 ETCDCTL_CONTAINER='etcdctl'
 
-RUNNING_ETCD_POD=$(oc get pod -n openshift-etcd --no-headers|grep Running| grep -o -m 1 '\S*etcd\S*')
+RUNNING_ETCD_POD=$(oc get pod -n openshift-etcd --no-headers|grep Running|grep -v quorum| grep -o -m 1 '\S*etcd\S*')
 
 # We cannot rely on ETCDCTL_ENDPOINTS on container because it may contain bootstrap VM
 ETCDCTL_ENDPOINTS=$(oc exec "${RUNNING_ETCD_POD}"  -n openshift-etcd -c ${ETCDCTL_CONTAINER} -- /bin/sh -c "etcdctl member list" | awk -F', ' '{printf "%s%s",sep,$5; sep=","}')
