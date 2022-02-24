@@ -1,6 +1,6 @@
 #!/bin/bash
 BASE_COLLECTION_PATH="must-gather"
-METALLB_NS=($(oc get subs -A --field-selector=metadata.name=metallb-operator -o jsonpath='{.items[*].metadata.namespace}'))
+METALLB_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "metallb-operator"}}{{.metadata.namespace}}{{end}}{{end}}')"
 METALLB_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${METALLB_NS}/pods"
 
 if [ -z "${METALLB_NS}" ]; then
