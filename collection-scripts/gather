@@ -85,5 +85,8 @@ oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text
 # Gather NMState
 /usr/bin/gather_nmstate
 
+# Gather SR-IOV resources
+/usr/bin/gather_sriov
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
