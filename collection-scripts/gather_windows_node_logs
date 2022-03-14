@@ -8,6 +8,7 @@ SERVICES=(docker)
 # Logfile list
 LOGS=(kube-proxy/kube-proxy.exe.INFO kube-proxy/kube-proxy.exe.ERROR kube-proxy/kube-proxy.exe.WARNING)
 LOGS+=(hybrid-overlay/hybrid-overlay.log kubelet/kubelet.log)
+LOGS+=(containerd/containerd.log)
 
 # if the cluster has no Windows nodes skip this script
 WIN_NODES=$(/usr/bin/oc get no -l kubernetes.io/os=windows)
