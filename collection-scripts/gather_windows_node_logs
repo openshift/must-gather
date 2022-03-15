@@ -2,6 +2,9 @@
 BASE_COLLECTION_PATH="/must-gather"
 WINDOWS_NODE_LOGS=$BASE_COLLECTION_PATH/host_service_logs/windows
 
+# Process time range limit, otherwise default to 7 days
+SINCE_TIMEFRAME="${SINCE_TIMEFRAME:--7d}"
+
 # Services logging to WinEvent log
 SERVICES=(docker)
 
@@ -21,13 +24,14 @@ mkdir -p ${LOG_WINEVENT_DIR}
 echo INFO: Collecting logs for all Windows nodes
 for service in ${SERVICES[@]}; do
     echo "INFO: Collecting WinEvent application logs for provider $service"
-    /usr/bin/oc adm node-logs -l kubernetes.io/os=windows -u $service > ${LOG_WINEVENT_DIR}/${service}_winevent.log &
+    /usr/bin/oc adm node-logs -l kubernetes.io/os=windows -u $service --since "${SINCE_TIMEFRAME}" > ${LOG_WINEVENT_DIR}/${service}_winevent.log &
     PIDS+=($!)
 done
 for log in ${LOGS[@]}; do
     LOG_FILE_DIR=${WINDOWS_NODE_LOGS}/log_files/$(dirname $log)
     mkdir -p ${LOG_FILE_DIR}
-    /usr/bin/oc adm node-logs -l kubernetes.io/os=windows --path=$log > ${LOG_FILE_DIR}/$(basename $log) &
+    echo "INFO: Collecting Windows node logs for $log"
+    /usr/bin/oc adm node-logs -l kubernetes.io/os=windows --path=$log --since "${SINCE_TIMEFRAME}" > ${LOG_FILE_DIR}/$(basename $log) &
     PIDS+=($!)
 done
 wait ${PIDS[@]}
