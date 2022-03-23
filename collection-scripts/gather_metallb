@@ -8,12 +8,11 @@ if [ -z "${METALLB_NS}" ]; then
     exit 0
 fi
 
-function get_metallb_cr() {
-    CR_PATH="${BASE_COLLECTION_PATH}/namespaces/${METALLB_NS}/cr"
-    mkdir ${CR_PATH}
-    declare -a CRS=("addresspools" "bgppeers" "bfdprofiles")
-    for CR in "${CRS[@]}"; do
-        oc get -n ${METALLB_NS} ${CR} -o yaml > ${CR_PATH}/${CR}.yaml
+function get_metallb_crs() {
+    declare -a METALLB_CRDS=("addresspools" "bgppeers" "bfdprofiles")
+    
+    for CRD in "${METALLB_CRDS[@]}"; do
+        oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" -n ${METALLB_NS} "${CRD}"
     done
 }
 
@@ -32,9 +31,8 @@ function gather_frr_logs() {
     done
 }
 
-oc adm inspect --dest-dir must-gather "ns/${METALLB_NS}"
-
-get_metallb_cr
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${METALLB_NS}"
+get_metallb_crs
 
 # speaker pods are responsible for IP advertisement
 SPEAKER_PODS="${@:-$(oc -n ${METALLB_NS} get pods -l component=speaker -o jsonpath='{.items[*].metadata.name}')}"
