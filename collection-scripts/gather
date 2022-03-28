@@ -80,7 +80,7 @@ oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text
 /usr/bin/gather_network_logs
 
 # Gather metallb logs
-/usr/bin/gather_metallb_logs
+/usr/bin/gather_metallb
 
 # Gather NMState
 /usr/bin/gather_nmstate

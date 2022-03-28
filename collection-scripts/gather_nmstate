@@ -1,28 +1,22 @@
 #!/bin/bash
 BASE_COLLECTION_PATH="must-gather"
 NMSTATE_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "kubernetes-nmstate-operator"}}{{.metadata.namespace}}{{end}}{{end}}')"
-NMSTATE_API_GROUP="nmstate.io"
 
 if [ -z "${NMSTATE_NS}" ]; then
     echo "INFO: NMState not detected. Skipping."
     exit 0
 fi
 
-function get_nmstate_cr() {
+function get_nmstate_crs() {
     declare -a NMSTATE_CRDS=("nmstates" "nodenetworkconfigurationenactments" "nodenetworkconfigurationpolicies" "nodenetworkstates")
-    for NMSTATE_CRD in "${NMSTATE_CRDS[@]}"; do
-        CR_PATH="${BASE_COLLECTION_PATH}/cluster-scoped-resources/${NMSTATE_API_GROUP}/${NMSTATE_CRD}"
-        mkdir -p ${CR_PATH}
 
-        for CR_NAME in $(oc get ${NMSTATE_CRD} -ojsonpath='{.items[*].metadata.name}'); do
-            oc get ${NMSTATE_CRD} ${CR_NAME} -o yaml > "${CR_PATH}/${CR_NAME}.yaml"
-        done
+    for CRD in "${NMSTATE_CRDS[@]}"; do
+        oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "${CRD}"
     done
 }
 
-oc adm inspect --dest-dir must-gather "ns/${NMSTATE_NS}"
-
-get_nmstate_cr
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${NMSTATE_NS}"
+get_nmstate_crs
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
