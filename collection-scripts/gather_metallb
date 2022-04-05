@@ -9,7 +9,7 @@ if [ -z "${METALLB_NS}" ]; then
 fi
 
 function get_metallb_crs() {
-    declare -a METALLB_CRDS=("addresspools" "bgppeers" "bfdprofiles")
+    declare -a METALLB_CRDS=("addresspools" "bgppeers" "bfdprofiles" "bgpAdvertisements" "ipaddresspools" "l2advertisements" "communities")
     
     for CRD in "${METALLB_CRDS[@]}"; do
         oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" -n ${METALLB_NS} "${CRD}"
