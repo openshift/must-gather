@@ -42,7 +42,16 @@ resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconf
 # Run the Collection of Resources using inspect
 # running across all-namespaces for the few "Autoscaler" resources.
 oc adm inspect --dest-dir must-gather --rotated-pod-logs "${named_resources[@]}"
-group_resources_text=$(IFS=, ; echo "${group_resources[*]}")
+
+filtered_group_resources=()
+for gr in "${group_resources[@]}"
+do
+  oc get "$gr" > /dev/null 2>&1
+  if [[ "$?" -eq 0 ]]; then
+    filtered_group_resources+=("$gr")
+  fi
+done
+group_resources_text=$(IFS=, ; echo "${filtered_group_resources[*]}")
 oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text}"
 
 # Gather Insights Operator Archives
