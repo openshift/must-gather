@@ -78,10 +78,12 @@ _gather_profiling_node_collect_crio_data() {
     local extract_timeout=$((PROFILING_NODE_SECONDS+300))
 
     _gather_profiling_node_start_crio_collection_pod "$node" "$pod_name"
-    oc wait --for=condition=Ready pod/${pod_name} --timeout=${extract_timeout}s \
-        && oc cp -c crio-prof-expose "${pod_name}:/tmp/pprof/" "$PROFILING_NODE_CRIO_LOG_PATH"
-
-    oc delete pod "$pod_name"
+    if oc wait --for=condition=Ready pod/${pod_name} --timeout=${extract_timeout}s; then
+        oc cp -c crio-prof-expose "${pod_name}:/tmp/pprof/" "$PROFILING_NODE_CRIO_LOG_PATH"
+        oc delete pod "$pod_name"
+    else
+        oc delete pod --grace-period=0 --force "$pod_name"
+    fi
 }
 
 _gather_profiling_node_collect_kubelet_data() {
