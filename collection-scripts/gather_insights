@@ -2,12 +2,15 @@
 # Gather the insights archive data from insights operator
 
 BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
-COLLECTOR=${1:-rsync}         #Define what oc collector to use (oc rsync or oc cp) 
+INSIGHTS_DATA_PATH="${BASE_COLLECTION_PATH}/insights-data"
+
+mkdir -p "${INSIGHTS_DATA_PATH}"/
+COLLECTOR=${1:-rsync}         #Define what oc collector to use (oc rsync or oc cp)
 
 INSIGHTS_OPERATOR_POD=$(oc get pods --namespace=openshift-insights -o custom-columns=:metadata.name --no-headers  --field-selector=status.phase=Running)
 
-echo "Collecting Insights Archives from $INSIGHTS_OPERATOR_POD"
-oc $COLLECTOR openshift-insights/$INSIGHTS_OPERATOR_POD:/var/lib/insights-operator $BASE_COLLECTION_PATH/insights-data
+echo "INFO: Collecting Insights Archives from $INSIGHTS_OPERATOR_POD"
+oc $COLLECTOR --namespace=openshift-insights openshift-insights/$INSIGHTS_OPERATOR_POD:/var/lib/insights-operator $INSIGHTS_DATA_PATH
 
 #TODO: Prune or Limit the data that is collected/synced (as this might be a lot to add to the archive).
 
