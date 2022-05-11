@@ -46,7 +46,7 @@ group_resources_text=$(IFS=, ; echo "${group_resources[*]}")
 oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text}"
 
 # Gather Insights Operator Archives
-/user/bin/gather_insights
+/usr/bin/gather_insights
 
 # Gather monitoring data from the cluster
 /usr/bin/gather_monitoring
