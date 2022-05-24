@@ -15,6 +15,18 @@ function gather_multus_data {
   oc get multi-networkpolicy -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/multi_networkpolicy 2>&1 & PIDS+=($!)
 }
 
+function gather_multus_logs {
+  MULTUS_DAEMON_PODS="${@:-$(oc -n openshift-multus get pods -l app=multus -o jsonpath='{.items[*].metadata.name}')}"
+  INTPUT_LOG_PATH="/host/var/run/multus/cni/net.d/multus.log"
+
+  for DAEMON_POD in ${MULTUS_DAEMON_PODS[@]}; do
+   # Collect var/log/multus.log if exists.
+      out=$(oc exec -n openshift-multus "${DAEMON_POD}" -- \
+      /bin/bash -c "cat $INTPUT_LOG_PATH" 2>/dev/null) && echo "$out" 1> "${NETWORK_LOG_PATH}/multus-log-$DAEMON_POD.log"
+  done
+
+}
+
 function gather_ovn_kubernetes_data {
   echo "INFO: Gathering ovn-kubernetes master data"
   OVNKUBE_MASTER_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-master -o=jsonpath='{.items[*].metadata.name}'))
@@ -81,6 +93,7 @@ PIDS=()
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
 
 gather_multus_data
+gather_multus_logs
 gather_scale_data
 
 if [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
