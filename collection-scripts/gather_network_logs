@@ -90,7 +90,7 @@ elif [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
     gather_ovn_kubernetes_data
 fi
 
-CNCC_DEPLOYMENT=$(oc get deployment -n openshift-cloud-network-config-controller -o custom-columns=":metadata.name")
+CNCC_DEPLOYMENT=$(oc get deployment -n openshift-cloud-network-config-controller --no-headers -o custom-columns=":metadata.name")
 if [[ "${CNCC_DEPLOYMENT}" == "cloud-network-config-controller" ]]; then
   oc adm inspect --dest-dir must-gather cloudprivateipconfigs.cloud.network.openshift.io
 fi
