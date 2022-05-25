@@ -15,6 +15,9 @@ function gather_multus_data {
   oc get multi-networkpolicy -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/multi_networkpolicy 2>&1 & PIDS+=($!)
 }
 
+CLUSTER_NODES="${@:-$(oc get node -l node-role.kubernetes.io/master -oname)}"
+/usr/bin/gather_multus_logs $CLUSTER_NODES
+
 function gather_ovn_kubernetes_data {
   echo "INFO: Gathering ovn-kubernetes master data"
   OVNKUBE_MASTER_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-master -o=jsonpath='{.items[*].metadata.name}'))
