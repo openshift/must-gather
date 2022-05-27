@@ -1,0 +1,18 @@
+#!/bin/bash
+# Expects a space-delimited list of nodes to be passed as parameters.
+
+BASE_COLLECTION_PATH="must-gather"
+NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
+INPUT_LOG_PATH="/host/var/run/multus/cni/net.d/multus.log"
+OUTPUT_LOG_PATH=${OUT:-"${NETWORK_LOG_PATH}/multus_logs"}
+mkdir -p "${OUTPUT_LOG_PATH}"/
+
+function gather_multus_logs {
+  for NODE in "$@"; do
+    nodefilename=$(echo "$NODE" | sed -e 's|node/||')
+    out=$(oc debug "${NODE}" -- \
+    /bin/bash -c "cat $INPUT_LOG_PATH" 2>/dev/null) && echo "$out" 1> "${OUTPUT_LOG_PATH}/multus-log-$nodefilename.log"
+  done
+}
+
+gather_multus_logs $@
