@@ -29,4 +29,4 @@ xargs --max-args=4 --max-procs=45 --no-run-if-empty bash -c \
   bash
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
-#sync
+sync ;#

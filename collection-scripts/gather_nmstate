@@ -19,4 +19,4 @@ oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${NMSTATE_NS}"
 get_nmstate_crs
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
-#sync
+sync ;#

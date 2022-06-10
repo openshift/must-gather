@@ -126,7 +126,7 @@ monitoring_gather(){
   alertmanager_get status  || true
 
   # force disk flush to ensure that all data gathered are written
-  #sync
+  sync ;#
 
   cleanup
 }
