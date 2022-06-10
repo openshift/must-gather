@@ -74,4 +74,4 @@ gather_monitoring_audit_logs
 echo "INFO: Audit logs collected."
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
-sync
+#sync

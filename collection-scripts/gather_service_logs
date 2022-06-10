@@ -34,4 +34,4 @@ wait "${PIDS[@]}"
 echo "INFO: Worker host service log collection to complete."
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
-sync
+#sync

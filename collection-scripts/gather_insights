@@ -14,4 +14,4 @@ oc $COLLECTOR --namespace=openshift-insights openshift-insights/$INSIGHTS_OPERAT
 
 #TODO: Prune or Limit the data that is collected/synced (as this might be a lot to add to the archive).
 
-sync
+#sync
