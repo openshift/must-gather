@@ -26,7 +26,7 @@ init() {
 
   # the SA token is used for authentication with Prometheus and Alert Manager
   # see: prom_get
-  SA_TOKEN="$(oc sa get-token default)"
+  SA_TOKEN="$(oc create token default)"
 
   # this is a CA bundle we need to verify the monitoring route,
   # we will write it to disk so we can use it in the flag
