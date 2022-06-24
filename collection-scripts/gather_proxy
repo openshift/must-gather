@@ -1,0 +1,6 @@
+#!/bin/bash
+
+BASE_COLLECTION_PATH="must-gather"
+PROXY_CONFIG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/proxy.yaml"}
+
+oc get proxy/cluster -o yaml > $PROXY_CONFIG_PATH
