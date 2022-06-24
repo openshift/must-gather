@@ -241,6 +241,7 @@ elif [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
     gather_kuryr_nodes_data
     gather_kuryr_data
 elif [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
+    oc adm inspect --dest-dir must-gather egressips.k8s.ovn.org
     if [ -z "$IPSEC_PODS" ]; then
         echo "INFO: No ovn-ipsec pods exist, tunnel traffic will be unencrypted"
     else 
