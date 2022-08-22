@@ -2,7 +2,7 @@
 
 # generate /must-gather/version file
 . version
-echo "openshift/must-gather" > /must-gather/version
+echo "OpenShift Container Platform (openshift/must-gather)" > /must-gather/version
 version >> /must-gather/version
 
 # Named resource list, eg. ns/openshift-config

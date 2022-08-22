@@ -2,10 +2,8 @@
 
 function version() {
   # get version from image
-  version=$( \
-    oc status | grep '^pod' | \
-    sed -n -r -e 's/.*([[:digit:]]+\.[[:digit:]]+(:?\.[[:digit:]])?(:?-[^@]+)?).*/\1/p' \
-  )
+
+  version=$(oc get ClusterVersion -o jsonpath='{.items[0].status.history[0].version}{"\n"}')
 
   # if version not found, fallback to imageID
   [ -z "${version}" ] && version=$(oc status | grep '^pod.*runs' | sed -r -e 's/^pod.*runs //')
