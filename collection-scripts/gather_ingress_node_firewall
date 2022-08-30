@@ -1,0 +1,32 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="must-gather"
+INGRESS_NODE_FIREWALL_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "ingress-node-firewall"}}{{.metadata.namespace}}{{end}}{{end}}')"
+
+if [ -z "${INGRESS_NODE_FIREWALL_NS}" ]; then
+    echo "INFO: Ingress node firewall namespace is not detected. Skipping."
+    exit 0
+fi
+
+function get_ingress_node_firewall_namespaced_crs() {
+    declare -a INGRESS_NODE_FIREWALL_NAMESPACED_CRDS=("ingressnodefirewallconfigs" "ingressnodefirewallnodestates")
+    
+    for CRD in "${INGRESS_NODE_FIREWALL_NAMESPACED_CRDS[@]}"; do
+        oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" -n ${INGRESS_NODE_FIREWALL_NS} "${CRD}"
+    done
+}
+
+function get_ingress_node_firewall_cluster_crs() {
+    declare -a INGRESS_NODE_FIREWALL_CLUSTER_CRDS=("ingressnodefirewalls")
+
+    for CRD in "${INGRESS_NODE_FIREWALL_CLUSTER_CRDS[@]}"; do
+        oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "${CRD}"
+    done
+}
+
+
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${INGRESS_NODE_FIREWALL_NS}"
+get_ingress_node_firewall_namespaced_crs
+get_ingress_node_firewall_cluster_crs
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
