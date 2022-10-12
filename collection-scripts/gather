@@ -15,8 +15,8 @@ group_resources=()
 named_resources+=(ns/openshift-cluster-version)
 group_resources+=(clusterversion)
 
-# Operator Resources
-group_resources+=(clusteroperators)
+# Operator and APIService Resources
+group_resources+=(clusteroperators apiservices)
 
 # Certificate Resources
 group_resources+=(certificatesigningrequests)
