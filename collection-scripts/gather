@@ -41,9 +41,9 @@ resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconf
 
 # Run the Collection of Resources using inspect
 # running across all-namespaces for the few "Autoscaler" resources.
-oc adm inspect --dest-dir must-gather "${named_resources[@]}"
+oc adm inspect --dest-dir must-gather --rotated-pod-logs "${named_resources[@]}"
 group_resources_text=$(IFS=, ; echo "${group_resources[*]}")
-oc adm inspect --dest-dir must-gather "${group_resources_text}"
+oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text}"
 
 # Gather monitoring data from the cluster
 /usr/bin/gather_monitoring
