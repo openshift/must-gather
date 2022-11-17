@@ -4,6 +4,4 @@ POD_NETWORK_CHECK="${BASE_COLLECTION_PATH}/pod_network_connectivity_check/"
 
 mkdir -p ${POD_NETWORK_CHECK}
 
-for i in $(oc get PodNetworkConnectivityCheck -n openshift-network-diagnostics --no-headers | awk '{ print $1 }'); do
-    oc get PodNetworkConnectivityCheck -n openshift-network-diagnostics "$i" -o yaml > ${POD_NETWORK_CHECK}/"$i".yaml 
-done
+oc get podnetworkconnectivitychecks -n openshift-network-diagnostics -o yaml > ${POD_NETWORK_CHECK}/podnetworkconnectivitychecks.yaml
