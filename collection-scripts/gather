@@ -36,6 +36,9 @@ group_resources+=(imagecontentsourcepolicies.operator.openshift.io)
 # Networking Resources
 group_resources+=(networks.operator.openshift.io)
 
+# HostSubnet Resources
+group_resources+=(hostsubnets)
+
 # NodeNetworkState
 resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
 
