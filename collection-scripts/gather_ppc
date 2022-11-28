@@ -1,0 +1,162 @@
+#!/bin/bash
+
+function ppc_nodes(){
+  
+check_node_gather_pods_ready() {
+   line=$(oc get ds perf-node-gather-daemonset -o=custom-columns=DESIRED:.status.desiredNumberScheduled,READY:.status.numberReady --no-headers -n perf-node-gather)
+
+    IFS=$' '
+    read desired ready <<< $line
+    IFS=$'\n'
+
+    if [[ "$desired" != "0" ]] && [[ "$ready" == "$desired" ]]
+    then
+       return 0
+    else
+       return 1
+    fi
+}
+
+IFS=$'\n'
+
+BASE_COLLECTION_PATH="/must-gather"
+NODES_PATH=${BASE_COLLECTION_PATH}/nodes
+mkdir -p ${NODES_PATH}
+NAMESPACE_MANIFEST="/etc/performance-profile-node-gather/namespace.yaml"
+SERVICEACCOUNT_MANIFEST="/etc/performance-profile-node-gather/serviceaccount.yaml"
+DAEMONSET_MANIFEST="/etc/performance-profile-node-gather/daemonset.yaml"
+CLUSTER_ROLE_MANIFEST="/etc/performance-profile-node-gather/clusterrole.yaml"
+CLUSTER_ROLE_BINDING_MANIFEST="/etc/performance-profile-node-gather/clusterrolebinding.yaml"
+NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+# Once you start the pod, the Kubernetes will set the pod hostname to the name of the pod
+# https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-hostname-and-subdomain-fields
+POD_NAME=${HOSTNAME}
+MUST_GATHER_IMAGE=$(oc get pod -n $NAMESPACE $POD_NAME -o jsonpath="{.spec.containers[0].image}")
+
+POD_IP=$(hostname -I |  tr -d "[:blank:]" )
+echo "[$NAMESPACE/$POD_IP/$POD_NAME]" >> ${BASE_COLLECTION_PATH}/debug
+oc get pod -n $NAMESPACE $POD_NAME -o json >> ${BASE_COLLECTION_PATH}/debug
+
+sed -i -e "s#MUST_GATHER_IMAGE#$MUST_GATHER_IMAGE#" $DAEMONSET_MANIFEST
+
+oc create -f $NAMESPACE_MANIFEST
+oc create -f $SERVICEACCOUNT_MANIFEST
+oc adm policy add-scc-to-user privileged -n perf-node-gather -z perf-node-gather
+oc create -f $CLUSTER_ROLE_MANIFEST
+oc create -f $CLUSTER_ROLE_BINDING_MANIFEST
+oc create -f $DAEMONSET_MANIFEST
+
+COUNTER=0
+until check_node_gather_pods_ready || [ $COUNTER -eq 300 ]; do
+   (( COUNTER++ ))
+   sleep 1
+done
+
+for line in $(oc get pod -o=custom-columns=NODE:.spec.nodeName --no-headers --field-selector=status.phase!=Running -n perf-node-gather)
+do
+    echo "Failed to collect perf-node-gather data from node ${line} due to pod scheduling failure." >> ${NODES_PATH}/skipped_nodes.txt
+done
+
+COLLECTABLE_NODES=()
+for line in $(oc get pod -o=custom-columns=NODE:.spec.nodeName,NAME:.metadata.name --no-headers --field-selector=status.phase=Running -n perf-node-gather)
+do
+    node=$(echo $line | awk -F ' ' '{print $1}')
+    pod=$(echo $line | awk -F ' ' '{print $2}')
+    NODE_PATH=${NODES_PATH}/$node
+    mkdir -p "${NODE_PATH}"
+
+    oc exec $pod -n perf-node-gather -- lspci -nvv > $NODE_PATH/lspci
+    oc exec $pod -n perf-node-gather -- lscpu -e > $NODE_PATH/lscpu
+    oc exec $pod -n perf-node-gather -- cat /proc/cmdline > $NODE_PATH/proc_cmdline
+    oc exec $pod -n perf-node-gather -- dmesg > $NODE_PATH/dmesg
+    oc exec $pod -n perf-node-gather -- ethtool -k eth0 > $NODE_PATH/ethtool_features
+    oc exec $pod -n perf-node-gather -- ethtool -l eth0 > $NODE_PATH/ethtool_channels
+
+    COLLECTABLE_NODES+=($node)
+
+    oc exec $pod -n perf-node-gather -- gather_sysinfo --json cpuaff --procfs=/host/proc --sysfs=/host/sys > $NODE_PATH/cpu_affinities.json
+    oc exec $pod -n perf-node-gather -- gather_sysinfo --json irqaff --procfs=/host/proc --sysfs=/host/sys > $NODE_PATH/irq_affinities.json
+    oc exec $pod -n perf-node-gather -- gather_sysinfo --json podres --socket-path=unix:///host/podresources/kubelet.sock > $NODE_PATH/podresources.json
+
+    oc exec $pod -n perf-node-gather -- gather_sysinfo snapshot --debug --root=/host --output=- > $NODE_PATH/sysinfo.tgz 2> $NODE_PATH/sysinfo.log
+
+    oc exec $pod -n perf-node-gather -- gather_sysinfo podinfo --node-name $node > $NODE_PATH/pods_info.json
+done
+
+# Collect journal logs for specified units for all nodes
+NODE_UNITS=(kubelet)
+ADM_PIDS=()
+for NODE in ${COLLECTABLE_NODES[@]}; do
+    NODE_PATH=${NODES_PATH}/$NODE
+    mkdir -p ${NODE_PATH}
+    for UNIT in ${NODE_UNITS[@]}; do
+        timeout -k 5m 30m bash -c "oc adm node-logs $NODE -u $UNIT --since '-8h' | gzip" > ${NODE_PATH}/${NODE}_logs_$UNIT.gz &
+	ADM_PIDS+=($!)
+    done
+done
+wait "${ADM_PIDS[@]}"
+
+oc delete -f $DAEMONSET_MANIFEST
+oc delete -f $CLUSTER_ROLE_BINDING_MANIFEST
+oc delete -f $CLUSTER_ROLE_MANIFEST
+oc delete -f $SERVICEACCOUNT_MANIFEST
+oc delete -f $NAMESPACE_MANIFEST
+}
+
+function ppc_namespace() {
+  # we control the subs, so this is the most reliable way to get the namespace
+  ns=$( oc get subs -A --field-selector metadata.name='performance-addon-operator-subscription' -o=jsonpath='{.items[0].metadata.namespace}{"\n"}' 2> /dev/null )
+  # trying again with the pods, which are _usually_ reliable - but users can change them
+  [ -z "${ns}" ] && ns=$( oc get pods -A -l name='performance-operator' -o=jsonpath='{.items[0].metadata.namespace}{"\n"}' 2> /dev/null )
+  # namespace suggested by the documentation. This is a fancier way to check for its existence
+  [ -z "${ns}" ] && ns=$( oc get ns openshift-performance-addon-operator -o jsonpath='{.metadata.name}{"\n"}' 2> /dev/null )
+  # we should never get there. This is the last resort.
+  [ -z "${ns}" ] && ns="openshift-operators"
+  echo ${ns}
+}
+
+function version() {
+  # get version from imageV
+  version=$( \
+    oc status | grep '^pod' | \
+    sed -n -r -e 's/.*([[:digit:]]+\.[[:digit:]]+(:?\.[[:digit:]])?(:?-[^@]+)?).*/\1/p' \
+  )
+
+  # if version not found, fallback to imageID
+  [ -z "${version}" ] && version=$(oc status | grep '^pod.*runs' | sed -r -e 's/^pod.*runs //')
+
+  # if version still not found, use Unknown
+  [ -z "${version}" ] && version="Unknown"
+
+  echo ${version}
+}
+
+# generate /must-gather/version file
+. version
+echo "performance-addon-operator/must-gather" > /must-gather/version
+version >> /must-gather/version
+
+. namespace
+PPC_NAMESPACE=$( ppc_namespace )
+
+# resource list
+resources=()
+
+# performance operator namespace
+resources+=(ns/${PPC_NAMESPACE})
+
+# performance operator profiles
+resources+=(performanceprofile)
+
+# machine/node resources
+resources+=(nodes machineconfigs machineconfigpools featuregates kubeletconfigs tuneds)
+
+# run the collection of resources using must-gather
+for resource in ${resources[@]}; do
+  /usr/bin/oc adm inspect --dest-dir must-gather --all-namespaces ${resource}
+done
+
+# Collect nodes details
+ppc_nodes
+
+exit 0

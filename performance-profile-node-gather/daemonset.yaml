@@ -1,0 +1,66 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: perf-node-gather-daemonset
+  namespace: perf-node-gather
+  labels:
+spec:
+  selector:
+    matchLabels:
+      name: perf-node-gather-daemonset
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        name: perf-node-gather-daemonset
+    spec:
+      # some gathering tools wants to collect (non-sensitive) informations about *all*
+      # the processes running on a worker nodes, like thread count and CPU affinity of
+      # them. Hence, we need to be able to see all the processes on the node.
+      hostPID: true
+      serviceaccount: perf-node-gather
+      serviceAccountName: perf-node-gather
+      terminationGracePeriodSeconds: 0
+      containers:
+      - name: node-probe
+        image: MUST_GATHER_IMAGE
+        command: ["/bin/bash", "-c", "echo ok > /tmp/healthy && sleep INF"]
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "100m"
+            memory: "256Mi"
+        readinessProbe:
+          exec:
+            command:
+              - cat
+              - /tmp/healthy
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+          - name: sys
+            mountPath: /host/sys
+            readOnly: true
+          - name: proc
+            mountPath: /host/proc
+            readOnly: true
+          - name: podres
+            mountPath: /host/podresources
+      volumes:
+      - name: sys
+        hostPath:
+          path: /sys
+          type: Directory
+      - name: proc
+        hostPath:
+          path: /proc
+          type: Directory
+      - name: podres
+        hostPath:
+          path: /var/lib/kubelet/pod-resources
+          type: Directory
