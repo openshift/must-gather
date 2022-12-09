@@ -1,7 +1,0 @@
-#!/bin/bash
-BASE_COLLECTION_PATH="/must-gather"
-WEB_HOOK_PATH="${BASE_COLLECTION_PATH}/web_hooks/"
-
-mkdir -p ${WEB_HOOK_PATH}
-oc get mutatingwebhookconfigurations -o yaml > ${WEB_HOOK_PATH}/mutatingwebhookconfigurations.yaml
-oc get validatingwebhookconfigurations -o yaml > ${WEB_HOOK_PATH}/validatingwebhookconfigurations.yaml
