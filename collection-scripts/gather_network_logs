@@ -91,6 +91,8 @@ if [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
 elif [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
     oc adm inspect --dest-dir must-gather egressips.k8s.ovn.org
     gather_ovn_kubernetes_data
+elif [[ "${NETWORK_TYPE}" == "openshiftsdn" ]]; then
+    oc adm inspect --dest-dir must-gather hostsubnets.network.openshift.io
 fi
 
 CNCC_DEPLOYMENT=$(oc get deployment -n openshift-cloud-network-config-controller --no-headers -o custom-columns=":metadata.name")
