@@ -3,7 +3,7 @@ BASE_COLLECTION_PATH="/must-gather"
 WINDOWS_NODE_LOGS=$BASE_COLLECTION_PATH/host_service_logs/windows
 
 # Logfile list
-LOGS=(kube-proxy/kube-proxy.exe.INFO kube-proxy/kube-proxy.exe.ERROR kube-proxy/kube-proxy.exe.WARNING)
+LOGS=(kube-proxy/kube-proxy.log)
 LOGS+=(hybrid-overlay/hybrid-overlay.log)
 LOGS+=(kubelet/kubelet.log)
 LOGS+=(containerd/containerd.log)
