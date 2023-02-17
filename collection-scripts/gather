@@ -96,5 +96,8 @@ oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text
 # Gather PodNetworkConnectivityCheck
 /usr/bin/gather_podnetworkconnectivitycheck
 
+# Gather CMA resources
+/usr/bin/gather_custom_metrics_autoscaler_logs
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
