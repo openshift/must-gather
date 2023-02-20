@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# safeguards
+set -o pipefail
+
+CMA_SUB_NAME="openshift-custom-metrics-autoscaler-operator"
+
+# find namespace
+CMA_NS=$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "'"${CMA_SUB_NAME}"'"}}{{.metadata.namespace}}{{end}}{{end}}')
+
+# check if namespace is present, exit otherwise
+if [ -z "${CMA_NS}" ]; then
+    echo "INFO: ${CMA_SUB_NAME} not detected. Skipping."
+    exit 0
+fi
+
+# init resource list
+resources=()
+
+# add resources in namespace
+resources+=(ns/${CMA_NS})
+
+# add custom resources
+resources+=(
+  kedacontroller
+  scaledjob
+  scaledobject
+  triggerauthentication
+  clustertriggerauthentication
+)
+
+# run the collection of resources using must-gather
+PIDS=()
+for resource in ${resources[@]}; do
+  echo "INFO: Processing $resource:" \
+    $(oc adm inspect --dest-dir must-gather --all-namespaces ${resource}) &
+  PIDS+=($!)
+done
+
+echo "INFO: Waiting for ${CMA_SUB_NAME} logs collection to complete ..."
+wait "${PIDS[@]}"
+echo "INFO: ${CMA_SUB_NAME} logs collection completed"
+
+# force disk flush to ensure that all data gathered are written
+sync
