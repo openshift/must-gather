@@ -4,20 +4,20 @@
 # master node.
 BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
 
-profile=$(oc get apiservers.v1.config.openshift.io -o jsonpath=.spec.audit.profile)
+profile=$(oc get apiservers.v1.config.openshift.io -o jsonpath='{.items[0].spec.audit.profile}')
 if [ -z "${profile}" ] || [ "${profile}" == None ]; then
   if [ "${1}" == "--force" ]; then
-    cat <<EOF
+    cat << EOF
 WARNING: To raise a Red Hat support request, it is required to set the top level audit policy to
          Default, WriteRequestBodies, or AllRequestBodies to generate audit log events that can
-         be analyzed by support. Try `oc edit apiservers` and set `spec.audit.profile` back to
+         be analyzed by support. Try 'oc edit apiservers' and set 'spec.audit.profile' back to
          Default" and reproduce the issue while gathering audit logs.
 EOF
   else
-    cat <<EOF
+    cat << EOF
 ERROR: To raise a Red Hat support request, it is required to set the top level audit policy to
        Default, WriteRequestBodies, or AllRequestBodies to generate audit log events that can
-       be analyzed by support. Try `oc edit apiservers` and set `spec.audit.profile` back to
+       be analyzed by support. Try 'oc edit apiservers' and set 'spec.audit.profile' back to
        "Default" and reproduce the issue while gathering audit logs. You can use "--force" to
        override this error.
 EOF
