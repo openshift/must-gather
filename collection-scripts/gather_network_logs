@@ -4,14 +4,15 @@ NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
 
 mkdir -p "${NETWORK_LOG_PATH}"/
 
-function gather_multus_data {
-  local resources=(ippools.whereabouts.cni.cncf.io overlappingrangeipreservations.whereabouts.cni.cncf.io \
-      net-attach-def multi-networkpolicy)
+function gather_multus_data { 
+  #Should we store this on a per namespace basis?
+  oc get net-attach-def -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/net_attach_def 2>&1 & PIDS+=($!)
 
-  for resource in "${resources[@]}"; do
-    oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "${resource}" --all-namespaces 2>&1 || true & PIDS+=($!)
-    oc describe "${resource}" -A > "${NETWORK_LOG_PATH}"/"${resource}" || true 2>&1 & PIDS+=($!)
-  done
+  oc describe ippools.whereabouts.cni.cncf.io -A > "${NETWORK_LOG_PATH}"/ippools 2>&1 & PIDS+=($!)
+
+  oc describe overlappingrangeipreservations.whereabouts.cni.cncf.io -A > "${NETWORK_LOG_PATH}"/overlappingrangeipreservations  2>&1 & PIDS+=($!)
+
+  oc get multi-networkpolicy -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/multi_networkpolicy 2>&1 & PIDS+=($!)
 }
 
 CLUSTER_NODES="${@:-$(oc get node -l node-role.kubernetes.io/master -oname)}"
