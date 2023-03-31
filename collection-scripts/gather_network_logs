@@ -5,13 +5,17 @@ NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
 mkdir -p "${NETWORK_LOG_PATH}"/
 
 function gather_multus_data { 
-  #Should we store this on a per namespace basis?
+  local resources=(ippools.whereabouts.cni.cncf.io overlappingrangeipreservations.whereabouts.cni.cncf.io)
+  local whereabouts_ns
+  whereabouts_ns=$(oc get daemonset -n openshift-multus multus-additional-cni-plugins \
+      -o jsonpath='{.spec.template.spec.initContainers[?(@.name=="whereabouts-cni")].env[?(@.name=="WHEREABOUTS_NAMESPACE")].value}')
+  for resource in "${resources[@]}"; do
+    oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "${resource}" -n "${whereabouts_ns:-openshift-multus}" 2>&1 || true & PIDS+=($!)
+  done
+
+  # Decide how best to collect the following 2 CustomResources.
+  # Keep in mind https://bugzilla.redhat.com/show_bug.cgi?id=2023295
   oc get net-attach-def -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/net_attach_def 2>&1 & PIDS+=($!)
-
-  oc describe ippools.whereabouts.cni.cncf.io -A > "${NETWORK_LOG_PATH}"/ippools 2>&1 & PIDS+=($!)
-
-  oc describe overlappingrangeipreservations.whereabouts.cni.cncf.io -A > "${NETWORK_LOG_PATH}"/overlappingrangeipreservations  2>&1 & PIDS+=($!)
-
   oc get multi-networkpolicy -o yaml --all-namespaces > "${NETWORK_LOG_PATH}"/multi_networkpolicy 2>&1 & PIDS+=($!)
 }
 
