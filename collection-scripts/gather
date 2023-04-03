@@ -11,6 +11,9 @@ named_resources=()
 # Resource groups list, eg. pods
 group_resources=()
 
+# Resources to gather with `--all-namespaces` option
+all_ns_resources=()
+
 # Cluster Version Information
 named_resources+=(ns/openshift-cluster-version)
 group_resources+=(clusterversion)
@@ -29,6 +32,7 @@ named_resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd)
 
 # Storage Resources
 group_resources+=(storageclasses persistentvolumes volumeattachments csidrivers csinodes volumesnapshotclasses volumesnapshotcontents)
+all_ns_resources+=(csistoragecapacities)
 
 # Image-source Resources
 group_resources+=(imagecontentsourcepolicies.operator.openshift.io)
@@ -53,6 +57,8 @@ do
 done
 group_resources_text=$(IFS=, ; echo "${filtered_group_resources[*]}")
 oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text}"
+
+oc adm inspect --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}" --all-namespaces
 
 # Gather Insights Operator Archives
 /usr/bin/gather_insights
