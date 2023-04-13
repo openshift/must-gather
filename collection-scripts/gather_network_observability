@@ -1,0 +1,29 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="must-gather"
+NO_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "netobserv-operator"}}{{.metadata.namespace}}{{end}}{{end}}')"
+
+if [ -z "${NO_NS}" ]; then
+    echo "INFO: Network Observability namespace is not detected. Skipping."
+    exit 0
+fi
+
+function get_netobserv_cluster_crs() {
+    CRD="flowcollectors.flows.netobserv.io"
+    oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "${CRD}"
+    obj=$(oc get ${CRD} -o custom-columns=:metadata.name --no-headers)
+    FC_NS=$(oc get ${CRD} ${obj} --output=jsonpath='{.spec.namespace}')
+}
+
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${NO_NS}"
+
+get_netobserv_cluster_crs
+if [ -z "${FC_NS}" ]; then
+    echo "INFO: Network Observability flow collector object namespace is not detected. Skipping."
+    exit 0
+fi
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${FC_NS}"
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${FC_NS}-privileged"
+
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
