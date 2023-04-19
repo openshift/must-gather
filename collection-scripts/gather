@@ -102,5 +102,8 @@ oc adm inspect --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}
 # Gather PodNetworkConnectivityCheck
 /usr/bin/gather_podnetworkconnectivitycheck
 
+# Gather Network Observerability logs
+/usr/bin/gather_network_observability
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
