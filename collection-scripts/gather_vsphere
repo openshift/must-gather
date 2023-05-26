@@ -1,0 +1,17 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="must-gather"
+
+CSIDRIVER=$( /usr/bin/oc get clustercsidriver csi.vsphere.vmware.com --ignore-not-found=true )
+if [ -z "$CSIDRIVER" ]; then
+    # vSphere CSI driver is not installed, most probably this is not vSphere platform
+    exit 0
+fi
+
+echo "INFO: Collecting vSphere CSI driver CRDs"
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" --rotated-pod-logs csinodetopologies.cns.vmware.com,cnsvspherevolumemigrations.cns.vmware.com
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" --rotated-pod-logs --all-namespaces cnsvolumeoperationrequests.cns.vmware.com
+
+echo "INFO: Collecting vSphere CSI driver CRDs complete"
+
+# force disk flush to ensure that all data gathered are written
+sync
