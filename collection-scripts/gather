@@ -105,5 +105,8 @@ oc adm inspect --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}
 # Gather Network Observerability logs
 /usr/bin/gather_network_observability
 
+# Gather vSphere resources. This is NOOP on non-vSphere platform.
+/usr/bin/gather_vsphere
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
