@@ -64,6 +64,25 @@ function gather_ethtool(){
   done <<< "$INTERFACES"
 }
 
+function gather_bf_info(){
+  CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${1}"
+  MSTCONFIG_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/mstconfig"
+  MSTFLINT_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/mstflint"
+
+  devices=$(oc exec -n openshift-sriov-network-operator ${1} -c sriov-network-config-daemon -- mstconfig q 2>/dev/null | grep "Device:" | awk 'BEGIN {FS="/";} { print $6 }')
+  if [ -z "${devices}" ]; then
+    echo "No Mellanox devices detected by mstconfig" | tee -a "${MSTCONFIG_LOG_PATH}" "${MSTFLINT_LOG_PATH}" >/dev/null;
+    return
+  fi
+  for device in $devices; do
+    oc exec -n ${SRIOV_NS} ${1} -c sriov-network-config-daemon -- \
+    /bin/bash -c "mstconfig -e -d $device q" >> "${MSTCONFIG_LOG_PATH}"
+
+    oc exec -n ${SRIOV_NS} ${1} -c sriov-network-config-daemon -- \
+    /bin/bash -c "mstflint -d $device q" >> "${MSTFLINT_LOG_PATH}"
+  done
+}
+
 for CONFIG_DAEMON_POD in ${CONFIG_DAEMON_PODS[@]}; do
 
     CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${CONFIG_DAEMON_POD}"
@@ -96,6 +115,8 @@ for CONFIG_DAEMON_POD in ${CONFIG_DAEMON_PODS[@]}; do
     gather_netns_ip_a "${CONFIG_DAEMON_POD}"  & PIDS+=($!)
 
     gather_ethtool "${CONFIG_DAEMON_POD}"  & PIDS+=($!)
+
+    gather_bf_info "${CONFIG_DAEMON_POD}"  & PIDS+=($!)
     
 done 
 
