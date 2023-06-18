@@ -43,6 +43,9 @@ group_resources+=(networks.operator.openshift.io)
 # NodeNetworkState
 resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
 
+# Leases
+all_ns_resources+=(leases)
+
 # Run the Collection of Resources using inspect
 # running across all-namespaces for the few "Autoscaler" resources.
 oc adm inspect --dest-dir must-gather --rotated-pod-logs "${named_resources[@]}"
