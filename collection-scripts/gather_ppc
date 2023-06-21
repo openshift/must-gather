@@ -1,0 +1,209 @@
+#!/bin/bash
+
+BASE_COLLECTION_PATH="must-gather"
+NODES_PATH=${BASE_COLLECTION_PATH}/nodes
+
+# Once you start the pod, the Kubernetes will set the pod hostname to the name of the pod
+# https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-hostname-and-subdomain-fields
+NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+
+POD_NAME=${HOSTNAME}
+POD_IP=$(hostname -I |  tr -d "[:blank:]" )
+
+function check_node_gather_pods_ready() {
+  line=$(oc get ds perf-node-gather-daemonset -o=custom-columns=DESIRED:.status.desiredNumberScheduled,READY:.status.numberReady --no-headers -n $NAMESPACE)
+
+  IFS=$' '
+  read desired ready <<< $line
+  IFS=$'\n'
+
+  if [[ "$desired" != "0" ]] && [[ "$ready" == "$desired" ]]
+  then
+    echo "Daemonset perf-node-gather-daemonset ready $ready out of $desired"
+    return 0
+  else
+    return 1
+  fi
+}
+
+# Start a specially privileged pod on each node and collect node level performance tuning data
+function ppc_nodes() {
+  IFS=$'\n'
+
+  # Create the destination
+  mkdir -p ${NODES_PATH}
+
+  # Save the debug pod info
+  echo "[$NAMESPACE/$POD_IP/$POD_NAME]" >> ${NODES_PATH}/debug
+  oc get pod -n $NAMESPACE $POD_NAME -o json >> ${NODES_PATH}/debug
+
+  # Find the NTO image reference
+  # NTO contains all the tools needed here
+  NTO=$(oc adm release info --image-for=cluster-node-tuning-operator)
+  if [ $? -ne 0 ]; then
+    echo "ERROR: Failed to identify the container image with node tools."
+    echo "INFO: Node performance data collection will not contain node level data."
+    return
+  fi
+
+  echo "INFO: Image with low level tools to use: ${NTO}"
+
+  # Start the collection daemon set
+  cat << EOF | oc apply -f -
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: perf-node-gather-daemonset
+  namespace: ${NAMESPACE}
+  labels:
+spec:
+  selector:
+    matchLabels:
+      name: perf-node-gather-daemonset
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        name: perf-node-gather-daemonset
+    spec:
+      # some gathering tools wants to collect (non-sensitive) informations about *all*
+      # the processes running on a worker nodes, like thread count and CPU affinity of
+      # them. Hence, we need to be able to see all the processes on the node.
+      hostPID: true
+      terminationGracePeriodSeconds: 0
+      containers:
+      - name: node-probe
+        image: ${NTO}
+        command: ["/bin/bash", "-c", "echo ok > /tmp/healthy && sleep INF"]
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "100m"
+            memory: "256Mi"
+        readinessProbe:
+          exec:
+            command:
+              - cat
+              - /tmp/healthy
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+          - name: sys
+            mountPath: /host/sys
+            readOnly: true
+          - name: proc
+            mountPath: /host/proc
+            readOnly: true
+          # this is needed for lspci
+          - name: lib-modules
+            mountPath: /lib/modules
+            readOnly: true
+          # Pod resources API is an endpoint that has to be
+          # writable so we can request current status
+          - name: podres
+            mountPath: /host/podresources
+      volumes:
+      - name: sys
+        hostPath:
+          path: /sys
+          type: Directory
+      - name: proc
+        hostPath:
+          path: /proc
+          type: Directory
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+          type: Directory
+      - name: podres
+        hostPath:
+          path: /var/lib/kubelet/pod-resources
+          type: Directory
+EOF
+
+  COUNTER=0
+  until check_node_gather_pods_ready || [ $COUNTER -eq 300 ]; do
+     (( COUNTER++ ))
+     echo "Waiting for performance profile collector pods to become ready: $COUNTER"
+     sleep 1
+  done
+
+  for line in $(oc get pod -o=custom-columns=NODE:.spec.nodeName --no-headers -l name=perf-node-gather-daemonset --field-selector=status.phase!=Running -n $NAMESPACE)
+  do
+      echo "Failed to collect performance data from node ${line} due to pod scheduling failure." >> ${NODES_PATH}/skipped_nodes.txt
+  done
+
+  COLLECTABLE_NODES=()
+  for line in $(oc get pod -o=custom-columns=NODE:.spec.nodeName,NAME:.metadata.name --no-headers -l name=perf-node-gather-daemonset --field-selector=status.phase=Running -n $NAMESPACE)
+  do
+      node=$(echo $line | awk -F ' ' '{print $1}')
+      pod=$(echo $line | awk -F ' ' '{print $2}')
+      NODE_PATH=${NODES_PATH}/$node
+      mkdir -p "${NODE_PATH}"
+
+      echo "Collecting performance related data for node $line"
+
+      oc exec $pod -n $NAMESPACE -- lspci -nvv > $NODE_PATH/lspci
+      oc exec $pod -n $NAMESPACE -- lscpu -e > $NODE_PATH/lscpu
+      oc exec $pod -n $NAMESPACE -- cat /proc/cmdline > $NODE_PATH/proc_cmdline
+      oc exec $pod -n $NAMESPACE -- dmesg > $NODE_PATH/dmesg
+      oc exec $pod -n $NAMESPACE -- ethtool -k eth0 > $NODE_PATH/ethtool_features
+      oc exec $pod -n $NAMESPACE -- ethtool -l eth0 > $NODE_PATH/ethtool_channels
+
+      COLLECTABLE_NODES+=($node)
+
+      oc exec $pod -n $NAMESPACE -- gather-sysinfo --json cpuaff --procfs=/host/proc --sysfs=/host/sys > $NODE_PATH/cpu_affinities.json
+      oc exec $pod -n $NAMESPACE -- gather-sysinfo --json irqaff --procfs=/host/proc --sysfs=/host/sys > $NODE_PATH/irq_affinities.json
+      oc exec $pod -n $NAMESPACE -- gather-sysinfo --json podres --socket-path=unix:///host/podresources/kubelet.sock > $NODE_PATH/podresources.json
+
+      oc exec $pod -n $NAMESPACE -- gather-sysinfo snapshot --debug --root=/host --output=- > $NODE_PATH/sysinfo.tgz 2> $NODE_PATH/sysinfo.log
+      oc exec $pod -n $NAMESPACE -- gather-sysinfo podinfo --node-name $node > $NODE_PATH/pods_info.json
+  done
+
+  # Collect journal logs for specified units for all nodes
+  NODE_UNITS=(kubelet)
+  ADM_PIDS=()
+  for NODE in ${COLLECTABLE_NODES[@]}; do
+      NODE_PATH=${NODES_PATH}/$NODE
+      mkdir -p ${NODE_PATH}
+      for UNIT in ${NODE_UNITS[@]}; do
+          timeout -k 5m 30m bash -c "oc adm node-logs $NODE -u $UNIT --since '-8h' | gzip" > ${NODE_PATH}/${NODE}_logs_$UNIT.gz &
+          ADM_PIDS+=($!)
+      done
+  done
+  wait "${ADM_PIDS[@]}"
+
+  oc delete ds perf-node-gather-daemonset -n $NAMESPACE
+}
+
+#
+# The main section follows
+#
+
+
+# resource list
+resources=()
+
+# performance operator profiles
+resources+=(performanceprofile)
+
+# machine/node resources
+resources+=(nodes machineconfigs machineconfigpools featuregates kubeletconfigs tuneds)
+
+echo "INFO: Waiting for node performance related collection to complete ..."
+
+# run the collection of resources using must-gather
+for resource in ${resources[@]}; do
+  /usr/bin/oc adm inspect --dest-dir must-gather --all-namespaces ${resource}
+done
+
+# Collect nodes details
+ppc_nodes
+
+echo "INFO: Node performance data collection complete."
+
+exit 0
