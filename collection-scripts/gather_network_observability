@@ -1,10 +1,15 @@
 #!/bin/bash
 BASE_COLLECTION_PATH="must-gather"
-NO_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "netobserv-operator"}}{{.metadata.namespace}}{{end}}{{end}}')"
+NO_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "netobserv-operator"}}{{.metadata.namespace}}{{"\n"}}{{end}}{{end}}')"
 
 if [ -z "${NO_NS}" ]; then
     echo "INFO: Network Observability namespace is not detected. Skipping."
     exit 0
+fi
+
+if [[ "$(echo "${NO_NS}" | wc -l)">1 ]]; then
+    echo "ERROR: found more than one netobserv-operator subscription. Exiting."
+    exit 1
 fi
 
 function get_netobserv_cluster_crs() {
