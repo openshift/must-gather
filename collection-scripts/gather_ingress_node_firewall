@@ -1,10 +1,15 @@
 #!/bin/bash
 BASE_COLLECTION_PATH="must-gather"
-INGRESS_NODE_FIREWALL_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "ingress-node-firewall"}}{{.metadata.namespace}}{{end}}{{end}}')"
+INGRESS_NODE_FIREWALL_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "ingress-node-firewall"}}{{.metadata.namespace}}{{"\n"}}{{end}}{{end}}')"
 
 if [ -z "${INGRESS_NODE_FIREWALL_NS}" ]; then
     echo "INFO: Ingress node firewall namespace is not detected. Skipping."
     exit 0
+fi
+
+if [[ "$(echo "${INGRESS_NODE_FIREWALL_NS}" | wc -l)">1 ]]; then
+    echo "ERROR: found more than one ingress-node-firewall subscription. Exiting."
+    exit 1
 fi
 
 function get_ingress_node_firewall_namespaced_crs() {

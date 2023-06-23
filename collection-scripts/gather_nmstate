@@ -1,10 +1,15 @@
 #!/bin/bash
 BASE_COLLECTION_PATH="must-gather"
-NMSTATE_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "kubernetes-nmstate-operator"}}{{.metadata.namespace}}{{end}}{{end}}')"
+NMSTATE_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "kubernetes-nmstate-operator"}}{{.metadata.namespace}}{{"\n"}}{{end}}{{end}}')"
 
 if [ -z "${NMSTATE_NS}" ]; then
     echo "INFO: NMState not detected. Skipping."
     exit 0
+fi
+
+if [[ "$(echo "${NMSTATE_NS}" | wc -l)">1 ]]; then
+    echo "ERROR: found more than one kubernetes-nmstate-operator subscription. Exiting."
+    exit 1
 fi
 
 function get_nmstate_crs() {

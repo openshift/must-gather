@@ -1,13 +1,18 @@
 #!/bin/bash
 
 BASE_COLLECTION_PATH="must-gather"
-SRIOV_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "sriov-network-operator"}}{{.metadata.namespace}}{{end}}{{end}}')"
+SRIOV_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "sriov-network-operator"}}{{.metadata.namespace}}{{"\n"}}{{end}}{{end}}')"
 SRIOV_LOG_PATH="${BASE_COLLECTION_PATH}/namespaces/${SRIOV_NS}"
 
 
 if [ -z "${SRIOV_NS}" ]; then
     echo "INFO: SR-IOV not detected. Skipping."
     exit 0
+fi
+
+if [[ "$(echo "${SRIOV_NS}" | wc -l)">1 ]]; then
+    echo "ERROR: found more than one sriov-network-operator subscription. Exiting."
+    exit 1
 fi
 
 # resource list
