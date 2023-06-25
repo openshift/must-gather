@@ -1,22 +1,14 @@
 #!/bin/bash
+
+source $(dirname "$0")/common.sh
 BASE_COLLECTION_PATH="must-gather"
-INGRESS_NODE_FIREWALL_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "ingress-node-firewall"}}{{.metadata.namespace}}{{"\n"}}{{end}}{{end}}')"
-
-if [ -z "${INGRESS_NODE_FIREWALL_NS}" ]; then
-    echo "INFO: Ingress node firewall namespace is not detected. Skipping."
-    exit 0
-fi
-
-if [[ "$(echo "${INGRESS_NODE_FIREWALL_NS}" | wc -l)">1 ]]; then
-    echo "ERROR: found more than one ingress-node-firewall subscription. Exiting."
-    exit 1
-fi
+get_operator_ns "ingress-node-firewall"
 
 function get_ingress_node_firewall_namespaced_crs() {
     declare -a INGRESS_NODE_FIREWALL_NAMESPACED_CRDS=("ingressnodefirewallconfigs" "ingressnodefirewallnodestates")
     
     for CRD in "${INGRESS_NODE_FIREWALL_NAMESPACED_CRDS[@]}"; do
-        oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" -n ${INGRESS_NODE_FIREWALL_NS} "${CRD}"
+        oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" -n ${operator_ns} "${CRD}"
     done
 }
 
@@ -29,7 +21,7 @@ function get_ingress_node_firewall_cluster_crs() {
 }
 
 
-oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${INGRESS_NODE_FIREWALL_NS}"
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"
 get_ingress_node_firewall_namespaced_crs
 get_ingress_node_firewall_cluster_crs
 
