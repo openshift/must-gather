@@ -1,23 +1,15 @@
 #!/bin/bash
+
+source $(dirname "$0")/common.sh
 BASE_COLLECTION_PATH="must-gather"
-METALLB_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "metallb-operator"}}{{.metadata.namespace}}{{"\n"}}{{end}}{{end}}')"
-METALLB_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${METALLB_NS}/pods"
-
-if [ -z "${METALLB_NS}" ]; then
-    echo "INFO: MetalLB not detected. Skipping."
-    exit 0
-fi
-
-if [[ "$(echo "${METALLB_NS}" | wc -l)">1 ]]; then
-    echo "ERROR: found more than one metallb-operator subscription. Exiting."
-    exit 1
-fi
+get_operator_ns "metallb-operator"
+METALLB_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${operator_ns}/pods"
 
 function get_metallb_crs() {
     declare -a METALLB_CRDS=("addresspools" "bgppeers" "bfdprofiles" "bgpAdvertisements" "ipaddresspools" "l2advertisements" "communities")
     
     for CRD in "${METALLB_CRDS[@]}"; do
-        oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" -n ${METALLB_NS} "${CRD}"
+        oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" -n ${operator_ns} "${CRD}"
     done
 }
 
@@ -27,26 +19,26 @@ function gather_frr_logs() {
     LOGS_DIR="${METALLB_PODS_PATH}/${1}/frr/frr/logs"
 
     for FILE in "${FILES_TO_GATHER[@]}"; do
-        oc -n ${METALLB_NS} exec ${1} -c frr -- sh -c "cat /etc/frr/${FILE}" > ${LOGS_DIR}/${FILE}
+        oc -n ${operator_ns} exec ${1} -c frr -- sh -c "cat /etc/frr/${FILE}" > ${LOGS_DIR}/${FILE}
     done
 
     for COMMAND in "${COMMANDS[@]}"; do
         echo "###### ${COMMAND}" >> ${LOGS_DIR}/dump_frr
-        echo "$( oc -n ${METALLB_NS} exec ${1} -c frr -- vtysh -c "${COMMAND}")" >> ${LOGS_DIR}/dump_frr
+        echo "$( oc -n ${operator_ns} exec ${1} -c frr -- vtysh -c "${COMMAND}")" >> ${LOGS_DIR}/dump_frr
     done
 }
 
-oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${METALLB_NS}"
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"
 get_metallb_crs
 
 # speaker pods are responsible for IP advertisement
-SPEAKER_PODS="${@:-$(oc -n ${METALLB_NS} get pods -l component=speaker -o jsonpath='{.items[*].metadata.name}')}"
+SPEAKER_PODS="${@:-$(oc -n ${operator_ns} get pods -l component=speaker -o jsonpath='{.items[*].metadata.name}')}"
 PIDS=()
 
 for SPEAKER_POD in ${SPEAKER_PODS[@]}; do
     gather_frr_logs ${SPEAKER_POD} &
     PIDS+=($!)
-    oc -n ${METALLB_NS} exec ${SPEAKER_POD} -c reloader -- sh -c "cat etc/frr_reloader/reloader.pid" > \
+    oc -n ${operator_ns} exec ${SPEAKER_POD} -c reloader -- sh -c "cat etc/frr_reloader/reloader.pid" > \
     ${METALLB_PODS_PATH}/${SPEAKER_POD}/reloader/reloader/logs/reloader.pid &
     PIDS+=($!)
 done 

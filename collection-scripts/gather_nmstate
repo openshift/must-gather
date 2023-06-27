@@ -1,16 +1,8 @@
 #!/bin/bash
+
+source $(dirname "$0")/common.sh
 BASE_COLLECTION_PATH="must-gather"
-NMSTATE_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "kubernetes-nmstate-operator"}}{{.metadata.namespace}}{{"\n"}}{{end}}{{end}}')"
-
-if [ -z "${NMSTATE_NS}" ]; then
-    echo "INFO: NMState not detected. Skipping."
-    exit 0
-fi
-
-if [[ "$(echo "${NMSTATE_NS}" | wc -l)">1 ]]; then
-    echo "ERROR: found more than one kubernetes-nmstate-operator subscription. Exiting."
-    exit 1
-fi
+get_operator_ns "kubernetes-nmstate-operator"
 
 function get_nmstate_crs() {
     declare -a NMSTATE_CRDS=("nmstates" "nodenetworkconfigurationenactments" "nodenetworkconfigurationpolicies" "nodenetworkstates")
@@ -20,7 +12,7 @@ function get_nmstate_crs() {
     done
 }
 
-oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${NMSTATE_NS}"
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"
 get_nmstate_crs
 
 # force disk flush to ensure that all data gathered is accessible in the copy container

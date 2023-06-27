@@ -1,16 +1,8 @@
 #!/bin/bash
+
+source $(dirname "$0")/common.sh
 BASE_COLLECTION_PATH="must-gather"
-NO_NS="$(oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name "netobserv-operator"}}{{.metadata.namespace}}{{"\n"}}{{end}}{{end}}')"
-
-if [ -z "${NO_NS}" ]; then
-    echo "INFO: Network Observability namespace is not detected. Skipping."
-    exit 0
-fi
-
-if [[ "$(echo "${NO_NS}" | wc -l)">1 ]]; then
-    echo "ERROR: found more than one netobserv-operator subscription. Exiting."
-    exit 1
-fi
+get_operator_ns "netobserv-operator"
 
 function get_netobserv_cluster_crs() {
     CRD="flowcollectors.flows.netobserv.io"
@@ -19,7 +11,7 @@ function get_netobserv_cluster_crs() {
     FC_NS=$(oc get ${CRD} ${obj} --output=jsonpath='{.spec.namespace}')
 }
 
-oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${NO_NS}"
+oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"
 
 get_netobserv_cluster_crs
 if [ -z "${FC_NS}" ]; then
