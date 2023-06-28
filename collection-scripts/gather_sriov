@@ -84,8 +84,9 @@ for CONFIG_DAEMON_POD in ${CONFIG_DAEMON_PODS[@]}; do
     SNO_INITIAL_NODE_STATE_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/sno-initial-node-state.json"
     KERNEL_CMDLINE_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/kernel-cmdline"
     IP_LINK_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/ip_link"
-    DMSEG_LOG_PAT="${CONFIG_DAEMON_POD_LOG_PATH}/dmseg"
+    DMESG_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/dmesg"
     MULTUS_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/multus-log"
+    VAR_LIB_CNI_SRIOV_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/var-lib-cni-sriov"
 
     # Collect sno-initial-node-state.json.
     oc exec -n ${operator_ns} "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
@@ -101,11 +102,14 @@ for CONFIG_DAEMON_POD in ${CONFIG_DAEMON_PODS[@]}; do
 
     # Collect dmesg.
     oc exec -n ${operator_ns} "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
-    /bin/bash -c "journalctl -k" > "${DMSEG_LOG_PAT}" & PIDS+=($!)
+    /bin/bash -c "journalctl -k" > "${DMESG_LOG_PATH}" & PIDS+=($!)
     
     # Collect var/log/multus.log if exists.
     out=$(oc exec -n ${operator_ns} "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
     /bin/bash -c "cat var/log/multus.log" 2>/dev/null) && echo "$out" 1> "${MULTUS_LOG_PATH}" & PIDS+=($!)
+
+    # Collect /var/lib/cni/sriov contents.
+    oc cp -n ${operator_ns} -c sriov-network-config-daemon "${CONFIG_DAEMON_POD}":/host/var/lib/cni/sriov "${VAR_LIB_CNI_SRIOV_PATH}" & PIDS+=($!)
 
     gather_netns_ip_a "${CONFIG_DAEMON_POD}"  & PIDS+=($!)
 
