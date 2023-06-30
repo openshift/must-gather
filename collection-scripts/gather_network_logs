@@ -10,7 +10,7 @@ function gather_multus_data {
 
   for resource in "${resources[@]}"; do
     oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "${resource}" --all-namespaces 2>&1 || true & PIDS+=($!)
-    oc describe "${resource}" -A > "${NETWORK_LOG_PATH}"/"${resource}" || true 2>&1 & PIDS+=($!)
+    oc describe "${resource}" -A > "${NETWORK_LOG_PATH}"/"${resource}" 2>&1 || true & PIDS+=($!)
   done
 }
 
