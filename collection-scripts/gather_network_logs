@@ -1,6 +1,7 @@
 #!/bin/bash
 BASE_COLLECTION_PATH="must-gather"
 NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
+OVNK_DATABASE_STORE_PATH=${OUT:-"ovnk_database_store"}
 
 mkdir -p "${NETWORK_LOG_PATH}"/
 
@@ -17,7 +18,27 @@ function gather_multus_data {
 CLUSTER_NODES="${@:-$(oc get node -l node-role.kubernetes.io/master -oname)}"
 /usr/bin/gather_multus_logs $CLUSTER_NODES
 
-function gather_ovn_kubernetes_data {
+function gather_ovn_kubernetes_data_interconnect_mode {
+  echo "INFO: Gathering ovn-kubernetes DBs"
+  OVNKUBE_CONTROLLER_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-node -o=jsonpath='{.items[*].metadata.name}'))
+  # collect dbs from each node
+  for DB in "n" "s"; do
+    if [ "$DB" = "n" ]; then
+      DB_NAME="OVN_Northbound"
+      CONTAINER="nbdb"
+    else
+      DB_NAME="OVN_Southbound"
+      CONTAINER="sbdb"
+    fi
+    for OVNKUBE_CONTROLLER_POD in "${OVNKUBE_CONTROLLER_PODS[@]}"; do
+      echo "INFO: Gathering "${DB_NAME}" from "${OVNKUBE_CONTROLLER_POD}"..."
+      oc cp openshift-ovn-kubernetes/"${OVNKUBE_CONTROLLER_POD}":/etc/ovn/ovn"${DB}"b_db.db -c "${CONTAINER}" \
+        "${NETWORK_LOG_PATH}/${OVNK_DATABASE_STORE_PATH}/${OVNKUBE_CONTROLLER_POD}_${DB}bdb" 2>&1 & PIDSDB+=($!)
+    done
+  done
+}
+
+function gather_ovn_kubernetes_data_legacy_mode {
   echo "INFO: Gathering ovn-kubernetes master data"
   OVNKUBE_MASTER_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-master -o=jsonpath='{.items[*].metadata.name}'))
   # collect only leader dbs to reduce result size
@@ -50,6 +71,18 @@ function gather_ovn_kubernetes_data {
       ((i++))
     done
   done
+}
+
+function gather_ovn_kubernetes_data {
+  sample_node=$(oc get no -o jsonpath='{.items[0].metadata.name}')
+  sample_node_zone=$(oc get node "${sample_node}" -o jsonpath='{.metadata.annotations.k8s\.ovn\.org/zone-name}')
+  if [ "${sample_node}" = "${sample_node_zone}" ]; then
+    echo "INFO: INTERCONNECT MODE"
+    gather_ovn_kubernetes_data_interconnect_mode
+  else
+    echo "INFO: LEGACY MODE"
+    gather_ovn_kubernetes_data_legacy_mode
+  fi
 
   oc adm top pods -n openshift-ovn-kubernetes --containers > "${NETWORK_LOG_PATH}"/ovn_kubernetes_top_pods & PIDS+=($!)
 }
@@ -80,6 +113,7 @@ function gather_scale_data {
 }
 
 PIDS=()
+PIDSDB=()
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
 
 gather_multus_data
@@ -100,6 +134,13 @@ if [[ "${CNCC_DEPLOYMENT}" == "cloud-network-config-controller" ]]; then
 fi
 
 echo "INFO: Waiting for network log collection to complete ..."
+if [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
+    echo "INFO: Waiting for ovnk database copies to complete ..."
+    wait "${PIDSDB[@]}"
+    echo "INFO: Copying ovnk databases complete."
+    du -sh "${NETWORK_LOG_PATH}/${OVNK_DATABASE_STORE_PATH}"
+    tar -zcvf "${NETWORK_LOG_PATH}/${OVNK_DATABASE_STORE_PATH}.tar.gz" -C "${NETWORK_LOG_PATH}" "${OVNK_DATABASE_STORE_PATH}" --remove-files 2>&1 & PIDS+=($!)
+fi
 wait "${PIDS[@]}"
 echo "INFO: Network log collection complete."
 
