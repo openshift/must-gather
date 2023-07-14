@@ -56,6 +56,11 @@ echo "INFO: Getting etcdctl alarm list"
 ocp4etcdctl alarm list -w json > ${ETCD_LOG_PATH}/alarm_list.json &
 PIDS+=($!)
 
+# etcd object count
+echo "INFO: Getting etcd object count"
+ocp4etcdctl etcdctl get / --prefix --keys-only | sed '/^$/d' | cut -d/ -f3 | sort | uniq -c | sort -rn > ${ETCD_LOG_PATH}/etcd_object_count &
+PIDS+=($!)
+
 echo "INFO: Waiting for etcd info collection to complete ..."
 wait "${PIDS[@]}"
 echo "INFO: Done collecting etcd information"
