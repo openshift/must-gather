@@ -6,6 +6,7 @@ WINDOWS_NODE_LOGS=$BASE_COLLECTION_PATH/host_service_logs/windows
 LOGS=(kube-proxy/kube-proxy.exe.INFO kube-proxy/kube-proxy.exe.ERROR kube-proxy/kube-proxy.exe.WARNING)
 LOGS+=(hybrid-overlay/hybrid-overlay.log kubelet/kubelet.log)
 LOGS+=(containerd/containerd.log)
+LOGS+=(csi-proxy/csi-proxy.log)
 
 # if the cluster has no Windows nodes skip this script
 WIN_NODES=$(/usr/bin/oc get no -l kubernetes.io/os=windows)
