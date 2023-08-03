@@ -8,6 +8,7 @@ LOGS+=(hybrid-overlay/hybrid-overlay.log)
 LOGS+=(kubelet/kubelet.log)
 LOGS+=(containerd/containerd.log)
 LOGS+=(wicd/windows-instance-config-daemon.exe.INFO wicd/windows-instance-config-daemon.exe.ERROR wicd/windows-instance-config-daemon.exe.WARNING)
+LOGS+=(csi-proxy/csi-proxy.log)
 
 # if the cluster has no Windows nodes skip this script
 WIN_NODES=$(/usr/bin/oc get no -l kubernetes.io/os=windows)
