@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# start off by doing a gather, which includes gather_network_logs_basics.
+/usr/bin/gather
+
+BASE_COLLECTION_PATH="must-gather"
+NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
+OVNK_EXTRAS_STORE_PATH=${OUT:-"ovnk_extras_store"}
+
+mkdir -p "${NETWORK_LOG_PATH}"/
+
+function gather_extra_ovn_kubernetes_data_interconnect_mode {
+  echo "INFO: Gathering ovn-kubernetes extra logs"
+  OVNKUBE_CONTROLLER_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-node -o=jsonpath='{.items[*].metadata.name}'))
+  # collect additional ovnkube logs from each ovnkube-node
+  CONTAINER="ovnkube-controller"
+  for OVNKUBE_CONTROLLER_POD in "${OVNKUBE_CONTROLLER_PODS[@]}"; do
+    echo "INFO: Gathering "${CONTAINER}" extra logs from "${OVNKUBE_CONTROLLER_POD}"..."
+    DEST_DIR="${NETWORK_LOG_PATH}/${OVNK_EXTRAS_STORE_PATH}/${OVNKUBE_CONTROLLER_POD}/${CONTAINER}"
+    mkdir -p "${DEST_DIR}"
+
+    # Inside the container, execute a 'find' command to identify the desired log files.
+    # Then, pipe the list into a tar file, creating a tarball to be sent to stdout.
+    # This tarball is then untarred while stripping the top 3 directories (var, log, ovnkube),
+    # and the contents are placed into the destination directory for the specified pod and container.
+    # All of this is done in the background.
+    oc exec -n openshift-ovn-kubernetes -c ${CONTAINER} ${OVNKUBE_CONTROLLER_POD} -- \
+       bash -c 'find /var/log/ovnkube -type f -name "libovsdb*log*" | tar czf - -T -' | \
+        tar xzf - -C ${DEST_DIR} --strip-components=3 2>&1 & PIDS+=($!)
+  done
+}
+
+function gather_extra_ovn_kubernetes_data {
+  sample_node=$(oc get no -o jsonpath='{.items[0].metadata.name}')
+  sample_node_zone=$(oc get node "${sample_node}" -o jsonpath='{.metadata.annotations.k8s\.ovn\.org/zone-name}')
+  # determine if ovn cluster is running in interconnect mode
+  if [ "${sample_node}" = "${sample_node_zone}" ]; then
+    gather_extra_ovn_kubernetes_data_interconnect_mode
+  fi
+}
+
+PIDS=()
+NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
+
+if [[ "${NETWORK_TYPE}" != "ovnkubernetes" ]]; then
+    exit 0
+fi
+
+gather_extra_ovn_kubernetes_data
+echo "INFO: Waiting for ovnk extra logs copies to complete ..."
+wait "${PIDS[@]}"
+echo "INFO: Copying ovnk extra logs complete."
+du -sh "${NETWORK_LOG_PATH}/${OVNK_EXTRAS_STORE_PATH}"
+tar zcvf "${NETWORK_LOG_PATH}/${OVNK_EXTRAS_STORE_PATH}.tar.gz" -C "${NETWORK_LOG_PATH}" "${OVNK_EXTRAS_STORE_PATH}" --remove-files 2>&1
+echo "INFO: Extra network logs collection complete."
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
