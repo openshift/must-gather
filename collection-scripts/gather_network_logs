@@ -1,148 +1,58 @@
 #!/bin/bash
+
+# start off by doing a gather, which includes gather_network_logs_basics.
+/usr/bin/gather
+
 BASE_COLLECTION_PATH="must-gather"
 NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
-OVNK_DATABASE_STORE_PATH=${OUT:-"ovnk_database_store"}
+OVNK_EXTRAS_STORE_PATH=${OUT:-"ovnk_extras_store"}
 
 mkdir -p "${NETWORK_LOG_PATH}"/
 
-function gather_multus_data {
-  local resources=(ippools.whereabouts.cni.cncf.io overlappingrangeipreservations.whereabouts.cni.cncf.io \
-      net-attach-def multi-networkpolicy)
-
-  for resource in "${resources[@]}"; do
-    oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "${resource}" --all-namespaces 2>&1 || true & PIDS+=($!)
-    oc describe "${resource}" -A > "${NETWORK_LOG_PATH}"/"${resource}" 2>&1 || true & PIDS+=($!)
-  done
-}
-
-CLUSTER_NODES="${@:-$(oc get node -l node-role.kubernetes.io/master -oname)}"
-/usr/bin/gather_multus_logs $CLUSTER_NODES
-
-function gather_ovn_kubernetes_data_interconnect_mode {
-  echo "INFO: Gathering ovn-kubernetes DBs"
+function gather_extra_ovn_kubernetes_data_interconnect_mode {
+  echo "INFO: Gathering ovn-kubernetes extra logs"
   OVNKUBE_CONTROLLER_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-node -o=jsonpath='{.items[*].metadata.name}'))
-  # collect dbs from each node
-  for DB in "n" "s"; do
-    if [ "$DB" = "n" ]; then
-      DB_NAME="OVN_Northbound"
-      CONTAINER="nbdb"
-    else
-      DB_NAME="OVN_Southbound"
-      CONTAINER="sbdb"
-    fi
-    for OVNKUBE_CONTROLLER_POD in "${OVNKUBE_CONTROLLER_PODS[@]}"; do
-      echo "INFO: Gathering "${DB_NAME}" from "${OVNKUBE_CONTROLLER_POD}"..."
-      oc cp openshift-ovn-kubernetes/"${OVNKUBE_CONTROLLER_POD}":/etc/ovn/ovn"${DB}"b_db.db -c "${CONTAINER}" \
-        "${NETWORK_LOG_PATH}/${OVNK_DATABASE_STORE_PATH}/${OVNKUBE_CONTROLLER_POD}_${DB}bdb" 2>&1 & PIDSDB+=($!)
-    done
+  # collect additional ovnkube logs from each ovnkube-node
+  CONTAINER="ovnkube-controller"
+  for OVNKUBE_CONTROLLER_POD in "${OVNKUBE_CONTROLLER_PODS[@]}"; do
+    echo "INFO: Gathering "${CONTAINER}" extra logs from "${OVNKUBE_CONTROLLER_POD}"..."
+    DEST_DIR="${NETWORK_LOG_PATH}/${OVNK_EXTRAS_STORE_PATH}/${OVNKUBE_CONTROLLER_POD}/${CONTAINER}"
+    mkdir -p "${DEST_DIR}"
+
+    # Inside the container, execute a 'find' command to identify the desired log files.
+    # Then, pipe the list into a tar file, creating a tarball to be sent to stdout.
+    # This tarball is then untarred while stripping the top 3 directories (var, log, ovnkube),
+    # and the contents are placed into the destination directory for the specified pod and container.
+    # All of this is done in the background.
+    oc exec -n openshift-ovn-kubernetes -c ${CONTAINER} ${OVNKUBE_CONTROLLER_POD} -- \
+       bash -c 'find /var/log/ovnkube -type f -name "libovsdb*log*" | tar czf - -T -' | \
+        tar xzf - -C ${DEST_DIR} --strip-components=3 2>&1 & PIDS+=($!)
   done
 }
 
-function gather_ovn_kubernetes_data_legacy_mode {
-  echo "INFO: Gathering ovn-kubernetes master data"
-  OVNKUBE_MASTER_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-master -o=jsonpath='{.items[*].metadata.name}'))
-  # collect only leader dbs to reduce result size
-  for DB in "n" "s"; do
-    if [ "$DB" = "n" ]; then
-      DB_NAME="OVN_Northbound"
-      CONTAINER="nbdb"
-    else
-      DB_NAME="OVN_Southbound"
-      CONTAINER="sbdb"
-    fi
-    i=0
-    PODS_AMOUNT=${#OVNKUBE_MASTER_PODS[@]}
-    # try 2 cycles in case leader has changed during first pass
-    while (( i < 2 * PODS_AMOUNT )) ; do
-      OVNKUBE_MASTER_POD=${OVNKUBE_MASTER_PODS[$(( i % PODS_AMOUNT ))]}
-      # find leader to copy db
-      RAFT_ROLE=$(oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}" -c "${CONTAINER}" -- bash -c \
-        "ovn-appctl -t /var/run/ovn/ovn${DB}b_db.ctl cluster/status ${DB_NAME} 2>&1 | grep \"^Role\"")
-      if echo "${RAFT_ROLE}" | grep -q -i leader; then
-        oc cp openshift-ovn-kubernetes/"${OVNKUBE_MASTER_POD}":/etc/ovn/ovn"${DB}"b_db.db -c "${CONTAINER}" \
-         "${NETWORK_LOG_PATH}/leader_${DB}bdb" 2>&1
-        gzip "${NETWORK_LOG_PATH}/leader_${DB}bdb" 2>&1 & PIDS+=($!)
-
-        oc exec -n openshift-ovn-kubernetes "${OVNKUBE_MASTER_POD}" -c "${CONTAINER}" -- bash -c \
-          "ovn-appctl -t /var/run/ovn/ovn${DB}b_db.ctl cluster/status ${DB_NAME}" > \
-          "${NETWORK_LOG_PATH}/leader_ovn${DB}b_status" & PIDS+=($!)
-        break
-      fi
-      ((i++))
-    done
-  done
-}
-
-function gather_ovn_kubernetes_data {
+function gather_extra_ovn_kubernetes_data {
   sample_node=$(oc get no -o jsonpath='{.items[0].metadata.name}')
   sample_node_zone=$(oc get node "${sample_node}" -o jsonpath='{.metadata.annotations.k8s\.ovn\.org/zone-name}')
+  # determine if ovn cluster is running in interconnect mode
   if [ "${sample_node}" = "${sample_node_zone}" ]; then
-    echo "INFO: INTERCONNECT MODE"
-    gather_ovn_kubernetes_data_interconnect_mode
-  else
-    echo "INFO: LEGACY MODE"
-    gather_ovn_kubernetes_data_legacy_mode
-  fi
-
-  oc adm top pods -n openshift-ovn-kubernetes --containers > "${NETWORK_LOG_PATH}"/ovn_kubernetes_top_pods & PIDS+=($!)
-}
-
-function gather_kuryr_data {
-  echo "INFO: Gathering kuryr data"
-  CONTROLLER_POD=$(oc -n openshift-kuryr get pods --no-headers -o custom-columns=":metadata.name" -l app=kuryr-controller)
-  oc -n openshift-kuryr exec "${CONTROLLER_POD}" -- bash -c \
-  'kuryr-gather-openstack-data --config-dir /etc/kuryr' > "${NETWORK_LOG_PATH}"/get_openstack_data &
-  PIDS+=($!)
-  oc get pods -A -o wide --show-labels > "${NETWORK_LOG_PATH}"/get_pods & PIDS+=($!)
-  oc get kuryrnetworks -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrnetworks & PIDS+=($!)
-  oc get kuryrnetworkpolicy -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrnetworkpolicy & PIDS+=($!)
-  oc get kuryrport -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrport & PIDS+=($!)
-  oc get kuryrloadbalancer -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrloadbalancer & PIDS+=($!)
-  oc get svc -A > "${NETWORK_LOG_PATH}"/get_svc & PIDS+=($!)
-}
-
-function gather_scale_data {
-  touch "${NETWORK_LOG_PATH}"/cluster_scale
-  echo services amount: $(oc get svc --no-headers -A | wc -l) >> "${NETWORK_LOG_PATH}"/cluster_scale & PIDS+=($!)
-  echo endpoints amount: $(oc get ep --no-headers -A | wc -l) >> "${NETWORK_LOG_PATH}"/cluster_scale & PIDS+=($!)
-  echo pods amount: $(oc get pods --no-headers -A | wc -l) >> "${NETWORK_LOG_PATH}"/cluster_scale & PIDS+=($!)
-  echo network policies amount: $(oc get networkpolicies --no-headers -A | wc -l) >> "${NETWORK_LOG_PATH}"/cluster_scale & PIDS+=($!)
-  if [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
-    echo egress firewalls amount: $(oc get egressfirewalls --no-headers -A | wc -l) >> "${NETWORK_LOG_PATH}"/cluster_scale & PIDS+=($!)
+    gather_extra_ovn_kubernetes_data_interconnect_mode
   fi
 }
 
 PIDS=()
-PIDSDB=()
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
 
-gather_multus_data
-gather_scale_data
-
-if [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
-    gather_kuryr_data
-elif [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
-    oc adm inspect --dest-dir must-gather egressips.k8s.ovn.org
-    gather_ovn_kubernetes_data
-elif [[ "${NETWORK_TYPE}" == "openshiftsdn" ]]; then
-    oc adm inspect --dest-dir must-gather hostsubnets.network.openshift.io
+if [[ "${NETWORK_TYPE}" != "ovnkubernetes" ]]; then
+    exit 0
 fi
 
-CNCC_DEPLOYMENT=$(oc get deployment -n openshift-cloud-network-config-controller --no-headers -o custom-columns=":metadata.name")
-if [[ "${CNCC_DEPLOYMENT}" == "cloud-network-config-controller" ]]; then
-  oc adm inspect --dest-dir must-gather cloudprivateipconfigs.cloud.network.openshift.io
-fi
-
-echo "INFO: Waiting for network log collection to complete ..."
-if [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
-    echo "INFO: Waiting for ovnk database copies to complete ..."
-    wait "${PIDSDB[@]}"
-    echo "INFO: Copying ovnk databases complete."
-    du -sh "${NETWORK_LOG_PATH}/${OVNK_DATABASE_STORE_PATH}"
-    tar -zcvf "${NETWORK_LOG_PATH}/${OVNK_DATABASE_STORE_PATH}.tar.gz" -C "${NETWORK_LOG_PATH}" "${OVNK_DATABASE_STORE_PATH}" --remove-files 2>&1 & PIDS+=($!)
-fi
+gather_extra_ovn_kubernetes_data
+echo "INFO: Waiting for ovnk extra logs copies to complete ..."
 wait "${PIDS[@]}"
-echo "INFO: Network log collection complete."
+echo "INFO: Copying ovnk extra logs complete."
+du -sh "${NETWORK_LOG_PATH}/${OVNK_EXTRAS_STORE_PATH}"
+tar zcvf "${NETWORK_LOG_PATH}/${OVNK_EXTRAS_STORE_PATH}.tar.gz" -C "${NETWORK_LOG_PATH}" "${OVNK_EXTRAS_STORE_PATH}" --remove-files 2>&1
+echo "INFO: Extra network logs collection complete."
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

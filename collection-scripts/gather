@@ -91,7 +91,7 @@ oc adm inspect --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}
 /usr/bin/gather_kas_startup_termination_logs
 
 # Gather network logs
-/usr/bin/gather_network_logs
+/usr/bin/gather_network_logs_basics
 
 # Gather metallb logs
 /usr/bin/gather_metallb
