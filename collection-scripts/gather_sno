@@ -1,7 +1,6 @@
 #!/bin/bash
 BASE_COLLECTION_PATH="must-gather"
 NODES_PATH=${OUT:-"${BASE_COLLECTION_PATH}/nodes"}
-NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
 
 function start_debug_pod_for_each_node {
 
@@ -11,7 +10,7 @@ function start_debug_pod_for_each_node {
     local DEBUG_POD_NAME_PREFIX=""
 
     #Start Debug pod force it to stay up until removed
-    oc debug --to-namespace="$NAMESPACE" node/"$1" -- chroot /host /bin/bash -c 'sleep 300' > /dev/null 2>&1 & 
+    oc debug node/"$1" -- chroot /host /bin/bash -c 'sleep 300' > /dev/null 2>&1 & 
 
 }
 
@@ -26,7 +25,7 @@ function get_system_data_of_node {
     while [ $counter -lt 3 ]
     do
       #Get the debug pod that is deployed in the MG namespace on the specified node
-      debugPod=$(oc get pods --namespace=$NAMESPACE -o jsonpath='{range .items[?(@.spec.nodeName=="'"$1"'")]}{.metadata.name}{"\n"}{end}' | grep "^${DEBUG_POD_NAME_PREFIX}-" | tail -n 1)
+      debugPod=$(oc get pods -o jsonpath='{range .items[?(@.spec.nodeName=="'"$1"'")]}{.metadata.name}{"\n"}{end}' | grep "^${DEBUG_POD_NAME_PREFIX}-" | tail -n 1)
 
       if [ -n "$debugPod" ]; then
         break 
@@ -41,18 +40,18 @@ function get_system_data_of_node {
     then
       echo "Debug pod for node ""$1"" never activated"
     else
-      oc wait -n "$NAMESPACE" --for=condition=Ready pod/"$debugPod"  --timeout=30s
+      oc wait --for=condition=Ready pod/"$debugPod"  --timeout=30s
 
       #Collect systemctl list unit files
       echo "Collecting list-unit-files"
-      oc exec "$debugPod" -n "$NAMESPACE" -- chroot /host /bin/bash -c "systemctl list-unit-files" > "$NODES_PATH"/"$1"/list_units_files 
+      oc exec "$debugPod" -- chroot /host /bin/bash -c "systemctl list-unit-files" > "$NODES_PATH"/"$1"/list_units_files 
       
       echo "Collecting list-units"
-      oc exec "$debugPod" -n "$NAMESPACE" -- chroot /host /bin/bash -c "systemctl list-units" > "$NODES_PATH"/"$1"/list_units 
+      oc exec "$debugPod" -- chroot /host /bin/bash -c "systemctl list-units" > "$NODES_PATH"/"$1"/list_units 
 
       #Collect /etc/crio directory
       echo "Collecting /etc/crio"
-      oc cp  -n "$NAMESPACE" "$debugPod":/host/etc/crio "$NODES_PATH"/"$1"/crio > /dev/null 2>&1
+      oc cp  "$debugPod":/host/etc/crio "$NODES_PATH"/"$1"/crio > /dev/null 2>&1
  
     fi
 }
