@@ -77,9 +77,9 @@ function gather_system_data {
 PIDS=()
 NODES="${*:-$(oc get nodes -o jsonpath='{.items[?(@.status.nodeInfo.operatingSystem=="linux")].metadata.name}')}"
 
-CPU_PARTITIONING=$(oc get infrastructure -o yaml | grep "CPUPartitioning" | awk '{print $2}')
+CPU_PARTITIONING=$(oc get infrastructure -o=jsonpath='{.items[?(@.status.CPUPartitioning == "AllNodes")].status.CPUPartitioning}' | head -n 1 )
 
-Collects data if workload partitioning is enabled
+# Collects data if workload partitioning is enabled
 
 if [ "$CPU_PARTITIONING" = "AllNodes" ]; then
   gather_system_data
