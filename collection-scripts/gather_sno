@@ -53,9 +53,7 @@ function get_system_data_of_node {
       #Collect /etc/crio directory
       echo "Collecting /etc/crio"
       oc cp  -n "$NAMESPACE" "$debugPod":/host/etc/crio "$NODES_PATH"/"$1"/crio > /dev/null 2>&1
-
-      #clean up debug pod after we are done using it
-      oc delete pod "$debugPod" -n "$NAMESPACE"  
+ 
     fi
 }
 
