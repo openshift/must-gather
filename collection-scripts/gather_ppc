@@ -39,7 +39,7 @@ function ppc_nodes() {
 
   # Find the NTO image reference
   # NTO contains all the tools needed here
-  NTO=$(oc adm release info --image-for=cluster-node-tuning-operator)
+  NTO=$(oc get deployment -n openshift-cluster-node-tuning-operator cluster-node-tuning-operator -o jsonpath="{.spec.template.spec.containers[0].image}")
   if [ $? -ne 0 ]; then
     echo "ERROR: Failed to identify the container image with node tools."
     echo "INFO: Node performance data collection will not contain node level data."
