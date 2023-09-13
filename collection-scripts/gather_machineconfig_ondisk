@@ -11,18 +11,11 @@ function gather_machineconfig_ondisk {
     echo "INFO: Gathering on-disk MachineConfig from degraded nodes"
     # we only really need the info from nodes that the MCO has marked as degraded 
     MACHINECONFIG_DEGRADED_NODES=$(oc get node -o jsonpath='{.items[?(@.metadata.annotations.machineconfiguration\.openshift\.io/state=="Degraded")].metadata.name}')
-    # if kube-system/bootstrap is present, we're done bootstrapping
-    DONE_BOOTSTRAPPING=$(oc get configmap -n kube-system bootstrap)
     for NODE in ${MACHINECONFIG_DEGRADED_NODES}; do
          # use the existing MCD pod on the node to get the files
          DAEMONPOD=$(oc get pods -n openshift-machine-config-operator --field-selector spec.nodeName=${NODE} --selector k8s-app=machine-config-daemon -o custom-columns=:metadata.name --no-headers)
-         if [ -z "$DONE_BOOTSTRAPPING" ]; then 
-            # collect the boostrap config that the Node got from the MCS (useless post-bootstrap)
-            timeout -v 3m oc cp -c machine-config-daemon openshift-machine-config-operator/"${DAEMONPOD}":rootfs/etc/mcs-machine-config-content.json "${MACHINECONFIG_CONFIG_PATH}"/"${NODE}"/mcs-machine-config-content.json &
-         else
-            # collect the Node's currentconfig that it believes it has applied (not present during bootstrap)
-            timeout -v 3m oc cp -c machine-config-daemon openshift-machine-config-operator/"${DAEMONPOD}":rootfs/etc/machine-config-daemon/currentconfig "${MACHINECONFIG_CONFIG_PATH}"/"${NODE}"/currentconfig &
-         fi
+         # collect the boostrap config that the Node got from the MCS
+         timeout -v 1m oc cp -c machine-config-daemon openshift-machine-config-operator/"${DAEMONPOD}":rootfs/etc/mcs-machine-config-content.json "${MACHINECONFIG_CONFIG_PATH}"/"${NODE}"/mcs-machine-config-content.json &
          PIDS+=($!)
     done
 
