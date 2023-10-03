@@ -104,6 +104,23 @@ alertmanager_get() {
       2> "$result_path.stderr"
 }
 
+prom_query() {
+  local query="$1"; shift
+  local path="${1:-$query}"; shift || true
+
+  local result_path="$MONITORING_PATH/queries/$path"
+  mkdir -p "$(dirname "$result_path")"
+
+  query_result="$(oc exec "${PROM_PODS[0]}" \
+    -c prometheus \
+    -n openshift-monitoring \
+    -- curl --silent --data-urlencode \
+    "query=${query}" \
+    http://localhost:9090/api/v1/query? | jq .)"
+
+  echo -e "Query: ${query}\n${query_result}" > "${result_path}.txt"
+}
+
 
 monitoring_gather(){
   init
@@ -124,6 +141,8 @@ monitoring_gather(){
   prom_get_from_replicas status/tsdb  || true
 
   alertmanager_get status  || true
+
+  prom_query "sum(cnv:vmi_status_running:count)" running_vms_count || true
 
   # force disk flush to ensure that all data gathered are written
   sync
