@@ -5,6 +5,9 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
+set -e
+set -x
+
 # global readonly constants
 declare -r BASE_COLLECTION_PATH="../must-gather"
 declare -r MONITORING_PATH="${BASE_COLLECTION_PATH}/monitoring"
@@ -104,6 +107,23 @@ alertmanager_get() {
       2> "$result_path.stderr"
 }
 
+# metrics_get runs "promtool tsdb dump" inside a prometheus instance and retrieves samples.
+# TODO: maybe move it to a new gather_metrics?
+metrics_get() {
+  local result_path="${MONITORING_PATH}/prometheus/metrics"
+  mkdir -p "$(dirname "${result_path}")" 
+
+  # TODO: get a healthy prometheus? get metrics from both?
+  # TODO: do we need to gzip to avoid transient disk consumption? (even though the whole must-gather is compressed)
+  # TODO: more granular arguments processing?
+  oc exec prometheus-k8s-0 \
+    -c prometheus \
+    -n openshift-monitoring \
+    -- promtool tsdb dump "$@" /prometheus \
+      >  "$result_path.text" \
+      2> "$result_path.stderr"
+}
+
 
 monitoring_gather(){
   init
@@ -125,10 +145,13 @@ monitoring_gather(){
 
   alertmanager_get status  || true
 
+  # get metrics
+  metrics_get "$@" || true
+
   # force disk flush to ensure that all data gathered are written
   sync
 
   cleanup
 }
 
-monitoring_gather
+monitoring_gather "$@"
