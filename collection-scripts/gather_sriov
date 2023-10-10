@@ -28,7 +28,8 @@ function gather_netns_ip_a(){
   NETNS_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/netns"
   NETNS_IP_A_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/netns_ip_a"
 
-  oc exec -n ${operator_ns} ${1} -c sriov-network-config-daemon -- chroot /host /bin/bash -c "ip netns" > "${NETNS_LOG_PATH}" 2>&1 
+  # Filter out everything after network namespace name
+  oc exec -n ${operator_ns} ${1} -c sriov-network-config-daemon -- chroot /host /bin/bash -c "ip netns | sed "s/ .*//"" > "${NETNS_LOG_PATH}" 2>&1 
 
   while IFS= read -r id; do  
     echo "> ip netns exec ${id} ip a" >> "${NETNS_IP_A_LOG_PATH}" &&
