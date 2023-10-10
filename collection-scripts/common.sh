@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 function get_operator_ns() {
     local operator_name=$(echo \"$1\")
     cmd="$(echo "oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name ""${operator_name}""}}{{.metadata.namespace}}{{\"\\n\"}}{{end}}{{end}}'")"
