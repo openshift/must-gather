@@ -105,9 +105,6 @@ oc adm inspect --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}
 # Gather PodNetworkConnectivityCheck
 /usr/bin/gather_podnetworkconnectivitycheck
 
-# Gather Network Observerability logs
-/usr/bin/gather_network_observability
-
 # Gather On-Disk MachineConfig files
 /usr/bin/gather_machineconfig_ondisk
 
