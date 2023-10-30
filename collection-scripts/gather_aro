@@ -1,0 +1,22 @@
+#!/bin/bash
+BASE_COLLECTION_PATH="must-gather"
+ARO_CR_NAME="clusters.aro.openshift.io"
+
+IS_ARO=$(oc get ${ARO_CR_NAME} --ignore-not-found=true )
+if [ -z "$IS_ARO" ]; then
+    exit 0
+fi
+
+function gather_aro() {
+    echo "INFO: Collecting ARO Cluster Data"
+    declare -a INSPECT_TARGETS=(${ARO_CR_NAME} "ns/openshift-azure-operator" "ns/openshift-azure-logging")
+
+    for TARGET in "${INSPECT_TARGETS[@]}"; do
+        oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "${TARGET}"
+    done
+}
+
+gather_aro
+
+# force disk flush to ensure that all data gathered are written
+sync
