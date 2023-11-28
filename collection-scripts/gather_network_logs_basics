@@ -87,20 +87,6 @@ function gather_ovn_kubernetes_data {
   oc adm top pods -n openshift-ovn-kubernetes --containers > "${NETWORK_LOG_PATH}"/ovn_kubernetes_top_pods & PIDS+=($!)
 }
 
-function gather_kuryr_data {
-  echo "INFO: Gathering kuryr data"
-  CONTROLLER_POD=$(oc -n openshift-kuryr get pods --no-headers -o custom-columns=":metadata.name" -l app=kuryr-controller)
-  oc -n openshift-kuryr exec "${CONTROLLER_POD}" -- bash -c \
-  'kuryr-gather-openstack-data --config-dir /etc/kuryr' > "${NETWORK_LOG_PATH}"/get_openstack_data &
-  PIDS+=($!)
-  oc get pods -A -o wide --show-labels > "${NETWORK_LOG_PATH}"/get_pods & PIDS+=($!)
-  oc get kuryrnetworks -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrnetworks & PIDS+=($!)
-  oc get kuryrnetworkpolicy -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrnetworkpolicy & PIDS+=($!)
-  oc get kuryrport -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrport & PIDS+=($!)
-  oc get kuryrloadbalancer -A -o yaml > "${NETWORK_LOG_PATH}"/get_kuryrloadbalancer & PIDS+=($!)
-  oc get svc -A > "${NETWORK_LOG_PATH}"/get_svc & PIDS+=($!)
-}
-
 function gather_scale_data {
   touch "${NETWORK_LOG_PATH}"/cluster_scale
   echo services amount: $(oc get svc --no-headers -A | wc -l) >> "${NETWORK_LOG_PATH}"/cluster_scale & PIDS+=($!)
@@ -119,9 +105,7 @@ NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.n
 gather_multus_data
 gather_scale_data
 
-if [[ "${NETWORK_TYPE}" == "kuryr" ]]; then
-    gather_kuryr_data
-elif [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
+if [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
     oc adm inspect --dest-dir must-gather egressips.k8s.ovn.org
     gather_ovn_kubernetes_data
 elif [[ "${NETWORK_TYPE}" == "openshiftsdn" ]]; then
