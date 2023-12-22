@@ -131,4 +131,27 @@ monitoring_gather(){
   cleanup
 }
 
+dump_metrics() {
+  init
+
+  echo "$(date) Starting to dump metrics..."
+
+  min_time=$(date --date='30 minutes ago' +%s%N | cut -b1-13)
+
+  # TODO: make sure PROM_PODS has at least one element
+  oc exec "${PROM_PODS[0]}" \
+    -c prometheus \
+    -n openshift-monitoring \
+    -- /bin/bash -c "/usr/bin/promtool tsdb dump --min-time ${min_time} /prometheus > prom.dump"
+  oc cp \
+    -c prometheus \
+    -n openshift-monitoring \
+    "${PROM_PODS[0]}":prom.dump ${MONITORING_PATH}/prom.dump
+  tar --remove-files -czf ${MONITORING_PATH}/prom.dump.tgz ${MONITORING_PATH}/prom.dump
+
+  echo "$(date) Finished dumping metrics."
+}
+
 monitoring_gather
+
+dump_metrics
