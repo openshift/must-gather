@@ -5,6 +5,9 @@
 echo "openshift/must-gather"> /must-gather/version
 version >> /must-gather/version
 
+# Store PIDs of all the subprocesses
+pids=()
+
 # Named resource list, eg. ns/openshift-config
 named_resources=()
 
@@ -48,7 +51,8 @@ all_ns_resources+=(leases)
 
 # Run the Collection of Resources using inspect
 # running across all-namespaces for the few "Autoscaler" resources.
-oc adm inspect --dest-dir must-gather --rotated-pod-logs "${named_resources[@]}"
+oc adm inspect --dest-dir must-gather --rotated-pod-logs "${named_resources[@]}" &
+pids+=($!)
 
 filtered_group_resources=()
 for gr in "${group_resources[@]}"
@@ -59,60 +63,85 @@ do
   fi
 done
 group_resources_text=$(IFS=, ; echo "${filtered_group_resources[*]}")
-oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text}"
+oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text}" &
+pids+=($!)
 
-oc adm inspect --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}" --all-namespaces
+oc adm inspect --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}" --all-namespaces &
+pids+=($!)
 
 # Gather Insights Operator Archives
-/usr/bin/gather_insights
+/usr/bin/gather_insights &
+pids+=($!)
 
 # Gather monitoring data from the cluster
-/usr/bin/gather_monitoring
+/usr/bin/gather_monitoring &
+pids+=($!)
 
 # Gather optional operator resources from all namespaces
-/usr/bin/gather_olm
+/usr/bin/gather_olm &
+pids+=($!)
 
 # Gather API Priority and Fairness Endpoints
-/usr/bin/gather_priority_and_fairness
+/usr/bin/gather_priority_and_fairness &
+pids+=($!)
 
 # Gather etcd information
-/usr/bin/gather_etcd
+/usr/bin/gather_etcd &
+pids+=($!)
 
 # Gather Service Logs (using a supplemental Script); Scoped to Masters.
-/usr/bin/gather_service_logs master
+/usr/bin/gather_service_logs master &
+pids+=($!)
 
 # Gather Windows Kubernetes component logs
-/usr/bin/gather_windows_node_logs
+/usr/bin/gather_windows_node_logs &
+pids+=($!)
 
 # Gather HAProxy config files
-/usr/bin/gather_haproxy_config
+/usr/bin/gather_haproxy_config &
+pids+=($!)
 
 # Gather kas startup and termination logs
-/usr/bin/gather_kas_startup_termination_logs
+/usr/bin/gather_kas_startup_termination_logs &
+pids+=($!)
 
 # Gather network logs
-/usr/bin/gather_network_logs_basics
+/usr/bin/gather_network_logs_basics &
+pids+=($!)
 
 # Gather metallb logs
-/usr/bin/gather_metallb
+/usr/bin/gather_metallb &
+pids+=($!)
 
 # Gather NMState
-/usr/bin/gather_nmstate
+/usr/bin/gather_nmstate &
+pids+=($!)
 
 # Gather SR-IOV resources
-/usr/bin/gather_sriov
+/usr/bin/gather_sriov &
+pids+=($!)
 
 # Gather PodNetworkConnectivityCheck
-/usr/bin/gather_podnetworkconnectivitycheck
+/usr/bin/gather_podnetworkconnectivitycheck &
+pids+=($!)
 
 # Gather On-Disk MachineConfig files
-/usr/bin/gather_machineconfig_ondisk
+/usr/bin/gather_machineconfig_ondisk &
+pids+=($!)
 
 # Gather vSphere resources. This is NOOP on non-vSphere platform.
-/usr/bin/gather_vsphere
+/usr/bin/gather_vsphere &
+pids+=($!)
 
 # Gather Performance profile information
-/usr/bin/gather_ppc
+/usr/bin/gather_ppc &
+pids+=($!)
+
+# Check if PID array has any values, if so, wait for them to finish
+if [ ${#pids[@]} -ne 0 ]; then
+    echo "Waiting on subprocesses to finish execution."
+    wait "${pids[@]}"
+fi
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
