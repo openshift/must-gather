@@ -1,4 +1,7 @@
 #!/bin/bash
+
+source $(dirname "$0")/common.sh
+get_log_collection_args
 . gather_service_logs_util
 
 BASE_COLLECTION_PATH="/must-gather"

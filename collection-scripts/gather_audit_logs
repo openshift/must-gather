@@ -2,6 +2,10 @@
 # Downloads the audit.log (and its rotated copies) from
 # /var/logs/{kube-apiserver,openshift-apiserver} on each
 # master node.
+
+source $(dirname "$0")/common.sh
+get_log_collection_args
+
 BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
 
 profile=$(oc get apiservers.v1.config.openshift.io -o jsonpath='{.items[0].spec.audit.profile}')
@@ -32,22 +36,23 @@ echo "WARNING: Collecting one or more audit logs on ALL masters in your cluster.
 # $2 - local output path
 # $3 - node name
 # $4 - log file name
+# $5 - --since=ISO time, if provided via MUST_GATHER_SINCE_TIME
 paths=(openshift-apiserver kube-apiserver oauth-apiserver etcd oauth-server)
 for path in "${paths[@]}" ; do
   output_dir="${BASE_COLLECTION_PATH}/audit_logs/$path"
   mkdir -p "$output_dir"
-  oc adm node-logs --role=master --path="$path" | \
+  oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} --role=master --path="$path" | \
   tee "${BASE_COLLECTION_PATH}/audit_logs/$path.audit_logs_listing" | \
   grep -v ".terminating" | \
   grep -v ".lock" | \
-  sed "s|^|$path $output_dir |"
+  sed "s|^|$path $output_dir |" | \
+  sed "s|$| '${node_log_collection_args}'|"
 done | \
-xargs --max-args=4 --max-procs=45 bash -c \
+xargs --max-args=5 --max-procs=45 bash -c \
   'echo "INFO: Started  downloading $1/$4 from $3";
-  oc adm node-logs $3 --path=$1/$4 | gzip > $2/$3-$4.gz;
+  oc adm node-logs ${5:+"$5"} $3 --path=$1/$4 | gzip > $2/$3-$4.gz;
   echo "INFO: Finished downloading $1/$4 from $3"' \
   bash
-
 
 # gathers audit logs from prometheus-adapter pod running in openshift-monitoring namespace.
 gather_monitoring_audit_logs() {

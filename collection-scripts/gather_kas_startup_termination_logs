@@ -5,6 +5,9 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
+source $(dirname "$0")/common.sh
+get_log_collection_args
+
 BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
 
 echo "WARNING: Collecting one or more kube-apiserver related logs on ALL masters in your cluster. This could take a large amount of time." >&2
@@ -14,17 +17,19 @@ echo "WARNING: Collecting one or more kube-apiserver related logs on ALL masters
 # $2 - local output path
 # $3 - node name
 # $4 - log file name
+# $5 - --since=ISO time, if provided via MUST_GATHER_SINCE_TIME
 paths=(kube-apiserver)
 for path in "${paths[@]}" ; do
   output_dir="${BASE_COLLECTION_PATH}/static-pods/$path"
   mkdir -p "$output_dir"
-  oc adm node-logs --role=master --path="$path" | \
+  oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} --role=master --path="$path" | \
   grep -E '(startup.*.log|termination.log)' | \
-  sed "s|^|$path $output_dir |"
+  sed "s|^|$path $output_dir |" | \
+  sed "s|$| '${node_log_collection_args}'|"
 done | \
-xargs --max-args=4 --max-procs=45 --no-run-if-empty bash -c \
+xargs --max-args=5 --max-procs=45 --no-run-if-empty bash -c \
   'echo "INFO: Started  downloading $1/$4 from $3";
-  oc adm node-logs $3 --path=$1/$4 | gzip > $2/$3-$4.gz;
+  oc adm node-logs ${5:+"$5"} ${node_log_collection_args} $3 --path=$1/$4 | gzip > $2/$3-$4.gz;
   echo "INFO: Finished downloading $1/$4 from $3"' \
   bash
 

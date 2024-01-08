@@ -1,5 +1,8 @@
 #!/bin/bash
 
+source $(dirname "$0")/common.sh
+get_log_collection_args
+
 BASE_COLLECTION_PATH="must-gather"
 NODES_PATH=${BASE_COLLECTION_PATH}/nodes
 
@@ -169,7 +172,7 @@ EOF
       NODE_PATH=${NODES_PATH}/$NODE
       mkdir -p ${NODE_PATH}
       for UNIT in ${NODE_UNITS[@]}; do
-          timeout -k 5m 30m bash -c "oc adm node-logs $NODE -u $UNIT --since '-8h' | gzip" > ${NODE_PATH}/${NODE}_logs_$UNIT.gz &
+          timeout -k 5m 30m bash -c "oc adm node-logs \"${node_log_collection_args:---since=-8h}\" $NODE -u $UNIT | gzip" > ${NODE_PATH}/${NODE}_logs_$UNIT.gz &
           ADM_PIDS+=($!)
       done
   done
@@ -196,7 +199,7 @@ echo "INFO: Waiting for node performance related collection to complete ..."
 
 # run the collection of resources using must-gather
 for resource in ${resources[@]}; do
-  /usr/bin/oc adm inspect --dest-dir must-gather --all-namespaces ${resource}
+  oc adm inspect ${log_collection_args} --dest-dir must-gather --all-namespaces ${resource}
 done
 
 # Collect nodes details

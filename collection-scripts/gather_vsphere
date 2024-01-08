@@ -1,4 +1,8 @@
 #!/bin/bash
+
+source $(dirname "$0")/common.sh
+get_log_collection_args
+
 BASE_COLLECTION_PATH="must-gather"
 
 CSIDRIVER=$( /usr/bin/oc get clustercsidriver csi.vsphere.vmware.com --ignore-not-found=true )
@@ -8,8 +12,8 @@ if [ -z "$CSIDRIVER" ]; then
 fi
 
 echo "INFO: Collecting vSphere CSI driver CRDs"
-oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" --rotated-pod-logs csinodetopologies.cns.vmware.com,cnsvspherevolumemigrations.cns.vmware.com
-oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" --rotated-pod-logs --all-namespaces cnsvolumeoperationrequests.cns.vmware.com
+oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" --rotated-pod-logs csinodetopologies.cns.vmware.com,cnsvspherevolumemigrations.cns.vmware.com
+oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" --rotated-pod-logs --all-namespaces cnsvolumeoperationrequests.cns.vmware.com
 
 echo "INFO: Collecting vSphere CSI driver CRDs complete"
 
