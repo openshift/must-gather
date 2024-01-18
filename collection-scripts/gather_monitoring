@@ -131,4 +131,44 @@ monitoring_gather(){
   cleanup
 }
 
+dump_prometheus_metrics() {
+  # Initialize variables and check for errors
+  init
+  if [[ -z "${PROM_PODS}" ]]; then
+    echo "Error: PROM_PODS array is empty. Cannot proceed." >&2
+    return 1
+  fi
+
+  prometheus_pod="${PROM_PODS[0]}"
+  min_time=$(date --date='10 minutes ago' +%s%N | cut -b1-13)
+
+  # Dump metrics from Prometheus
+  echo "$(date) Starting to dump metrics..."
+  oc exec "${prometheus_pod}" \
+    -c prometheus \
+    -n openshift-monitoring \
+    -- /bin/bash -c "/usr/bin/promtool tsdb dump --min-time ${min_time} /prometheus > prom.dump" || {
+      echo "Error executing promtool dump." >&2
+      return 1
+    }
+
+  # Copy and compress the dump file
+  oc cp \
+    -c prometheus \
+    -n openshift-monitoring \
+    "${prometheus_pod}":prom.dump "${MONITORING_PATH}/prom.dump" || {
+      echo "Error copying dump file." >&2
+      return 1
+    }
+
+  tar --remove-files -czf "${MONITORING_PATH}/prom.dump.tgz" "${MONITORING_PATH}/prom.dump" || {
+      echo "Error compressing dump file." >&2
+      return 1
+    }
+
+  echo "$(date) Finished dumping metrics."
+}
+
 monitoring_gather
+
+dump_prometheus_metrics
