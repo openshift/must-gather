@@ -5,6 +5,9 @@
 echo "openshift/must-gather"> /must-gather/version
 version >> /must-gather/version
 
+source $(dirname "$0")/common.sh
+get_log_collection_args
+
 # Store PIDs of all the subprocesses
 pids=()
 
@@ -51,7 +54,7 @@ all_ns_resources+=(leases)
 
 # Run the Collection of Resources using inspect
 # running across all-namespaces for the few "Autoscaler" resources.
-oc adm inspect --dest-dir must-gather --rotated-pod-logs "${named_resources[@]}" &
+oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${named_resources[@]}" &
 pids+=($!)
 
 filtered_group_resources=()
@@ -63,10 +66,10 @@ do
   fi
 done
 group_resources_text=$(IFS=, ; echo "${filtered_group_resources[*]}")
-oc adm inspect --dest-dir must-gather --rotated-pod-logs "${group_resources_text}" &
+oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${group_resources_text}" &
 pids+=($!)
 
-oc adm inspect --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}" --all-namespaces &
+oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}" --all-namespaces &
 pids+=($!)
 
 # Gather Insights Operator Archives

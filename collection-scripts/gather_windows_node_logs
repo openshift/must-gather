@@ -1,4 +1,8 @@
 #!/bin/bash
+
+source $(dirname "$0")/common.sh
+get_log_collection_args
+
 BASE_COLLECTION_PATH="/must-gather"
 WINDOWS_NODE_LOGS=$BASE_COLLECTION_PATH/host_service_logs/windows
 
@@ -21,7 +25,7 @@ echo INFO: Collecting logs for all Windows nodes
 for log in ${LOGS[@]}; do
     LOG_FILE_DIR=${WINDOWS_NODE_LOGS}/log_files/$(dirname $log)
     mkdir -p ${LOG_FILE_DIR}
-    /usr/bin/oc adm node-logs -l kubernetes.io/os=windows --path=$log > ${LOG_FILE_DIR}/$(basename $log) &
+    /usr/bin/oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} -l kubernetes.io/os=windows --path=$log > ${LOG_FILE_DIR}/$(basename $log) &
     PIDS+=($!)
 done
 wait ${PIDS[@]}

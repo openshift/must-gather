@@ -3,6 +3,7 @@
 source $(dirname "$0")/common.sh
 BASE_COLLECTION_PATH="must-gather"
 get_operator_ns "sriov-network-operator"
+get_log_collection_args
 SRIOV_LOG_PATH="${BASE_COLLECTION_PATH}/namespaces/${operator_ns}"
 
 # resource list
@@ -16,7 +17,7 @@ resources+=(sriovnetworknodepolicies sriovnetworknodestates sriovnetworkpoolconf
 
 # run the collection of resources using must-gather
 for resource in ${resources[@]}; do
-  oc adm inspect --dest-dir must-gather --all-namespaces ${resource}
+  oc adm inspect ${log_collection_args} --dest-dir must-gather --all-namespaces ${resource}
 done
 
 CONFIG_DAEMON_PODS="${@:-$(oc -n ${operator_ns} get pods -l app=sriov-network-config-daemon -o jsonpath='{.items[*].metadata.name}')}"

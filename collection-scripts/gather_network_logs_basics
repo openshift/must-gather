@@ -1,4 +1,8 @@
 #!/bin/bash
+
+source $(dirname "$0")/common.sh
+get_log_collection_args
+
 BASE_COLLECTION_PATH="must-gather"
 NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
 OVNK_DATABASE_STORE_PATH=${OUT:-"ovnk_database_store"}
@@ -10,7 +14,7 @@ function gather_multus_data {
       net-attach-def multi-networkpolicy)
 
   for resource in "${resources[@]}"; do
-    oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "${resource}" --all-namespaces 2>&1 || true & PIDS+=($!)
+    oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${resource}" --all-namespaces 2>&1 || true & PIDS+=($!)
     oc describe "${resource}" -A > "${NETWORK_LOG_PATH}"/"${resource}" 2>&1 || true & PIDS+=($!)
   done
 }
@@ -106,15 +110,15 @@ gather_multus_data
 gather_scale_data
 
 if [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
-    oc adm inspect --dest-dir must-gather egressips.k8s.ovn.org
+    oc adm inspect ${log_collection_args} --dest-dir must-gather egressips.k8s.ovn.org
     gather_ovn_kubernetes_data
 elif [[ "${NETWORK_TYPE}" == "openshiftsdn" ]]; then
-    oc adm inspect --dest-dir must-gather hostsubnets.network.openshift.io
+    oc adm inspect ${log_collection_args} --dest-dir must-gather hostsubnets.network.openshift.io
 fi
 
 CNCC_DEPLOYMENT=$(oc get deployment -n openshift-cloud-network-config-controller --no-headers -o custom-columns=":metadata.name")
 if [[ "${CNCC_DEPLOYMENT}" == "cloud-network-config-controller" ]]; then
-  oc adm inspect --dest-dir must-gather cloudprivateipconfigs.cloud.network.openshift.io
+  oc adm inspect ${log_collection_args} --dest-dir must-gather cloudprivateipconfigs.cloud.network.openshift.io
 fi
 
 echo "INFO: Waiting for network log collection to complete ..."
