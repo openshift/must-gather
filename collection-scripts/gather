@@ -112,6 +112,10 @@ pids+=($!)
 /usr/bin/gather_network_logs_basics &
 pids+=($!)
 
+# Gather host networking logs
+/usr/bin/gather_host_network_logs &
+pids+=($!)
+
 # Gather metallb logs
 /usr/bin/gather_metallb &
 pids+=($!)

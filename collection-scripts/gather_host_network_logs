@@ -1,0 +1,36 @@
+#!/bin/bash
+
+source $(dirname "$0")/common.sh
+get_log_collection_args
+. gather_service_logs_util
+
+BASE_COLLECTION_PATH="/must-gather"
+HOST_NETWORK_NODE_LOGS=$BASE_COLLECTION_PATH/host_network_logs
+
+mkdir -p "${HOST_NETWORK_NODE_LOGS}"/
+
+PIDS=()
+echo "INFO: Collecting host networking logs"
+
+collect_service_logs --role=master "on-prem-resolv-prepender"
+collect_service_logs --role=worker "on-prem-resolv-prepender"
+
+collect_service_logs --role=master "nodeip-configuration"
+collect_service_logs --role=worker "nodeip-configuration"
+
+CLUSTER_NODES="${@:-$(oc get node -l node-role.kubernetes.io/master -oname)}"
+for NODE in ${CLUSTER_NODES}; do
+    nodefilename=$(echo "$NODE" | sed -e 's|node/||')
+    out=$(oc debug "${NODE}" -- \
+    /bin/bash -c "ip address" 2>/dev/null) && echo "$out" 1> "${HOST_NETWORK_NODE_LOGS}/ip-address-$nodefilename.log"
+    out=$(oc debug "${NODE}" -- \
+    /bin/bash -c "ip -4 route" 2>/dev/null) && echo "$out" 1> "${HOST_NETWORK_NODE_LOGS}/ip-route4-$nodefilename.log"
+    out=$(oc debug "${NODE}" -- \
+    /bin/bash -c "ip -6 route" 2>/dev/null) && echo "$out" 1> "${HOST_NETWORK_NODE_LOGS}/ip-route6-$nodefilename.log"
+done
+
+wait ${PIDS[@]}
+echo "INFO: Host networking log collection complete."
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
