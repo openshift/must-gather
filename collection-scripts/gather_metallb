@@ -25,7 +25,7 @@ function gather_frr_logs() {
 
     for COMMAND in "${COMMANDS[@]}"; do
         echo "###### ${COMMAND}" >> ${LOGS_DIR}/dump_frr
-        echo "$( oc -n ${operator_ns} exec ${1} -c frr -- vtysh -c "${COMMAND}")" >> ${LOGS_DIR}/dump_frr
+        echo "$( timeout -v 20s oc -n ${operator_ns} exec ${1} -c frr -- vtysh -c "${COMMAND}")" >> ${LOGS_DIR}/dump_frr
     done
 }
 
