@@ -278,7 +278,7 @@ The image is included in the payload, but has no content running in a cluster to
 
 ### Version Skew Strategy
 
-The `oc` command must skew +/- one like normal commands.
+The `oc` command must skew +/- one like normal commands. 
 
 ## Implementation History
 
