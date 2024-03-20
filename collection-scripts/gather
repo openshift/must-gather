@@ -46,6 +46,12 @@ resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconf
 # Leases
 all_ns_resources+=(leases)
 
+# Flowcontrol - API Priority and Fairness (APF)
+group_resources+=(prioritylevelconfigurations.flowcontrol.apiserver.k8s.io flowschemas.flowcontrol.apiserver.k8s.io)
+
+# ClusterResourceQuota
+group_resources+=(clusterresourcequotas.quota.openshift.io)
+
 # Run the Collection of Resources using inspect
 # running across all-namespaces for the few "Autoscaler" resources.
 oc adm inspect --dest-dir must-gather --rotated-pod-logs "${named_resources[@]}"
