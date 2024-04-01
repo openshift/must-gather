@@ -124,6 +124,8 @@ spec:
         hostPath:
           path: /var/lib/kubelet/pod-resources
           type: Directory
+      tolerations: 
+        - operator: Exists
 EOF
 
   COUNTER=0
