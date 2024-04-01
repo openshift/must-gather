@@ -146,5 +146,8 @@ if [ ${#pids[@]} -ne 0 ]; then
     wait "${pids[@]}"
 fi
 
+# Gather ARO information
+/usr/bin/gather_aro
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
