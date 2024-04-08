@@ -7,7 +7,7 @@ get_log_collection_args
 METALLB_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${operator_ns}/pods"
 
 function get_metallb_crs() {
-    declare -a METALLB_CRDS=("addresspools" "bgppeers" "bfdprofiles" "bgpAdvertisements" "ipaddresspools" "l2advertisements" "communities")
+    declare -a METALLB_CRDS=("bgppeers" "bfdprofiles" "bgpAdvertisements" "ipaddresspools" "l2advertisements" "communities")
 
     for CRD in "${METALLB_CRDS[@]}"; do
         oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n ${operator_ns} "${CRD}"
