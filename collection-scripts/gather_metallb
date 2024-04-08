@@ -8,7 +8,7 @@ METALLB_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${operator_ns}/pods"
 
 function get_metallb_crs() {
     declare -a METALLB_CRDS=("addresspools" "bgppeers" "bfdprofiles" "bgpAdvertisements" "ipaddresspools" "l2advertisements" "communities")
-    
+
     for CRD in "${METALLB_CRDS[@]}"; do
         oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n ${operator_ns} "${CRD}"
     done
@@ -39,10 +39,10 @@ PIDS=()
 for SPEAKER_POD in ${SPEAKER_PODS[@]}; do
     gather_frr_logs ${SPEAKER_POD} &
     PIDS+=($!)
-    oc -n ${operator_ns} exec ${SPEAKER_POD} -c reloader -- sh -c "cat etc/frr_reloader/reloader.pid" > \
+    oc -n ${operator_ns} exec ${SPEAKER_POD} -c reloader -- sh -c "cat /etc/frr_reloader/reloader.pid" > \
     ${METALLB_PODS_PATH}/${SPEAKER_POD}/reloader/reloader/logs/reloader.pid &
     PIDS+=($!)
-done 
+done
 wait ${PIDS[@]}
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
