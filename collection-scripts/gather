@@ -114,5 +114,8 @@ oc adm inspect --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}
 # Gather Performance profile information
 /usr/bin/gather_ppc
 
+# Gather ARO information
+/usr/bin/gather_aro
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
