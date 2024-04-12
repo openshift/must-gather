@@ -140,6 +140,10 @@ pids+=($!)
 /usr/bin/gather_ppc &
 pids+=($!)
 
+# Gather OSUS information
+/usr/bin/gather_osus &
+pids+=($!)
+
 # Check if PID array has any values, if so, wait for them to finish
 if [ ${#pids[@]} -ne 0 ]; then
     echo "Waiting on subprocesses to finish execution."
