@@ -49,6 +49,9 @@ group_resources+=(networks.operator.openshift.io)
 # NodeNetworkState
 resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
 
+# Assisted Installer
+all_ns_resources+=(ns/assisted-installer)
+
 # Leases
 all_ns_resources+=(leases)
 
