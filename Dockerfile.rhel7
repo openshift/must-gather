@@ -3,6 +3,9 @@ WORKDIR /go/src/github.com/openshift/must-gather
 COPY . .
 ENV GO_PACKAGE github.com/openshift/must-gather
 
+FROM registry.ci.openshift.org/ocp/4.16:cli-artifacts as cli-artifacts
+
 FROM registry.ci.openshift.org/ocp/4.16:cli
 COPY --from=builder /go/src/github.com/openshift/must-gather/collection-scripts/* /usr/bin/
+COPY --from=cli-artifacts /usr/share/openshift/linux_amd64/oc.rhel8 /usr/bin/oc
 RUN yum install --setopt=tsflags=nodocs -y jq && yum clean all && rm -rf /var/cache/yum/*
