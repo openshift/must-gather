@@ -1,16 +1,8 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.21-openshift-4.16 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-openshift-4.16 AS builder
 WORKDIR /go/src/github.com/openshift/must-gather
 COPY . .
 ENV GO_PACKAGE github.com/openshift/must-gather
 
-FROM registry.ci.openshift.org/ocp/4.16:cli-artifacts as cli-artifacts
-
 FROM registry.ci.openshift.org/ocp/4.16:cli
 COPY --from=builder /go/src/github.com/openshift/must-gather/collection-scripts/* /usr/bin/
-COPY --from=cli-artifacts /usr/share/openshift/linux_amd64/oc.rhel8 /usr/share/openshift/linux_amd64/oc
-COPY --from=cli-artifacts /usr/share/openshift/linux_arm64/oc.rhel8 /usr/share/openshift/linux_arm64/oc
-COPY --from=cli-artifacts /usr/share/openshift/linux_ppc64le/oc.rhel8 /usr/share/openshift/linux_ppc64le/oc
-
-RUN ln -sf /usr/share/openshift/linux_$(uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/')/oc /usr/bin/oc
-
 RUN yum install --setopt=tsflags=nodocs -y jq && yum clean all && rm -rf /var/cache/yum/*
