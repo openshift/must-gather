@@ -10,6 +10,7 @@ COPY --from=builder /go/src/github.com/openshift/must-gather/collection-scripts/
 COPY --from=cli-artifacts /usr/share/openshift/linux_amd64/oc.rhel8 /usr/share/openshift/linux_amd64/oc
 COPY --from=cli-artifacts /usr/share/openshift/linux_arm64/oc.rhel8 /usr/share/openshift/linux_arm64/oc
 COPY --from=cli-artifacts /usr/share/openshift/linux_ppc64le/oc.rhel8 /usr/share/openshift/linux_ppc64le/oc
+COPY --from=cli-artifacts /usr/share/openshift/linux_s390x/oc.rhel8 /usr/share/openshift/linux_s390x/oc
 
 RUN ln -sf /usr/share/openshift/linux_$(uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/')/oc /usr/bin/oc
 
