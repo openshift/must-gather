@@ -139,6 +139,7 @@ EOF
   done
 
   COLLECTABLE_NODES=()
+  NODE_PIDS=()
   for line in $(oc get pod -o=custom-columns=NODE:.spec.nodeName,NAME:.metadata.name --no-headers -l name=perf-node-gather-daemonset --field-selector=status.phase=Running -n $NAMESPACE)
   do
       node=$(echo $line | awk -F ' ' '{print $1}')
@@ -146,24 +147,13 @@ EOF
       NODE_PATH=${NODES_PATH}/$node
       mkdir -p "${NODE_PATH}"
 
-      echo "Collecting performance related data for node $line"
-
-      oc exec $pod -n $NAMESPACE -- lspci -nvv > $NODE_PATH/lspci
-      oc exec $pod -n $NAMESPACE -- lscpu -e > $NODE_PATH/lscpu
-      oc exec $pod -n $NAMESPACE -- cat /proc/cmdline > $NODE_PATH/proc_cmdline
-      oc exec $pod -n $NAMESPACE -- dmesg > $NODE_PATH/dmesg
-      oc exec $pod -n $NAMESPACE -- ethtool -k eth0 > $NODE_PATH/ethtool_features
-      oc exec $pod -n $NAMESPACE -- ethtool -l eth0 > $NODE_PATH/ethtool_channels
-
       COLLECTABLE_NODES+=($node)
 
-      oc exec $pod -n $NAMESPACE -- gather-sysinfo --json cpuaff --procfs=/host/proc --sysfs=/host/sys > $NODE_PATH/cpu_affinities.json
-      oc exec $pod -n $NAMESPACE -- gather-sysinfo --json irqaff --procfs=/host/proc --sysfs=/host/sys > $NODE_PATH/irq_affinities.json
-      oc exec $pod -n $NAMESPACE -- gather-sysinfo --json podres --socket-path=unix:///host/podresources/kubelet.sock > $NODE_PATH/podresources.json
-
-      oc exec $pod -n $NAMESPACE -- gather-sysinfo snapshot --debug --root=/host --output=- > $NODE_PATH/sysinfo.tgz 2> $NODE_PATH/sysinfo.log
-      oc exec $pod -n $NAMESPACE -- gather-sysinfo podinfo --node-name $node > $NODE_PATH/pods_info.json
+      # Run per node data collection in parallel
+      timeout -k 1m 5m /usr/bin/gather_ppc_single_node "${pod}" "${NAMESPACE}" "${node}" "${NODE_PATH}" &
+      NODE_PIDS+=($!)
   done
+  wait "${NODE_PIDS[@]}"
 
   # Collect journal logs for specified units for all nodes
   NODE_UNITS=(kubelet)
@@ -172,6 +162,7 @@ EOF
       NODE_PATH=${NODES_PATH}/$NODE
       mkdir -p ${NODE_PATH}
       for UNIT in ${NODE_UNITS[@]}; do
+          echo "Collecting ${UNIT} logs for node ${NODE}"
           timeout -k 5m 30m bash -c "oc adm node-logs \"${node_log_collection_args:---since=-8h}\" $NODE -u $UNIT | gzip" > ${NODE_PATH}/${NODE}_logs_$UNIT.gz &
           ADM_PIDS+=($!)
       done
