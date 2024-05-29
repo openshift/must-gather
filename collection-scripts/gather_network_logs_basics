@@ -19,6 +19,10 @@ function gather_multus_data {
   done
 }
 
+READY_CONTROL_PLANE_NODES="${@:-$(oc get node -l node-role.kubernetes.io/control-plane -o json | jq -r '.items[] | select(.status.conditions[] | select(.type=="Ready" and .status=="True")).metadata.name')}"
+
+/usr/bin/gather_multus_logs $READY_CONTROL_PLANE_NODES
+
 function gather_ovn_kubernetes_data_interconnect_mode {
   echo "INFO: Gathering ovn-kubernetes DBs"
   OVNKUBE_CONTROLLER_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovnkube-node -o=jsonpath='{.items[*].metadata.name}'))
