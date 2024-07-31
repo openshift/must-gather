@@ -10,6 +10,7 @@ declare -r BASE_COLLECTION_PATH="../must-gather"
 declare -r MONITORING_PATH="${BASE_COLLECTION_PATH}/monitoring"
 declare -r CA_BUNDLE="${MONITORING_PATH}/ca-bundle.crt"
 
+source $(dirname "$0")/monitoring_common.sh
 
 # init initializes global variables that need to be computed.
 # E.g. get token of the default ServiceAccount
@@ -124,6 +125,9 @@ monitoring_gather(){
   prom_get_from_replicas status/tsdb  || true
 
   alertmanager_get status  || true
+
+  # TODO: Add out of the box metrics.
+  # metrics_gather --min-time=${promtool_min_time} --match=xxx || true
 
   # force disk flush to ensure that all data gathered are written
   sync
