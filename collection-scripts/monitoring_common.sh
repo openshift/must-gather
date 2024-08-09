@@ -21,7 +21,7 @@ metrics_get() {
   oc exec ${prometheus_pod} \
     -c prometheus \
     -n openshift-monitoring \
-    -- promtool tsdb dump-openmetrics /prometheus "$@" \
+    -- promtool tsdb dump-openmetrics /prometheus --sandbox-dir-root="/prometheus" "$@" \
        > "$METRICS_PATH/metrics.openmetrics" \
        2> "$METRICS_PATH/metrics.stderr"
 }
