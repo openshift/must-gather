@@ -1,6 +1,7 @@
 reviewers:
   - sferich888
 approvers:
+  - ardaguclu
   - sferich888
   - soltysh
 component: "oc"
