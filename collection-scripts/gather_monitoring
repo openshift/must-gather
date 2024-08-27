@@ -101,9 +101,9 @@ monitoring_gather(){
   prom_get rules    || true
   prom_get status/config  || true
   prom_get status/flags  || true
-  prom_get status/runtimeinfo  || true
 
   # using prom_get_from_replica as the state differs for each replica
+  prom_get_from_replicas status/runtimeinfo  || true
   prom_get_from_replicas 'targets?state=active' active-targets  || true
   prom_get_from_replicas status/tsdb  || true
 
