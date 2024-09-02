@@ -8,17 +8,29 @@ set -o pipefail
 # global readonly constants
 declare -r METRICS_PATH="../must-gather/monitoring/metrics"
 
-metrics_get() {
-  mkdir -p "${METRICS_PATH}"
-
+get_first_ready_prom_pod() {
   readarray -t READY_PROM_PODS < <(
     oc get pods -n openshift-monitoring  -l prometheus=k8s --field-selector=status.phase==Running \
       --no-headers -o custom-columns=":metadata.name"
   )
-  prometheus_pod=${READY_PROM_PODS[0]}
+  echo "${READY_PROM_PODS[0]}"
+}
+
+get_first_ready_alertmanager_pod() {
+  readarray -t READY_AM_PODS < <(
+    oc get pods -n openshift-monitoring  -l alertmanager=main --field-selector=status.phase==Running \
+      --no-headers -o custom-columns=":metadata.name"
+  )
+  echo "${READY_AM_PODS[0]}"
+}
+
+metrics_get() {
+  mkdir -p "${METRICS_PATH}"
+
+  prometheus_pod=$(get_first_ready_prom_pod)
   echo "INFO: Getting metrics from ${prometheus_pod}"
 
-  oc exec ${prometheus_pod} \
+  oc exec "${prometheus_pod}" \
     -c prometheus \
     -n openshift-monitoring \
     -- promtool tsdb dump-openmetrics /prometheus --sandbox-dir-root="/prometheus" "$@" \
