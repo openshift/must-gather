@@ -19,8 +19,6 @@ function gather_multus_data {
   done
 }
 
-CLUSTER_NODES="${@:-$(oc get node -l node-role.kubernetes.io/master -oname)}"
-/usr/bin/gather_multus_logs $CLUSTER_NODES
 
 function gather_ovn_kubernetes_data_interconnect_mode {
   echo "INFO: Gathering ovn-kubernetes DBs"
