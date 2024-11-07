@@ -15,5 +15,23 @@ included.
 You can run `must-gather` on a cluster with `oc adm must-gather`. 
 Use `-h` flag to see available options.
 
+## How to test
+Build a new must-gather image with your changes using the Makefile. There are two options in the Makefile, `make` will use imagebuilder to build the image while `make BUILDER=podman` will use podman to build the image.
+
+If using `make BUILDER=podman`, please set the `AUTH_FILE` parameter pointing to an authentication file that has credentials for the `registry.ci.openshift.org` registry. Ensure that you are connected to the VPN before building the image.
+```
+make BUILDER=podman AUTH_FILE=/path/to/authfile
+```
+
+Once the image is built, push it to a registry where it can be accessed from. 
+```
+podman push [built-image] [registry/username/your-built-image]
+``` 
+
+To test your new changes with a cluster, run the following:
+```
+oc adm must-gather --image=registry/username/your-built-image
+```
+
 ## Obfuscate confidential information
 There is a dedicated effort to obfuscate and omit confidential information. Head over to [openshift/must-gather-clean](https://github.com/openshift/must-gather-clean) for more information.
