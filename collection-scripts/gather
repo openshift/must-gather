@@ -37,7 +37,7 @@ group_resources+=(nodes)
 named_resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd)
 
 # Storage Resources
-group_resources+=(storageclasses persistentvolumes volumeattachments csidrivers csinodes volumesnapshotclasses volumesnapshotcontents)
+group_resources+=(storageclasses persistentvolumes volumeattachments csidrivers csinodes volumesnapshotclasses volumesnapshotcontents clustercsidrivers)
 all_ns_resources+=(csistoragecapacities)
 
 # Image-source Resources
