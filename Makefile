@@ -18,3 +18,19 @@ IMAGE_REGISTRY :=registry.ci.openshift.org
 $(call build-image,ocp-must-gather,$(IMAGE_REGISTRY)/ocp/4.17:ocp-must-gather, ./Dockerfile.ocp,.)
 
 $(call verify-golang-versions,Dockerfile.ocp)
+
+# Allow users to pass in an authentication file when building with podman
+# An absolute path needs to be passed in here
+# This file must container credentials for registry.ci.openshift.org
+AUTH_FILE ?=
+
+# Target for building the image using Podman
+.PHONY: podman-image
+podman-image:
+	podman build \
+		$(if $(AUTH_FILE),--authfile=$(AUTH_FILE)) \
+		-t $(IMAGE_REGISTRY)/ocp/must-gather \
+		-f ./Dockerfile.ocp .
+
+# Ensure the podman-image target depends on verifying Golang versions
+image-with-podman: verify-golang-versions podman-image
