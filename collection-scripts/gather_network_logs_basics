@@ -2,6 +2,7 @@
 BASE_COLLECTION_PATH="must-gather"
 NETWORK_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/network_logs"}
 OVNK_DATABASE_STORE_PATH=${OUT:-"ovnk_database_store"}
+OVNK_IPSEC_PATH=${OUT:-"ipsec"}
 
 mkdir -p "${NETWORK_LOG_PATH}"/
 
@@ -71,6 +72,35 @@ function gather_ovn_kubernetes_data_legacy_mode {
   done
 }
 
+function gather_ovn_kubernetes_ipsec_data {
+  echo "INFO: Gathering ovn-kubernetes IPsec data"
+  OVNKUBE_IPSEC_PODS=($(oc -n openshift-ovn-kubernetes get pods -l app=ovn-ipsec -o=jsonpath='{.items[*].metadata.name}'))
+  CONTAINER="ovn-ipsec"
+  mkdir -p "${NETWORK_LOG_PATH}/${OVNK_IPSEC_PATH}/xfrm" "${NETWORK_LOG_PATH}/${OVNK_IPSEC_PATH}/status" "${NETWORK_LOG_PATH}/${OVNK_IPSEC_PATH}/trafficstatus"
+  for OVNKUBE_IPSEC_POD in "${OVNKUBE_IPSEC_PODS[@]}"; do
+    if [[ "${OVNKUBE_IPSEC_POD}" == *"containerized"* ]]; then
+      oc cp openshift-ovn-kubernetes/"${OVNKUBE_IPSEC_POD}":/var/log/openvswitch/libreswan.log -c "${CONTAINER}" \
+        "${NETWORK_LOG_PATH}/${OVNK_IPSEC_PATH}/${OVNKUBE_IPSEC_POD}_libreswan.log" 2>&1 & PIDS+=($!)
+    fi
+    oc cp openshift-ovn-kubernetes/"${OVNKUBE_IPSEC_POD}":/etc/ipsec.conf -c "${CONTAINER}" \
+      "${NETWORK_LOG_PATH}/${OVNK_IPSEC_PATH}/${OVNKUBE_IPSEC_POD}_ipsec.conf" 2>&1 & PIDS+=($!)
+    oc cp openshift-ovn-kubernetes/"${OVNKUBE_IPSEC_POD}":/etc/ipsec.d -c "${CONTAINER}" \
+      "${NETWORK_LOG_PATH}/${OVNK_IPSEC_PATH}/${OVNKUBE_IPSEC_POD}_ipsec.d" 2>&1 & PIDS+=($!)
+    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_IPSEC_POD}" -c "${CONTAINER}" -- bash -c \
+      "ip xfrm state" > \
+      "${NETWORK_LOG_PATH}/${OVNK_IPSEC_PATH}/xfrm/${OVNKUBE_IPSEC_POD}_state.log" & PIDS+=($!)
+    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_IPSEC_POD}" -c "${CONTAINER}" -- bash -c \
+      "ip xfrm policy" > \
+      "${NETWORK_LOG_PATH}/${OVNK_IPSEC_PATH}/xfrm/${OVNKUBE_IPSEC_POD}_policy.log" & PIDS+=($!)
+    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_IPSEC_POD}" -c "${CONTAINER}" -- bash -c \
+      "ipsec whack --status" > \
+      "${NETWORK_LOG_PATH}/${OVNK_IPSEC_PATH}/status/${OVNKUBE_IPSEC_POD}.log" & PIDS+=($!)
+    oc exec -n openshift-ovn-kubernetes "${OVNKUBE_IPSEC_POD}" -c "${CONTAINER}" -- bash -c \
+      "ipsec whack --trafficstatus" > \
+      "${NETWORK_LOG_PATH}/${OVNK_IPSEC_PATH}/trafficstatus/${OVNKUBE_IPSEC_POD}.log" & PIDS+=($!)
+  done
+}
+
 function gather_ovn_kubernetes_data {
   sample_node=$(oc get no -o jsonpath='{.items[0].metadata.name}')
   sample_node_zone=$(oc get node "${sample_node}" -o jsonpath='{.metadata.annotations.k8s\.ovn\.org/zone-name}')
@@ -81,7 +111,10 @@ function gather_ovn_kubernetes_data {
     echo "INFO: LEGACY MODE"
     gather_ovn_kubernetes_data_legacy_mode
   fi
-
+  IPSEC_CONFIG=$(oc get networks.operator.openshift.io cluster -o jsonpath='{.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig}')
+  if [ "$IPSEC_CONFIG" == "{}" ]; then
+    gather_ovn_kubernetes_ipsec_data
+  fi
   oc adm top pods -n openshift-ovn-kubernetes --containers > "${NETWORK_LOG_PATH}"/ovn_kubernetes_top_pods & PIDS+=($!)
 }
 
