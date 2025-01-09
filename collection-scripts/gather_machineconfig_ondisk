@@ -16,6 +16,7 @@ function gather_machineconfig_ondisk {
          DAEMONPOD=$(oc get pods -n openshift-machine-config-operator --field-selector spec.nodeName=${NODE} --selector k8s-app=machine-config-daemon -o custom-columns=:metadata.name --no-headers)
          # collect the boostrap config that the Node got from the MCS
          timeout -v 1m oc cp -c machine-config-daemon openshift-machine-config-operator/"${DAEMONPOD}":rootfs/etc/mcs-machine-config-content.json "${MACHINECONFIG_CONFIG_PATH}"/"${NODE}"/mcs-machine-config-content.json &
+         timeout -v 1m oc cp -c machine-config-daemon openshift-machine-config-operator/"${DAEMONPOD}":rootfs/etc/machine-config-daemon/bootstrapconfigdiff "${MACHINECONFIG_CONFIG_PATH}"/"${NODE}"/bootstrapconfigdiff &
          PIDS+=($!)
     done
 

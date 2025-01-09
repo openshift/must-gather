@@ -142,6 +142,10 @@ pids+=($!)
 /usr/bin/gather_machineconfig_ondisk &
 pids+=($!)
 
+# Gather On-Disk MachineConfigDaemon logs
+/usr/bin/gather_machineconfigdaemon_termination_logs &
+pids+=($!)
+
 # Gather vSphere resources. This is NOOP on non-vSphere platform.
 /usr/bin/gather_vsphere &
 pids+=($!)
