@@ -9,6 +9,20 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 
 IMAGE_REGISTRY :=registry.ci.openshift.org
 
+# Check which builder to use - default is imagebuilder
+ifeq ($(BUILDER), podman)
+# Use podman to build the must gather image
+# Please ensure you have podman installed on your machine for this
+IMAGE_BUILD_BUILDER := podman build
+# Clear all build default flags
+IMAGE_BUILD_DEFAULT_FLAGS :=
+# Set authfile if the user passes another location for the authentication file
+ifneq ($(strip $(AUTH_FILE)),)
+IMAGE_BUILD_DEFAULT_FLAGS := --authfile=$(AUTH_FILE)
+endif
+endif
+
+
 # This will call a macro called "build-image" which will generate image specific targets based on the parameters:
 # $0 - macro name
 # $1 - target name

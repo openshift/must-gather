@@ -3,6 +3,7 @@ all
 build
 clean
 clean-binaries
+ensure-imagebuilder
 help
 image-ocp-cli
 images
@@ -23,3 +24,4 @@ verify-gofmt
 verify-golang-versions
 verify-golint
 verify-govet
+vulncheck
