@@ -7,29 +7,15 @@ get_log_collection_args
 METALLB_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${operator_ns}/pods"
 
 function get_metallb_crs() {
-    declare -a METALLB_CRDS=("bgppeers" "bfdprofiles" "bgpAdvertisements" "ipaddresspools" "l2advertisements" "communities" "frrconfiguration" "frrnodestate")
+    declare -a METALLB_CRDS=("bgppeers" "bfdprofiles" "bgpAdvertisements" "ipaddresspools" "l2advertisements" "communities")
 
     for CRD in "${METALLB_CRDS[@]}"; do
         oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n ${operator_ns} "${CRD}"
     done
 }
 
-function gather_frr_logs() {
-    declare -a FILES_TO_GATHER=("frr.conf" "frr.log" "daemons" "vtysh.conf")
-    declare -a COMMANDS=("show running-config" "show bgp ipv4" "show bgp ipv6" "show bgp neighbor" "show bfd peer")
-    LOGS_DIR="${METALLB_PODS_PATH}/${1}/frr/frr/logs"
-
-    for FILE in "${FILES_TO_GATHER[@]}"; do
-        oc -n ${operator_ns} exec ${1} -c frr -- sh -c "cat /etc/frr/${FILE}" > ${LOGS_DIR}/${FILE}
-    done
-
-    for COMMAND in "${COMMANDS[@]}"; do
-        echo "###### ${COMMAND}" >> ${LOGS_DIR}/dump_frr
-        echo "$( timeout -v 20s oc -n ${operator_ns} exec ${1} -c frr -- vtysh -c "${COMMAND}")" >> ${LOGS_DIR}/dump_frr
-    done
-}
-
 oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"
+
 get_metallb_crs
 
 
@@ -37,24 +23,6 @@ if ! oc get metallb metallb -n ${operator_ns} > /dev/null 2>&1; then
     echo "metallb not started"
     exit 0
 fi
-
-BGP_BACKEND=$(oc get metallb metallb -n ${operator_ns} -o jsonpath='{.spec.bgpBackend}')
-
-if [ "$BGP_BACKEND" == "frr-k8s" ]; then
-	FRR_PODS="${@:-$(oc -n ${operator_ns} get pods -l component=frr-k8s -o jsonpath='{.items[*].metadata.name}')}"
-else
-	FRR_PODS="${@:-$(oc -n ${operator_ns} get pods -l component=speaker -o jsonpath='{.items[*].metadata.name}')}"
-fi
-PIDS=()
-
-for POD in ${FRR_PODS[@]}; do
-    gather_frr_logs ${POD} &
-    PIDS+=($!)
-    oc -n ${operator_ns} exec ${POD} -c reloader -- sh -c "cat /etc/frr_reloader/reloader.pid" > \
-    ${METALLB_PODS_PATH}/${POD}/reloader/reloader/logs/reloader.pid &
-    PIDS+=($!)
-done
-wait ${PIDS[@]}
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

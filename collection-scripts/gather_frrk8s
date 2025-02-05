@@ -1,0 +1,53 @@
+#!/bin/bash
+
+source $(dirname "$0")/common.sh
+BASE_COLLECTION_PATH="must-gather"
+get_log_collection_args
+FRRK8S_NS="openshift-frr-k8s"
+FRRK8S_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${FRRK8S_NS}/pods"
+
+function get_frrk8s_crs() {
+    declare -a FRRK8S_CRDS=("frrconfiguration" "frrnodestate")
+
+    for CRD in "${FRRK8S_CRDS[@]}"; do
+        oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n ${FRRK8S_NS} "${CRD}"
+    done
+}
+
+function gather_frr_logs() {
+    declare -a FILES_TO_GATHER=("frr.conf" "daemons" "vtysh.conf")
+    declare -a COMMANDS=("show running-config" "show bgp ipv4" "show bgp ipv6" "show bgp neighbor" "show bfd peer")
+    LOGS_DIR="${FRRK8S_PODS_PATH}/${1}/frr/frr/logs"
+
+    for FILE in "${FILES_TO_GATHER[@]}"; do
+        oc -n ${FRRK8S_NS} exec ${1} -c frr -- sh -c "cat /etc/frr/${FILE}" > ${LOGS_DIR}/${FILE}
+    done
+
+    for COMMAND in "${COMMANDS[@]}"; do
+        echo "###### ${COMMAND}" >> ${LOGS_DIR}/dump_frr
+        echo "$( timeout -v 20s oc -n ${FRRK8S_NS} exec ${1} -c frr -- vtysh -c "${COMMAND}")" >> ${LOGS_DIR}/dump_frr
+    done
+}
+
+if ! oc get ns "${FRRK8S_NS}" &> /dev/null; then
+  echo "INFO: namespace ${FRRK8S_NS} not detected. Skipping."
+  exit
+fi
+
+oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${FRRK8S_NS}"
+get_frrk8s_crs
+
+FRR_PODS="${@:-$(oc -n ${FRRK8S_NS} get pods -l component=frr-k8s -o jsonpath='{.items[*].metadata.name}')}"
+PIDS=()
+
+for POD in ${FRR_PODS[@]}; do
+    gather_frr_logs ${POD} &
+    PIDS+=($!)
+    oc -n ${FRRK8S_NS} exec ${POD} -c reloader -- sh -c "cat /etc/frr_reloader/reloader.pid" > \
+    ${FRRK8S_PODS_PATH}/${POD}/reloader/reloader/logs/reloader.pid &
+    PIDS+=($!)
+done
+wait ${PIDS[@]}
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
