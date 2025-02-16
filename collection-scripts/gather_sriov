@@ -89,6 +89,8 @@ for CONFIG_DAEMON_POD in ${CONFIG_DAEMON_PODS[@]}; do
     DMESG_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/dmesg"
     MULTUS_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/multus-log"
     VAR_LIB_CNI_SRIOV_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/var-lib-cni-sriov"
+    ETC_SRIOV_OPERATOR_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/etc-sriov-operator"
+    KERNEL_LOCKDOWN_FILE_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/lockdown"
 
     # Collect sno-initial-node-state.json.
     oc exec -n ${operator_ns} "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
@@ -110,8 +112,15 @@ for CONFIG_DAEMON_POD in ${CONFIG_DAEMON_PODS[@]}; do
     out=$(oc exec -n ${operator_ns} "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
     /bin/bash -c "cat var/log/multus.log" 2>/dev/null) && echo "$out" 1> "${MULTUS_LOG_PATH}" & PIDS+=($!)
 
+    # collect kernel lockdown mode
+    oc exec -n ${operator_ns} "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
+    /bin/bash -c "cat /sys/kernel/security/lockdown" > "${KERNEL_LOCKDOWN_FILE_PATH}" & PIDS+=($!)
+
     # Collect /var/lib/cni/sriov contents.
     oc cp -n ${operator_ns} -c sriov-network-config-daemon "${CONFIG_DAEMON_POD}":/host/var/lib/cni/sriov "${VAR_LIB_CNI_SRIOV_PATH}" & PIDS+=($!)
+
+    # Collect etc/sriov-operator contents.
+    oc cp -n ${operator_ns} -c sriov-network-config-daemon "${CONFIG_DAEMON_POD}":/host/etc/sriov-operator/ "${ETC_SRIOV_OPERATOR_PATH}" & PIDS+=($!)
 
     gather_netns_ip_a "${CONFIG_DAEMON_POD}"  & PIDS+=($!)
 
