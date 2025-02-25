@@ -126,6 +126,10 @@ pids+=($!)
 /usr/bin/gather_metallb &
 pids+=($!)
 
+# Gather frr-k8s logs
+/usr/bin/gather_frrk8s &
+pids+=($!)
+
 # Gather NMState
 /usr/bin/gather_nmstate &
 pids+=($!)
