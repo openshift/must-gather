@@ -190,7 +190,7 @@ resources=()
 resources+=(performanceprofile)
 
 # machine/node resources
-resources+=(nodes machineconfigs machineconfigpools featuregates kubeletconfigs tuneds runtimeclasses machineosconfigs machineosbuilds machineconfigurations)
+resources+=(nodes machineconfigs machineconfigpools featuregates kubeletconfigs tuneds runtimeclasses machineosconfigs machineosbuilds machineconfigurations machineconfignodes pinnedimagesets)
 
 echo "INFO: Waiting for node performance related collection to complete ..."
 
