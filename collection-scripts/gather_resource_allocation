@@ -1,0 +1,66 @@
+#!/bin/bash 
+
+BASE_COLLECTION_PATH="must-gather"
+RESOURCE_ALLOCATION_PATH=${BASE_COLLECTION_PATH}/resource_allocation
+
+mkdir -p "${RESOURCE_ALLOCATION_PATH}"/
+
+# Extract all the resource limits, alocations and node subnets and store it in a json
+oc describe nodes | awk '
+BEGIN {
+  printf "{\"items\":["
+} {
+  if ($1 == "Name:") {
+    name=$2
+  }
+  if ($1 == "k8s.ovn.org/node-subnets:") {
+    $1=""
+    gsub("\"","\\\"",$0)
+    ovnsubnet=$0
+  }
+  if ($1 ~ "Allocatable:") {
+    while ($1 != "System") {
+      if ($1 == "cpu:") {
+        Alloc_cpu=$2
+      }
+      if ($1 == "memory:") {
+        Alloc_mem=$2
+      }
+      if ($1 == "pods:") {
+        Alloc_pod=$2
+      }
+      getline
+    }
+  }
+  if ($1 == "Namespace") {
+    getline
+    getline
+    pods_count=0
+    while ($1 != "Allocated") {
+      pods_count++
+      getline
+    }
+  }
+  if ($1 == "Resource") {
+    while ($1 != "Events:") {
+      if ($1 == "cpu") {
+        req_cpu=$2
+        preq_cpu=$3
+        lim_cpu=$4
+        plim_cpu=$5
+      }
+      if ($1 == "memory") {
+        req_mem=$2
+        preq_mem=$3
+        lim_mem=$4
+        plim_mem=$5
+      }
+      getline
+    }
+    printf "%s{\"node_name\":\"%s\",\"cpu\":{\"allocatable\":\"%s\",\"request\":\"%s\",\"request_percent\":\"%s\",\"limit\":\"%s\",\"limit_percent\":\"%s\"},\"memory\":{\"allocatable\":\"%s\",\"request\":\"%s\",\"request_percent\":\"%s\",\"limit\":\"%s\",\"limit_percent\":\"%s\"},\"pods\":{\"allocatable\":%s,\"running\":%s},\"node_subnet\":\"%s\"}",comma,name,Alloc_cpu,req_cpu,preq_cpu,lim_cpu,plim_cpu,Alloc_mem,req_mem,preq_mem,lim_mem,plim_mem,Alloc_pod,pods_count,ovnsubnet;comma=","
+  }
+} 
+END {
+  printf "]}\n"
+}' | jq > ${RESOURCE_ALLOCATION_PATH}/nodes.json
+
