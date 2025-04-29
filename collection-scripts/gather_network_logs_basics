@@ -114,8 +114,9 @@ function gather_ovn_kubernetes_data {
     echo "INFO: LEGACY MODE"
     gather_ovn_kubernetes_data_legacy_mode
   fi
+  IPSEC_CONFIG=$(oc get networks.operator.openshift.io cluster -o jsonpath='{.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig}')
   IPSEC_MODE=$(oc get networks.operator.openshift.io cluster -o jsonpath='{.spec.defaultNetwork.ovnKubernetesConfig.ipsecConfig.mode}')
-  if [ "$IPSEC_MODE" != "" ] && [ "$IPSEC_MODE" != "Disabled" ]; then
+  if [ "$IPSEC_CONFIG" == "{}" ] || [ "$IPSEC_MODE" != "" ] && [ "$IPSEC_MODE" != "Disabled" ]; then
     gather_ovn_kubernetes_ipsec_data
   fi
   oc adm top pods -n openshift-ovn-kubernetes --containers > "${NETWORK_LOG_PATH}"/ovn_kubernetes_top_pods & PIDS+=($!)
