@@ -153,6 +153,11 @@ if [[ "${CNCC_DEPLOYMENT}" == "cloud-network-config-controller" ]]; then
   oc adm inspect ${log_collection_args} --dest-dir must-gather cloudprivateipconfigs.cloud.network.openshift.io
 fi
 
+ROUTE_ADVERTISEMENTS=$(oc get network.operator.openshift.io cluster -o=jsonpath='{.spec.defaultNetwork.ovnKubernetesConfig.routeAdvertisements}')
+if [[ "${ROUTE_ADVERTISEMENTS}" == "Enabled" ]]; then
+    oc adm inspect ${log_collection_args} --dest-dir must-gather routeadvertisements.k8s.ovn.org
+fi
+
 echo "INFO: Waiting for network log collection to complete ..."
 if [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
     echo "INFO: Waiting for ovnk database copies to complete ..."
