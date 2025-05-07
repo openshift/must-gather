@@ -62,7 +62,7 @@ BEGIN {
 } 
 END {
   printf "]}\n"
-}' | jq > ${RESOURCE_ALLOCATION_PATH}/nodes.json
+}' | jq -c > ${RESOURCE_ALLOCATION_PATH}/node_resources.json
 
 # Extract the output of "oc adm top nodes" in json format
 oc adm top nodes | column -J -n "top_nodes" --table-columns "node_name","cpu_cores","cpu_%","mem_bytes","mem_%" | jq -c > ${RESOURCE_ALLOCATION_PATH}/top_nodes.json
