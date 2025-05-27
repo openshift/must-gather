@@ -38,13 +38,10 @@ PIDS=()
 
 # fio info
 echo "INFO: Running fio on etcd"
+pushd ${ETCD_LOG_PATH}
 fio_suite.sh &
 PIDS+=($!)
-
-# # fio info
-# echo "INFO: Running fio on etcd"
-# ocp4etcdctl fio info -w json > ${ETCD_LOG_PATH}/fio_info.json &
-# PIDS+=($!)
+popd
 
 # member list
 echo "INFO: Getting etcdctl member list"

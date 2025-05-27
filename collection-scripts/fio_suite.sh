@@ -1,8 +1,10 @@
 #!/bin/bash
 
+# Copied from peterducai/etcd_tools forked from openshift/etcd-tools
+
 STAMP=$(date +%Y-%m-%d_%H-%M-%S)
-OUTPUT_PATH="/must-gather/fio-summary_$STAMP"
-DATA_DIR="/tmp/fio-test-data"
+ORIG_PATH=$(pwd)
+OUTPUT_PATH="$ORIG_PATH/FIO-SUMMARY_$STAMP"
 FSYNC_HIGH=15000
 FSYNC_THRESHOLD=10000
 FSYNC_EDGE=8000
@@ -27,8 +29,7 @@ mkdir -p /test
 #       echo "sudo dnf install fio -y"
 # else
 #       echo "fio is installed.. OK"
-# fiRUN yum install --setopt=tsflags=nodocs -y jq fio && yum clean all && rm -rf /var/cache/yum/*
-
+# fi
 
 
 # echo -e " "
@@ -39,8 +40,8 @@ echo -e ""
 echo -e "  [ ETCD-like FSYNC WRITE with fsync engine]"
 echo -e ""
 echo -e "  the 99.0th and 99.9th percentile of this metric should be less than 10ms (10k)"
-mkdir -p $DATA_DIR
-fio --rw=write --ioengine=sync --fdatasync=1 --directory=$DATA_DIR --size=22m --bs=8000 --name=cleanfsynctest > $OUTPUT_PATH/cleanfsynctest.log
+mkdir -p test-data
+/usr/bin/fio --rw=write --ioengine=sync --fdatasync=1 --directory=test-data --size=22m --bs=8000 --name=cleanfsynctest > $OUTPUT_PATH/cleanfsynctest.log
 echo -e ""
 cat $OUTPUT_PATH/cleanfsynctest.log
 echo -e ""
@@ -91,7 +92,7 @@ echo -e "  [ libaio engine SINGLE JOB, 70% read, 30% write]"
 echo -e ""
 echo -e "  This test is only for reference IOPS as it doesn't fully represent sequential IOPS of fsync."
 
-fio --name=seqread1g --filename=fiotest --runtime=120 --ioengine=libaio --direct=1 --ramp_time=10 --readwrite=rw --rwmixread=70 --rwmixwrite=30 --iodepth=1 --bs=4k --size=1G --percentage_random=0 > $OUTPUT_PATH/r70_w30_1G_d4.log
+/usr/bin/fio --name=seqread1g --filename=fiotest --runtime=120 --ioengine=libaio --direct=1 --ramp_time=10 --readwrite=rw --rwmixread=70 --rwmixwrite=30 --iodepth=1 --bs=4k --size=1G --percentage_random=0 > $OUTPUT_PATH/r70_w30_1G_d4.log
 s7030big=$(cat $OUTPUT_PATH/r70_w30_1G_d4.log |grep IOPS|tail -2)
 FSYNC=$(cat $OUTPUT_PATH/r70_w30_1G_d4.log |grep "99.00th"|tail -1|cut -c17-|grep -oE "([0-9]+)]" -m1|cut -d ']' -f 1|head -1)
 wIOPS=$(cat $OUTPUT_PATH/r70_w30_1G_d4.log |grep IOPS|tail -1| cut -d ' ' -f2-|cut -d ' ' -f3|rev|cut -c2-|rev|cut -c6-)
@@ -114,7 +115,7 @@ echo -e "SEQUENTIAL WRITE IOPS: $wIOPS"
 echo -e "SEQUENTIAL READ IOPS: $rIOPS"
 echo -e "--------------------------"
 echo -e ""
-fio --name=seqread1mb --filename=fiotest --runtime=120 --ioengine=libaio --direct=1 --ramp_time=10  --readwrite=rw --rwmixread=70 --rwmixwrite=30 --iodepth=1 --bs=4k --size=200M > $OUTPUT_PATH/r70_w30_200M_d4.log
+/usr/bin/fio --name=seqread1mb --filename=fiotest --runtime=120 --ioengine=libaio --direct=1 --ramp_time=10  --readwrite=rw --rwmixread=70 --rwmixwrite=30 --iodepth=1 --bs=4k --size=200M > $OUTPUT_PATH/r70_w30_200M_d4.log
 s7030small=$(cat $OUTPUT_PATH/r70_w30_200M_d4.log |grep IOPS|tail -2)
 FSYNC=$(cat $OUTPUT_PATH/r70_w30_200M_d4.log |grep "99.00th"|tail -1|cut -c17-|grep -oE "([0-9]+)]" -m1|cut -d ']' -f 1|head -1)
 wIOPS=$(cat $OUTPUT_PATH/r70_w30_200M_d4.log |grep IOPS|tail -1| cut -d ' ' -f2-|cut -d ' ' -f3|rev|cut -c2-|rev|cut -c6-)
@@ -142,7 +143,7 @@ echo -e " "
 echo -e "-- [ libaio engine SINGLE JOB, 30% read, 70% write] --"
 echo -e " "
 
-fio --name=seqwrite1G --filename=fiotest --runtime=120 --bs=2k --ioengine=libaio --direct=1 --ramp_time=10 --readwrite=rw --rwmixread=30 --rwmixwrite=70 --iodepth=1 --bs=4k --size=200M  > $OUTPUT_PATH/r30_w70_200M_d1.log
+/usr/bin/fio --name=seqwrite1G --filename=fiotest --runtime=120 --bs=2k --ioengine=libaio --direct=1 --ramp_time=10 --readwrite=rw --rwmixread=30 --rwmixwrite=70 --iodepth=1 --bs=4k --size=200M  > $OUTPUT_PATH/r30_w70_200M_d1.log
 so7030big=$(cat $OUTPUT_PATH/r30_w70_200M_d1.log |grep IOPS|tail -2)
 FSYNC=$(cat $OUTPUT_PATH/r30_w70_200M_d1.log |grep "99.00th"|tail -1|cut -c17-|grep -oE "([0-9]+)]" -m1|cut -d ']' -f 1|head -1)
 wIOPS=$(cat $OUTPUT_PATH/r30_w70_200M_d1.log |grep IOPS|tail -1| cut -d ' ' -f2-|cut -d ' ' -f3|rev|cut -c2-|rev|cut -c6-)
@@ -169,7 +170,7 @@ echo -e "--------------------------"
 # rm read*
 
 echo -e " "
-fio --name=seqwrite1mb --filename=fiotest --runtime=120 --bs=2k --ioengine=libaio --direct=1 --ramp_time=10 --readwrite=rw --rwmixread=30 --rwmixwrite=70 --iodepth=1 --bs=4k --size=1G > $OUTPUT_PATH/r30_w70_1G_d1.log
+/usr/bin/fio --name=seqwrite1mb --filename=fiotest --runtime=120 --bs=2k --ioengine=libaio --direct=1 --ramp_time=10 --readwrite=rw --rwmixread=30 --rwmixwrite=70 --iodepth=1 --bs=4k --size=1G > $OUTPUT_PATH/r30_w70_1G_d1.log
 so7030small=$(cat $OUTPUT_PATH/r30_w70_1G_d1.log |grep IOPS|tail -2)
 FSYNC=$(cat $OUTPUT_PATH/r30_w70_1G_d1.log |grep "99.00th"|tail -1|cut -c17-|grep -oE "([0-9]+)]" -m1|cut -d ']' -f 1|head -1)
 wIOPS=$(cat $OUTPUT_PATH/r30_w70_1G_d1.log |grep IOPS|tail -1| cut -d ' ' -f2-|cut -d ' ' -f3|rev|cut -c2-|rev|cut -c6-)
@@ -223,7 +224,7 @@ echo -e "RANDOM IOPS: $IOPS"
 echo -e "--------------------------"
 
 echo -e ""
-fio --name=seek1mb --filename=fiotest --runtime=120 --ioengine=libaio --direct=1 --ramp_time=10 --iodepth=4  --readwrite=randread --blocksize=4k --size=200M > $OUTPUT_PATH/rand_200M_d1.log
+/usr/bin/fio --name=seek1mb --filename=fiotest --runtime=120 --ioengine=libaio --direct=1 --ramp_time=10 --iodepth=4  --readwrite=randread --blocksize=4k --size=200M > $OUTPUT_PATH/rand_200M_d1.log
 overhead_small=$(cat $OUTPUT_PATH/rand_200M_d1.log |grep IOPS|tail -1)
 FSYNC=$(cat $OUTPUT_PATH/rand_200M_d1.log |grep "99.00th"|tail -1|cut -c17-|grep -oE "([0-9]+)]" -m1|cut -d ']' -f 1|head -1)
 IOPS=$(cat $OUTPUT_PATH/rand_200M_d1.log |grep IOPS|tail -1| cut -d ' ' -f2-|cut -d ' ' -f3|rev|cut -c2-|rev)
@@ -240,7 +241,7 @@ echo -e "RANDOM IOPS: $IOPS"
 echo -e "--------------------------"
 
 rm fiotest
-rm -rf $DATA_DIR
+rm -rf test-data
 
 echo -e " "
 echo -e "- END -----------------------------------------"
