@@ -38,10 +38,8 @@ PIDS=()
 
 # fio info
 echo "INFO: Running fio on etcd"
-pushd ${ETCD_LOG_PATH}
-fio_suite.sh &
+fio_suite.sh > fio_output.txt &
 PIDS+=($!)
-popd
 
 # member list
 echo "INFO: Getting etcdctl member list"
