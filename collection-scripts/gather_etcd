@@ -36,9 +36,9 @@ set +o errexit
 
 PIDS=()
 
-# fio info
-echo "INFO: Running fio on etcd"
-fio_suite.sh > fio_output.txt &
+# prometheus info similar to fio
+echo "INFO: Gathering Prometheus metrics on etcd"
+gather_metrics -- match 'etcd_disk_wal_fsync_duration_seconds_bucket{job=~".*etcd.*"}' &
 PIDS+=($!)
 
 # member list
