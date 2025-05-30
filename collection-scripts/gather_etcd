@@ -36,6 +36,11 @@ set +o errexit
 
 PIDS=()
 
+# prometheus info similar to fio
+echo "INFO: Gathering Prometheus metrics on etcd"
+/usr/bin/gather_metrics --match 'etcd_disk_wal_fsync_duration_seconds_bucket{job=~".*etcd.*"}' &
+PIDS+=($!)
+
 # member list
 echo "INFO: Getting etcdctl member list"
 ocp4etcdctl member list -w json > ${ETCD_LOG_PATH}/member_list.json &
