@@ -39,6 +39,18 @@ function gather_extra_ovn_kubernetes_data {
   fi
 }
 
+function gather_interface_stats() {
+  echo "INFO: Gathering network interface stats from each node"
+  INTERFACE_STATS_PATH="${NETWORK_LOG_PATH}/interface_stats"
+  mkdir -p "${INTERFACE_STATS_PATH}"
+
+  for node in $(oc get nodes -o name); do
+    node_name=$(basename "$node")
+    echo "INFO: Running on ${node_name}"
+    oc debug "$node" -- chroot /host ip -s link show > "${INTERFACE_STATS_PATH}/${node_name}.txt" 2>&1
+  done
+}
+
 PIDS=()
 NETWORK_TYPE=$(oc get network.config.openshift.io -o=jsonpath='{.items[0].spec.networkType}' | tr '[:upper:]' '[:lower:]')
 
@@ -53,6 +65,8 @@ echo "INFO: Copying ovnk extra logs complete."
 du -sh "${NETWORK_LOG_PATH}/${OVNK_EXTRAS_STORE_PATH}"
 tar zcvf "${NETWORK_LOG_PATH}/${OVNK_EXTRAS_STORE_PATH}.tar.gz" -C "${NETWORK_LOG_PATH}" "${OVNK_EXTRAS_STORE_PATH}" --remove-files 2>&1
 echo "INFO: Extra network logs collection complete."
+
+gather_interface_stats
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
