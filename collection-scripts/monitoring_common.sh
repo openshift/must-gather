@@ -37,8 +37,8 @@ metrics_get() {
     -c prometheus \
     -n openshift-monitoring \
     -- promtool tsdb dump-openmetrics /prometheus --sandbox-dir-root="/prometheus" "$@" \
-       > "${METRICS_PATH}/"${output_file}.openmetrics" \
-       2> "${METRICS_PATH}/"${output_file}.stderr"
+       > "${METRICS_PATH}/${output_file}.openmetrics" \
+       2> "${METRICS_PATH}/${output_file}.stderr"
 }
 
 # metrics_gather dumps metrics in OpenMetrics format at $METRICS_PATH.
