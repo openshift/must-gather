@@ -38,7 +38,7 @@ PIDS=()
 
 # prometheus info similar to fio
 echo "INFO: Gathering Prometheus metrics on etcd"
-/usr/bin/gather_metrics --match 'etcd_disk_wal_fsync_duration_seconds_bucket{job=~".*etcd.*"}' &
+/usr/bin/gather_metrics "fsync_duration.openmetrics" --match 'etcd_disk_wal_fsync_duration_seconds_bucket{job=~".*etcd.*"}' &
 PIDS+=($!)
 
 # member list
