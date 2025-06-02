@@ -59,10 +59,7 @@ Please set them wisely."
     exit 1
   fi
 
-  local output_file="$1"
-  shift  
-
-  metrics_get "$output_file" "$@" || true
+  metrics_get "$@" || true
 
   # Force disk flush to ensure that all gathered data is written.
   sync
