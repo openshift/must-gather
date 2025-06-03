@@ -54,8 +54,6 @@ PIDS+=($!)
 PIDS+=($!)
 /usr/bin/gather_metrics "server_handled_code" --min-time "${MIN_TIME}" --match 'grpc_server_handled_total{job=~".*etcd.*"}' &
 PIDS+=($!)
-/usr/bin/gather_metrics "server_handled_code" --min-time "${MIN_TIME}" --match 'grpc_server_handled_total{job=~".*etcd.*"grpc_code=~"Unknown|FailedPrecondition|ResourceExhausted|Internal|Unavailable|DataLoss|DeadlineExceeded"}' &
-PIDS+=($!)
 
 # member list
 echo "INFO: Getting etcdctl member list"
