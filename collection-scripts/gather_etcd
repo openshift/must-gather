@@ -11,12 +11,21 @@ ETCD_LOG_PATH="${BASE_COLLECTION_PATH}/etcd_info"
 ETCDCTL_CONTAINER='etcdctl'
 
 RUNNING_ETCD_POD=$(oc get pod -n openshift-etcd --no-headers -l app=etcd|grep Running| grep -o -m 1 '\S*etcd\S*')
+ALL_RUNNING_ETCD_PODS=$(oc get pod -n openshift-etcd --no-headers -l app=etcd|grep Running|grep -o '\S*etcd\S*')
 
 # We cannot rely on ETCDCTL_ENDPOINTS on container because it may contain bootstrap VM
 ETCDCTL_ENDPOINTS=$(oc exec "${RUNNING_ETCD_POD}"  -n openshift-etcd -c ${ETCDCTL_CONTAINER} -- /bin/sh -c "etcdctl member list" | awk -F', ' '{printf "%s%s",sep,$5; sep=","}')
 
 function ocp4etcdctl {
     oc -n openshift-etcd exec -c "${ETCDCTL_CONTAINER}" "${RUNNING_ETCD_POD}" -- env "ETCDCTL_ENDPOINTS=${ETCDCTL_ENDPOINTS}" etcdctl "$@"
+}
+
+function ocp4ip {
+    for pod in ${ALL_RUNNING_ETCD_PODS}; do
+        mkdir -p ${ETCD_LOG_PATH}/${pod}
+        echo "INFO: Gathering interface stats from pod ${pod}"
+        oc -n openshift-etcd exec -c "${ETCDCTL_CONTAINER}" "${pod}" -- ip -s link show "$@" > ${ETCD_LOG_PATH}/${pod}/interface_stats.txt || true
+    done
 }
 
 if [[ -z $RUNNING_ETCD_POD ]];then
@@ -59,6 +68,11 @@ PIDS+=($!)
 # object count
 echo "INFO: Getting object count"
 ocp4etcdctl get / --prefix --keys-only | sed '/^$/d' | cut -d/ -f3 | sort | uniq -c | sort -rn | awk '{print $2 ":" $1}' | jq -nRc ' [inputs | index(":") as $ix | {(.[:$ix]): .[$ix+1:]}] | add' > ${ETCD_LOG_PATH}/object_count.json &
+PIDS+=($!)
+
+# interface stats
+echo "INFO: Getting interface stats"
+ocp4ip &
 PIDS+=($!)
 
 echo "INFO: Waiting for etcd info collection to complete ..."
