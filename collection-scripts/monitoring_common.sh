@@ -25,9 +25,6 @@ get_first_ready_alertmanager_pod() {
 }
 
 metrics_get() {
-  local output_file="$1"
-  shift
-
   mkdir -p "${METRICS_PATH}"
 
   prometheus_pod=$(get_first_ready_prom_pod)
@@ -37,14 +34,14 @@ metrics_get() {
     -c prometheus \
     -n openshift-monitoring \
     -- promtool tsdb dump-openmetrics /prometheus --sandbox-dir-root="/prometheus" "$@" \
-       > "${METRICS_PATH}/${output_file}.openmetrics" \
-       2> "${METRICS_PATH}/${output_file}.stderr"
+       > "${METRICS_PATH}.openmetrics" \
+       2> "${METRICS_PATH}.stderr"
 }
 
 # metrics_gather dumps metrics in OpenMetrics format at $METRICS_PATH.
 metrics_gather() {
-  if [ $# -lt 2 ]; then
-    echo "ERROR: Not setting the required arguments will result in dumping all the metrics from the Prometheus instance.
+  if [ $# -eq 0 ] ; then
+    echo "ERROR: Not setting at least one argument will result in dumping all the metrics from the Prometheus instance.
 This script is not meant to do that, as it may negatively impact the Prometheus instance and the client running the script.
 
 A filename needs to be set and,

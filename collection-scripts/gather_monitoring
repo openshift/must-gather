@@ -88,6 +88,7 @@ alertmanager_get() {
       2> "${result_path}.stderr"
 }
 
+MIN_TIME="$(date -d '24 hours ago' +%s%3N)"
 
 monitoring_gather(){
   init
@@ -111,6 +112,18 @@ monitoring_gather(){
 
   # TODO: Add out of the box metrics.
   # metrics_gather --min-time=${promtool_min_time} --match=xxx || true
+  echo "INFO: Gathering metrics from Prometheus replicas"
+  METRIC_MATCHES=(
+    '--min-time='${MIN_TIME}
+    '--match=etcd_disk_wal_fsync_duration_seconds_bucket{job=~".*etcd.*"}'
+    '--match=etcd_network_peer_sent_failures_total{job=~".*etcd.*"}'
+    '--match=etcd_network_peer_round_trip_time_seconds_bucket{job=~".*etcd.*"}'
+    '--match=etcd_server_proposals_failed_total{job=~".*etcd.*"}'
+    '--match=etcd_disk_backend_commit_duration_seconds_bucket{job=~".*etcd.*"}'
+    '--match=grpc_server_handling_seconds_bucket{job=~".*etcd.*", grpc_method!="Defragment", grpc_type="unary"}'
+    '--match=grpc_server_handled_total{job=~".*etcd.*"}'
+  )
+  metrics_gather "${METRIC_MATCHES[@]}" || true
 
   # force disk flush to ensure that all data gathered are written
   sync
