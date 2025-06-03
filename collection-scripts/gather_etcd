@@ -41,12 +41,19 @@ MIN_TIME="$(date -d '24 hours ago' +%s%3N)"
 # prometheus info similar to fio
 echo "INFO: Gathering Prometheus metrics on etcd"
 /usr/bin/gather_metrics "fsync_duration" --min-time "${MIN_TIME}" --match 'etcd_disk_wal_fsync_duration_seconds_bucket{job=~".*etcd.*"}' &
+PIDS+=($!)
 /usr/bin/gather_metrics "sent_fails" --min-time "${MIN_TIME}" --match 'etcd_network_peer_sent_failures_total{job=~".*etcd.*"}' &
+PIDS+=($!)
 /usr/bin/gather_metrics "round_trip_fails" --min-time "${MIN_TIME}" --match 'etcd_network_peer_round_trip_time_seconds_bucket{job=~".*etcd.*"}' &
+PIDS+=($!)
 /usr/bin/gather_metrics "serv_prop_fails" --min-time "${MIN_TIME}" --match 'etcd_server_proposals_failed_total{job=~".*etcd.*"}' &
+PIDS+=($!)
 /usr/bin/gather_metrics "backend_commit_dur" --min-time "${MIN_TIME}" --match 'etcd_disk_backend_commit_duration_seconds_bucket{job=~".*etcd.*"}' &
+PIDS+=($!)
 /usr/bin/gather_metrics "server_handling" --min-time "${MIN_TIME}" --match 'grpc_server_handling_seconds_bucket{job=~".*etcd.*", grpc_method!="Defragment", grpc_type="unary"}' & 
+PIDS+=($!)
 /usr/bin/gather_metrics "server_handled_code" --min-time "${MIN_TIME}" --match 'grpc_server_handled_total{job=~".*etcd.*"}' &
+PIDS+=($!)
 /usr/bin/gather_metrics "server_handled_code" --min-time "${MIN_TIME}" --match 'grpc_server_handled_total{job=~".*etcd.*"grpc_code=~"Unknown|FailedPrecondition|ResourceExhausted|Internal|Unavailable|DataLoss|DeadlineExceeded"}' &
 PIDS+=($!)
 
