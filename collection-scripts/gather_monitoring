@@ -122,7 +122,6 @@ monitoring_gather(){
     '--match=grpc_server_handling_seconds_bucket{job=~".*etcd.*", grpc_method!="Defragment", grpc_type="unary"}'
     '--match=grpc_server_handled_total{job=~".*etcd.*"}'
   )
-  # metrics_gather "${METRIC_MATCHES[@]}" || true
   metrics_gather --min-time="${MIN_TIME}" "${METRIC_MATCHES[@]}" || true
 
   # force disk flush to ensure that all data gathered are written
