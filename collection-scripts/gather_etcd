@@ -36,13 +36,6 @@ set +o errexit
 
 PIDS=()
 
-# MIN_TIME="$(date -d '24 hours ago' +%s%3N)"
-
-# # prometheus info similar to fio
-# echo "INFO: Gathering Prometheus metrics on etcd"
-# /usr/bin/gather_metrics --min-time "${MIN_TIME}" --match 'etcd_disk_wal_fsync_duration_seconds_bucket{job=~".*etcd.*"}' --match 'etcd_network_peer_sent_failures_total{job=~".*etcd.*"}' --match 'etcd_network_peer_round_trip_time_seconds_bucket{job=~".*etcd.*"}' --match 'etcd_server_proposals_failed_total{job=~".*etcd.*"}' --match 'etcd_disk_backend_commit_duration_seconds_bucket{job=~".*etcd.*"}' --match 'grpc_server_handling_seconds_bucket{job=~".*etcd.*", grpc_method!="Defragment", grpc_type="unary"}' --match 'grpc_server_handled_total{job=~".*etcd.*"}' &
-# PIDS+=($!)
-
 # member list
 echo "INFO: Getting etcdctl member list"
 ocp4etcdctl member list -w json > ${ETCD_LOG_PATH}/member_list.json &
