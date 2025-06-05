@@ -40,7 +40,7 @@ metrics_get() {
 
 # metrics_gather dumps metrics in OpenMetrics format at $METRICS_PATH.
 metrics_gather() {
-  if [ $# -eq 0 ] ; then
+  if [ $# -eq 0 ]; then
     echo "ERROR: Not setting any arguments will result in dumping all the metrics from the Prometheus instance.
 This script is not meant to do that, as it may negatively impact the Prometheus instance and the client running the script.
 
