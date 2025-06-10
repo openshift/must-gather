@@ -11,7 +11,7 @@ ETCD_LOG_PATH="${BASE_COLLECTION_PATH}/etcd_info"
 ETCDCTL_CONTAINER='etcdctl'
 
 RUNNING_ETCD_POD=$(oc get pod -n openshift-etcd --no-headers -l app=etcd|grep Running| grep -o -m 1 '\S*etcd\S*')
-ALL_CP_NODES=$(oc get nodes -l 'node-role.kubernetes.io/master' -o name; oc get nodes -l 'node-role.kubernetes.io/control-plane' -o name | sort | uniq)
+ALL_CP_NODES=$(oc get nodes -l 'node-role.kubernetes.io/control-plane' -o name)
 
 # We cannot rely on ETCDCTL_ENDPOINTS on container because it may contain bootstrap VM
 ETCDCTL_ENDPOINTS=$(oc exec "${RUNNING_ETCD_POD}"  -n openshift-etcd -c ${ETCDCTL_CONTAINER} -- /bin/sh -c "etcdctl member list" | awk -F', ' '{printf "%s%s",sep,$5; sep=","}')
