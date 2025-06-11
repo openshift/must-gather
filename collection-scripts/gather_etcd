@@ -25,6 +25,7 @@ function ocp4chronyd {
         mkdir -p ${ETCD_LOG_PATH}/${node}
         echo "INFO: Gathering chronyd logs from node ${node}"
         oc debug "$node" -- chroot /host journalctl -u chronyd > "${ETCD_LOG_PATH}/${node}/chronyd_journal.txt" 2>&1 || true
+    done
 }
 
 if [[ -z $RUNNING_ETCD_POD ]];then
