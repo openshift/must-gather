@@ -36,6 +36,34 @@ set +o errexit
 
 PIDS=()
 
+# Optional route to gather pprof goroutine dumps from the CEO
+if [ $# -ge 1 ] && [ "$1" = "gather-pprof-godumps" ]; then
+    MIN_TIME="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+
+    CEO_POD=$(oc get pods -n openshift-etcd-operator -l app=etcd-operator --no-headers -o | awk '/Running/ {print $1; exit}')
+    
+    if [ -z "${CEO_POD}" ]; then
+        echo "ERROR: No running etcd-operator pods found" >&2
+        exit 1
+    fi
+
+    oc exec -n openshift-etcd-operator "${CEO_POD}" -- /usr/local/bin/etcd-operator pprof goroutine > ${ETCD_LOG_PATH}/ceo_pprof_goroutine_dump.txt &
+    PIDS+=($!)
+
+    oc get configmap -n openshift-etcd etcd-endpoints -o yaml \ > ${ETCD_LOG_PATH}/configmap-etcd-endpoints.yaml & \
+    PIDS+=($!)
+
+    oc logs -n openshift-etcd-operator "etcd-operator-667d9c44ff-pdqql" --since-time="$MIN_TIME" > ${ETCD_LOG_PATH}/ceo_logs.txt &
+    PIDS+=($!)
+
+    echo "INFO: Waiting for pprof goroutine dump collection to complete ..."
+    wait "${PIDS[@]}"
+    echo "INFO: Done collecting pprof goroutine dump"
+
+    sync
+    exit 0
+fi
+
 # member list
 echo "INFO: Getting etcdctl member list"
 ocp4etcdctl member list -w json > ${ETCD_LOG_PATH}/member_list.json &
