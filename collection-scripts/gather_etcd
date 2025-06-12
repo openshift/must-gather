@@ -50,7 +50,7 @@ if [ $# -ge 1 ] && [ "$1" = "gather-pprof-godumps" ]; then
     oc exec -n openshift-etcd-operator "${CEO_POD}" -- /usr/local/bin/etcd-operator pprof goroutine > ${ETCD_LOG_PATH}/ceo_pprof_goroutine_dump.txt &
     PIDS+=($!)
 
-    oc get configmap -n openshift-etcd etcd-endpoints -o yaml \ > ${ETCD_LOG_PATH}/configmap-etcd-endpoints.yaml & \
+    oc get configmap -n openshift-etcd etcd-endpoints -o yaml > ${ETCD_LOG_PATH}/configmap-etcd-endpoints.yaml &
     PIDS+=($!)
 
     oc logs -n openshift-etcd-operator "${CEO_POD}" --since-time="$MIN_TIME" > ${ETCD_LOG_PATH}/ceo_logs.txt &
