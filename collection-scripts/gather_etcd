@@ -36,34 +36,6 @@ set +o errexit
 
 PIDS=()
 
-# Optional route to gather additional etcd information, including metrics.
-if [ $# -ge 1 ] && [ "$1" = "gather-more-etcd" ]; then
-    source "$(dirname "$0")"/monitoring_common.sh
-
-    MIN_TIME="$(date -d '24 hours ago' +%s%3N)"
-
-    echo "INFO: Gathering more etcd information"
-
-    METRIC_MATCHES=(
-    '--match=etcd_disk_wal_fsync_duration_seconds_bucket{job=~".*etcd.*"}'
-    '--match=etcd_network_peer_sent_failures_total{job=~".*etcd.*"}'
-    '--match=etcd_network_peer_round_trip_time_seconds_bucket{job=~".*etcd.*"}'
-    '--match=etcd_server_proposals_failed_total{job=~".*etcd.*"}'
-    '--match=etcd_disk_backend_commit_duration_seconds_bucket{job=~".*etcd.*"}'
-    '--match=grpc_server_handling_seconds_bucket{job=~".*etcd.*", grpc_method!="Defragment", grpc_type="unary"}'
-    '--match=grpc_server_handled_total{job=~".*etcd.*"}'
-    )
-    metrics_gather "${ETCD_LOG_PATH}" --min-time="${MIN_TIME}" "${METRIC_MATCHES[@]}" &
-    PIDS+=($!)
-
-    echo "INFO: Waiting for more etcd info collection to complete ..."
-    wait "${PIDS[@]}"
-    echo "INFO: Done collecting more etcd information"
-    
-    sync
-    exit 0
-fi
-
 # member list
 echo "INFO: Getting etcdctl member list"
 ocp4etcdctl member list -w json > ${ETCD_LOG_PATH}/member_list.json &
