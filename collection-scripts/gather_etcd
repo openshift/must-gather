@@ -40,7 +40,7 @@ PIDS=()
 if [ $# -ge 1 ] && [ "$1" = "gather-pprof-godumps" ]; then
     MIN_TIME="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
 
-    CEO_POD=$(oc get pods -n openshift-etcd-operator -l app=etcd-operator --no-headers -o | awk '/Running/ {print $1; exit}')
+    CEO_POD=$(oc get pods -n openshift-etcd-operator -l app=etcd-operator --no-headers | awk '{print $1}')
     
     if [ -z "${CEO_POD}" ]; then
         echo "ERROR: No running etcd-operator pods found" >&2
