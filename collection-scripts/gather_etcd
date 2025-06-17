@@ -47,13 +47,10 @@ if [ $# -ge 1 ] && [ "$1" = "gather-pprof-godumps" ]; then
         exit 1
     fi
 
-    oc exec -n openshift-etcd-operator "${CEO_POD}" -- /usr/local/bin/etcd-operator pprof goroutine > ${ETCD_LOG_PATH}/ceo_pprof_goroutine_dump.txt &
+    oc exec -n openshift-etcd-operator "${CEO_POD}" -- curl -s http://127.0.0.1:6060/debug/pprof/goroutine?debug=2 > ${ETCD_LOG_PATH}/ceo_pprof_goroutine_dump.txt &
     PIDS+=($!)
 
     oc get configmap -n openshift-etcd etcd-endpoints -o yaml > ${ETCD_LOG_PATH}/configmap-etcd-endpoints.yaml &
-    PIDS+=($!)
-
-    oc logs -n openshift-etcd-operator "${CEO_POD}" --since-time="$MIN_TIME" > ${ETCD_LOG_PATH}/ceo_logs.txt &
     PIDS+=($!)
 
     echo "INFO: Waiting for pprof goroutine dump collection to complete ..."
