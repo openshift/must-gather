@@ -21,8 +21,7 @@ fi
 
 echo "INFO: Gathering CEO pprof goroutine dump from pod ${CEO_POD}"
 
-oc exec -n openshift-etcd-operator "${CEO_POD}" -- curl -s http://127.0.0.1:6060/debug/pprof/goroutine?debug=2 \
-    > "${ETCD_LOG_PATH}/ceo_pprof_goroutine_dump.txt"
+oc exec -n openshift-etcd-operator "${CEO_POD}" -- curl -s http://127.0.0.1:6060/debug/pprof/goroutine?debug=2 > "${ETCD_LOG_PATH}/ceo_pprof_goroutine_dump.txt"
 
 echo "INFO: CEO pprof goroutine dump collection completed"
 
