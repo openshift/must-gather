@@ -142,6 +142,7 @@ gather_scale_data
 
 if [[ "${NETWORK_TYPE}" == "ovnkubernetes" ]]; then
     oc adm inspect ${log_collection_args} --dest-dir must-gather egressips.k8s.ovn.org
+    oc adm inspect ${log_collection_args} --dest-dir must-gather clusteruserdefinednetworks.k8s.ovn.org
     oc adm inspect ${log_collection_args} --dest-dir must-gather adminnetworkpolicies.policy.networking.k8s.io
     oc adm inspect ${log_collection_args} --dest-dir must-gather baselineadminnetworkpolicies.policy.networking.k8s.io
     gather_ovn_kubernetes_data
