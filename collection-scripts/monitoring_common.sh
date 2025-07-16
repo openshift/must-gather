@@ -5,7 +5,6 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-# global readonly constants
 METRICS_PATH=${METRICS_PATH:-"../must-gather/monitoring/metrics"}
 
 get_first_ready_prom_pod() {
