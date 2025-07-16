@@ -24,7 +24,6 @@ get_first_ready_alertmanager_pod() {
 }
 
 metrics_get() {
-  echo ${METRICS_PATH}
   mkdir -p "${METRICS_PATH}"
 
   prometheus_pod=$(get_first_ready_prom_pod)
