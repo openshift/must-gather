@@ -1,0 +1,42 @@
+#!/bin/bash
+
+#Safeguards
+set -o nounset
+set -o errexit
+set -o pipefail
+
+source "$(dirname "$0")"/monitoring_common.sh
+source $(dirname "$0")/common.sh
+get_mintime
+
+ALERT_COLLECTION_PATH="/must-gather/monitoring/alert_metrics"
+mkdir -p ${ALERT_COLLECTION_PATH}
+
+# Store PIDs of all the subprocesses
+pids=()
+
+# Gather etcd metrics, etcd pprof goroutine dump, and network interface stats
+/usr/bin/gather_etcd_more &
+pids+=($!)
+
+# Gather alerts
+METRIC_MATCHES=(
+    '--match=ALERTS{}'
+    '--match=ALERTS_FOR_STATE{}'
+    '--match=alertmanager_notifications_total'
+)
+METRICS_PATH=${ALERT_COLLECTION_PATH} metrics_get --min-time="${MIN_TIME}" "${METRIC_MATCHES[@]}" &
+pids+=($!)
+
+# Gather audit logs from API server
+/usr/bin/gather_audit_logs &
+pids+=($!)
+
+# Check if PID array has any values, if so, wait for them to finish
+if [ ${#pids[@]} -ne 0 ]; then
+    echo "Waiting on subprocesses to finish execution."
+    wait "${pids[@]}"
+fi
+
+# Force disk flush to ensure that all data gathered is accessible in the copy container
+sync

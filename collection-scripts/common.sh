@@ -44,3 +44,16 @@ get_log_collection_args() {
 		node_log_collection_args=--since="${iso_time}"
 	fi
 }
+
+get_mintime() {
+	MIN_TIME=""
+
+	if [ -n "${MUST_GATHER_SINCE:-}" ]; then
+		duration=$(echo "${MUST_GATHER_SINCE:-}" | sed -E 's/^([0-9]+)s$/\1 seconds ago/; s/^([0-9]+)m$/\1 minutes ago/; s/^([0-9]+)h$/\1 hours ago/; s/^([0-9]+)d$/\1 days ago/; s/^([0-9]+)w$/\1 weeks ago/; s/^([0-9]+)y$/\1 years ago/')
+		MIN_TIME=$(date -d "${duration}" +%s%3N)
+	fi
+	if [ -n "${MUST_GATHER_SINCE_TIME:-}" ]; then
+		latest=$(echo "${MUST_GATHER_SINCE_TIME}" | sed 's/T/ /; s/Z//')
+		MIN_TIME=$(date -d "${latest}" +%s%3N)
+	fi
+}

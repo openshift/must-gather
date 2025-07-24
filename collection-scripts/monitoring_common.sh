@@ -5,8 +5,7 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-# global readonly constants
-declare -r METRICS_PATH="../must-gather/monitoring/metrics"
+METRICS_PATH=${METRICS_PATH:-"../must-gather/monitoring/metrics"}
 
 get_first_ready_prom_pod() {
   readarray -t READY_PROM_PODS < <(
@@ -25,10 +24,7 @@ get_first_ready_alertmanager_pod() {
 }
 
 metrics_get() {
-  local output_path="$1"
-  shift
-
-  mkdir -p "${output_path}"
+  mkdir -p "${METRICS_PATH}"
 
   prometheus_pod=$(get_first_ready_prom_pod)
   echo "INFO: Getting metrics from ${prometheus_pod}"
@@ -37,17 +33,17 @@ metrics_get() {
     -c prometheus \
     -n openshift-monitoring \
     -- promtool tsdb dump-openmetrics /prometheus --sandbox-dir-root="/prometheus" "$@" \
-      | gzip > "${output_path}/metrics.openmetrics.gz" \
-      2> >(gzip > "${output_path}/metrics.stderr.gz")
+       > "${METRICS_PATH}/metrics.openmetrics" \
+       2> "${METRICS_PATH}/metrics.stderr"
 }
 
 # metrics_gather dumps metrics in OpenMetrics format at $METRICS_PATH.
 metrics_gather() {
-  if [ $# -lt 2 ]; then
-    echo "ERROR: Not setting required arguments will result in dumping all the metrics from the Prometheus instance.
+  if [ $# -eq 0 ]; then
+    echo "ERROR: Not setting any arguments will result in dumping all the metrics from the Prometheus instance.
 This script is not meant to do that, as it may negatively impact the Prometheus instance and the client running the script.
 
-Must set the output path and at least one of the following arguments:
+At least one of the following arguments should be set:
 
 --min-time: Minimum timestamp to dump in ms. Defaults to -9223372036854775808.
 --max-time: Maximum timestamp to dump in ms. Defaults to 9223372036854775807.
