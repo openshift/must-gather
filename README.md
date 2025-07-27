@@ -35,3 +35,23 @@ oc adm must-gather --image=registry/username/your-built-image
 
 ## Obfuscate confidential information
 There is a dedicated effort to obfuscate and omit confidential information. Head over to [openshift/must-gather-clean](https://github.com/openshift/must-gather-clean) for more information.
+
+## Loki Log Collection
+
+### Options
+- `--only-loki` - Collect only Loki logs (skip traditional must-gather)
+- `--logs-namespace=NAME` - Target specific namespace
+- `LOKI_MAX_BATCHES=N` - Batches per log type (default: 100, each batch contain 5000 logs)
+
+### Output Structure
+```
+loki-logs/
+├── application_logs_part1.txt     (250K records)
+├── application_logs_part2.txt     (remaining records)
+├── infrastructure_logs_part1.txt  (250K records)
+├── audit_logs_part1.txt           (250K records)
+└── metadata/
+    ├── clusterlogging.yaml
+    ├── loki_routes.yaml
+    └── loki_pods.yaml
+```
