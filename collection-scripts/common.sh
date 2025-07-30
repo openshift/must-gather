@@ -46,7 +46,8 @@ get_log_collection_args() {
 }
 
 get_mintime() {
-	MIN_TIME=""
+	# By default, we set MIN_TIME to 24 hours ago
+	MIN_TIME=$(date -d "24 hours ago" +%s%3N)
 
 	if [ -n "${MUST_GATHER_SINCE:-}" ]; then
 		duration=$(echo "${MUST_GATHER_SINCE:-}" | sed -E 's/^([0-9]+)s$/\1 seconds ago/; s/^([0-9]+)m$/\1 minutes ago/; s/^([0-9]+)h$/\1 hours ago/; s/^([0-9]+)d$/\1 days ago/; s/^([0-9]+)w$/\1 weeks ago/; s/^([0-9]+)y$/\1 years ago/')
