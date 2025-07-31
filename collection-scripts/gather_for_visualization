@@ -27,7 +27,6 @@ METRIC_MATCHES=(
     '--match=grpc_server_handled_total{job=~".*etcd.*"}'
     '--match=ALERTS{}'
     '--match=ALERTS_FOR_STATE{}'
-    '--match=alertmanager_notifications_total'
 )
 METRICS_PATH=${ALERT_COLLECTION_PATH} metrics_get --min-time="${MIN_TIME}" "${METRIC_MATCHES[@]}" &
 pids+=($!)
