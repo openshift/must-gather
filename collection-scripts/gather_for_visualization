@@ -9,8 +9,8 @@ source "$(dirname "$0")"/monitoring_common.sh
 source $(dirname "$0")/common.sh
 get_mintime
 
-ALERT_COLLECTION_PATH="/must-gather/monitoring/alert_metrics"
-mkdir -p ${ALERT_COLLECTION_PATH}
+VISUALIZATION_METRICS_PATH="/must-gather/monitoring/metrics"
+mkdir -p ${VISUALIZATION_METRICS_PATH}
 
 # Store PIDs of all the subprocesses
 pids=()
@@ -28,7 +28,7 @@ METRIC_MATCHES=(
     '--match=ALERTS{}'
     '--match=ALERTS_FOR_STATE{}'
 )
-METRICS_PATH=${ALERT_COLLECTION_PATH} metrics_get --min-time="${MIN_TIME}" "${METRIC_MATCHES[@]}" &
+METRICS_PATH=${VISUALIZATION_METRICS_PATH} metrics_get --min-time="${MIN_TIME}" "${METRIC_MATCHES[@]}" &
 pids+=($!)
 
 # Gather audit logs from API server
