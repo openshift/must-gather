@@ -162,7 +162,7 @@ pids+=($!)
 /usr/bin/gather_osus &
 pids+=($!)
 
-# Gather Istio information
+# Gather Istio/Gateway API information
 /usr/bin/gather_istio &
 pids+=($!)
 
