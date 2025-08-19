@@ -16,11 +16,11 @@
 source $(dirname "$0")/common.sh
 BASE_COLLECTION_PATH="/must-gather/istio"
 
-# Get Istio, sail operator, kiali, gateway.networking.k8s.io and inference.networking.x-k8s.io group CRDs
+# Get Istio, sail operator, kiali, gateway.networking.k8s.io, inference.networking.x-k8s.io and inference.networking.k8s.io group CRDs
 function getCRDs() {
   local result=()
   local output
-  output=$(oc get crds -o custom-columns=NAME:metadata.name --no-headers | grep -e '\.istio\.io' -e '\.sailoperator\.io' -e '\.kiali\.io' -e '\.gateway\.networking\.k8s\.io' -e 'inference\.networking\.x-k8s\.io')
+  output=$(oc get crds -o custom-columns=NAME:metadata.name --no-headers | grep -e '\.istio\.io' -e '\.sailoperator\.io' -e '\.kiali\.io' -e '\.gateway\.networking\.k8s\.io' -e 'inference\.networking\.x-k8s\.io' -e 'inference\.networking\.k8s\.io')
   for crd in ${output}; do
     result+=("${crd}")
   done
