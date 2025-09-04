@@ -92,6 +92,11 @@ function inspect() {
   resource=$1
   ns=$2
 
+  if [ -z "$resource" ]; then
+    echo "No resource provided to inspect function"
+    return
+  fi
+
   if [ -n "$ns" ]; then
     echo "Inspecting resource ${resource} in namespace ${ns}"
     # it's here just to make the linter happy (we have to use double quotes arround the variable)
