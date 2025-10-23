@@ -134,6 +134,10 @@ pids+=($!)
 /usr/bin/gather_nmstate &
 pids+=($!)
 
+# Gather Node Feature Discovery (NFD)
+/usr/bin/gather_nfd &
+pids+=($!)
+
 # Gather SR-IOV resources
 /usr/bin/gather_sriov &
 pids+=($!)
