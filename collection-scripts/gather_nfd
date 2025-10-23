@@ -2,14 +2,15 @@
 
 source $(dirname "$0")/common.sh
 BASE_COLLECTION_PATH="must-gather"
-get_operator_ns "node-feature-discovery-operator"
+get_operator_ns "nfd"
 get_log_collection_args
 
 function get_nfd_crs() {
     declare -a NFD_CRDS=("nodefeaturediscoveries" "nodefeaturegroups" "nodefeaturerules" "nodefeatures")
 
     for CRD in "${NFD_CRDS[@]}"; do
-        oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${CRD}"
+        echo "INFO: Collecting NFD Data for ${CRD} in namespace ${operator_ns}"
+        oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${CRD}" -n "${operator_ns}"
     done
 }
 
