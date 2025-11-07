@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# This script collects OLM v1 resources.
+# OLM v1 uses the olm.operatorframework.io API group and provides a new declarative
+# installation and management experience for cluster extensions.
+
+source $(dirname "$0")/common.sh
+get_log_collection_args
+BASE_COLLECTION_PATH="must-gather"
+
+# Function to get all CRDs in the olm.operatorframework.io API group
+function getOLMv1CRDs() {
+  local result=()
+  local output
+  output=$(oc get crds -o custom-columns=NAME:metadata.name --no-headers 2>/dev/null | grep -e '\.olm\.operatorframework\.io$')
+  for crd in ${output}; do
+    result+=("${crd}")
+  done
+  echo "${result[@]}"
+}
+
+# Check if OLM v1 is installed by looking for any CRDs in the olm.operatorframework.io group
+OLMV1_CRDS=$(getOLMv1CRDs)
+
+if [ -z "$OLMV1_CRDS" ]; then
+    echo "INFO: OLM v1 CRDs not detected. Skipping OLM v1 resource collection."
+    exit 0
+fi
+
+echo "INFO: Collecting OLM v1 resources from olm.operatorframework.io API group"
+
+# Collect each OLM v1 CRD (both cluster-scoped and namespace-scoped resources)
+for crd in ${OLMV1_CRDS}; do
+    echo "INFO: Collecting ${crd}"
+    # Use --all-namespaces to collect both cluster-scoped and namespace-scoped resources
+    oc adm inspect ${log_collection_args} --dest-dir="${BASE_COLLECTION_PATH}" "${crd}" --all-namespaces 2>/dev/null || {
+        echo "WARNING: Failed to collect ${crd}, skipping..."
+    }
+done
+
+echo "INFO: OLM v1 resource collection complete"
+
+# Force disk flush to ensure that all data gathered is accessible in the copy container
+sync

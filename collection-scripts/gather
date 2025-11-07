@@ -94,6 +94,10 @@ pids+=($!)
 /usr/bin/gather_olm &
 pids+=($!)
 
+# Gather OLM v1 resources
+/usr/bin/gather_olm_v1 &
+pids+=($!)
+
 # Gather API Priority and Fairness Endpoints
 /usr/bin/gather_priority_and_fairness &
 pids+=($!)
