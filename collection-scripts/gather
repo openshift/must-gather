@@ -8,8 +8,37 @@ version >> /must-gather/version
 source $(dirname "$0")/common.sh
 get_log_collection_args
 
+# Parse command line arguments for special flags
+LOKI_ONLY=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --only-loki)
+            LOKI_ONLY=true
+            export LOKI_ONLY_MODE=true
+            shift
+            ;;
+        --logs-namespace=*)
+            export LOKI_LOGS_NAMESPACE="${1#*=}"
+            shift
+            ;;
+        *)
+            # Pass through other arguments
+            shift
+            ;;
+    esac
+done
+
 # Store PIDs of all the subprocesses
 pids=()
+
+# Check if only loki collection is requested
+if [[ "$LOKI_ONLY" == "true" ]]; then
+    echo "Running Loki-only collection..."
+    # Gather Loki logs from OpenShift Logging (environment variables are already set)
+    /usr/bin/gather_loki
+    echo "Loki collection completed."
+    exit 0
+fi
 
 # Named resource list, eg. ns/openshift-config
 named_resources=()
@@ -82,6 +111,11 @@ all_ns_resources_text=$(IFS=, ; echo "${all_ns_resources[*]}")
 oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${all_ns_resources_text}" --all-namespaces &
 pids+=($!)
 
+# Gather Loki logs from OpenShift Logging FIRST (before any other scripts that might fail)
+echo "Starting Loki log collection first..."
+/usr/bin/gather_loki
+echo "Loki log collection completed. Starting other collectors..."
+
 # Gather Insights Operator Archives
 /usr/bin/gather_insights &
 pids+=($!)
@@ -153,6 +187,8 @@ pids+=($!)
 # Gather vSphere resources. This is NOOP on non-vSphere platform.
 /usr/bin/gather_vsphere &
 pids+=($!)
+
+
 
 # Gather Performance profile information
 /usr/bin/gather_ppc &

@@ -1,0 +1,237 @@
+#!/bin/bash
+
+source $(dirname "$0")/common.sh
+BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
+get_log_collection_args
+
+LOKI_COLLECTION_PATH="${BASE_COLLECTION_PATH}/loki-logs"
+
+# Get standard must-gather parameters (like other gather scripts)
+get_log_collection_args
+
+# Use environment variables for our custom parameters
+ONLY_LOKI_MODE="${LOKI_ONLY_MODE:-false}"
+LOGS_NAMESPACE="${LOKI_LOGS_NAMESPACE:-}"
+
+# Batching configuration (configurable via environment variables)
+LOKI_MAX_BATCHES="${LOKI_MAX_BATCHES:-100}"          # Default 100 batches (500K records total)
+
+function check_loki_installed() {
+    if oc get clusterlogging -n openshift-logging >/dev/null 2>&1; then
+        echo "Found ClusterLogging CR"
+        return 0
+    fi
+    echo "OpenShift Logging (Loki) is not installed"
+    return 1
+}
+
+function collect_loki_logs() {
+    echo "Starting Loki log collection..."
+
+    # Check if Loki is installed
+    if ! check_loki_installed; then
+        if [[ "$ONLY_LOKI_MODE" == "true" ]]; then
+            echo "ERROR: Loki is not installed, but --only-loki mode was requested"
+            exit 1
+        else
+            echo "Loki not installed, skipping"
+            return 0
+        fi
+    fi
+
+    mkdir -p "$LOKI_COLLECTION_PATH/metadata"
+
+    # Collect basic Loki metadata
+    echo "Collecting Loki metadata..."
+    oc get clusterlogging -n openshift-logging -o yaml > "$LOKI_COLLECTION_PATH/metadata/clusterlogging.yaml" 2>/dev/null || echo "No ClusterLogging found" > "$LOKI_COLLECTION_PATH/metadata/clusterlogging.yaml"
+    oc get routes -n openshift-logging -o yaml > "$LOKI_COLLECTION_PATH/metadata/loki_routes.yaml" 2>/dev/null || echo "No routes found" > "$LOKI_COLLECTION_PATH/metadata/loki_routes.yaml"
+    oc get pods -n openshift-logging -l app.kubernetes.io/name=lokistack -o yaml > "$LOKI_COLLECTION_PATH/metadata/loki_pods.yaml" 2>/dev/null || echo "No Loki pods found" > "$LOKI_COLLECTION_PATH/metadata/loki_pods.yaml"
+
+    # Get Loki route (try common route names)
+    LOKI_ROUTE=""
+    for route_name in "logging-loki-openshift-logging" "logging-loki" "loki-gateway"; do
+        LOKI_ROUTE=$(oc get route -n openshift-logging "$route_name" -o jsonpath='{.spec.host}' 2>/dev/null)
+        if [[ -n "$LOKI_ROUTE" ]]; then
+            echo "Found Loki route: $route_name"
+            break
+        fi
+    done
+
+    if [[ -z "$LOKI_ROUTE" ]]; then
+        echo "Loki route not found, skipping log collection"
+        return 0
+    fi
+
+    echo "Using Loki endpoint: https://$LOKI_ROUTE"
+
+    # Set time range from must-gather environment variables
+    local time_params=""
+
+    if [[ -n "${MUST_GATHER_SINCE:-}" ]]; then
+        # Convert must-gather format (1h, 2d, 30m, 1w) to seconds and calculate start time
+        if [[ "${MUST_GATHER_SINCE}" =~ ^([0-9]+)([mhdw])$ ]]; then
+            local value="${BASH_REMATCH[1]}"
+            local unit="${BASH_REMATCH[2]}"
+            local seconds_ago=0
+
+            case "$unit" in
+                m) seconds_ago=$((value * 60)) ;;
+                h) seconds_ago=$((value * 3600)) ;;
+                d) seconds_ago=$((value * 86400)) ;;
+                w) seconds_ago=$((value * 604800)) ;;
+            esac
+
+            local start_nano=$((($(date +%s) - seconds_ago) * 1000000000))
+            local end_nano=$(date +%s)000000000
+            time_params="&start=${start_nano}&end=${end_nano}"
+            echo "Collecting logs since: ${MUST_GATHER_SINCE}"
+        fi
+    elif [[ -n "${MUST_GATHER_SINCE_TIME:-}" ]]; then
+        local start_nano=$(date -d "$MUST_GATHER_SINCE_TIME" +%s)000000000
+        local end_nano=$(date +%s)000000000
+        time_params="&start=${start_nano}&end=${end_nano}"
+        echo "Collecting logs from: $MUST_GATHER_SINCE_TIME"
+    else
+        echo "Collecting latest logs up to size limit"
+    fi
+
+    if [[ -n "$LOGS_NAMESPACE" ]]; then
+        echo "Collecting logs for namespace: $LOGS_NAMESPACE"
+    else
+        echo "Collecting logs from all namespaces"
+    fi
+
+    # Collect logs for different log types
+    local log_types=("application" "infrastructure" "audit")
+
+    for log_type in "${log_types[@]}"; do
+        echo "Collecting $log_type logs..."
+
+        local query="{log_type=\"$log_type\"}"
+        if [[ -n "$LOGS_NAMESPACE" ]]; then
+            query="{log_type=\"$log_type\", kubernetes_namespace_name=\"$LOGS_NAMESPACE\"}"
+        fi
+
+        # Batching configuration using environment variables
+        local batch_size=5000                    # Max per query (Loki server limit)
+        local max_batches=$LOKI_MAX_BATCHES      # Configurable batch count
+        local records_per_file=250000  # Fixed 250K records per file
+        local target_records=$((max_batches * batch_size))
+
+        echo "Collecting $log_type logs (target: $target_records records, $max_batches batches, $records_per_file per file)..."
+
+        local encoded_query=$(printf %s "$query" | od -A n -t x1 | tr ' ' % | tr -d '\n')
+        local api_url="https://$LOKI_ROUTE/api/logs/v1/$log_type/loki/api/v1/query_range"
+
+        # File management for splitting
+        local file_counter=1
+        local records_in_current_file=0
+        local current_file="$LOKI_COLLECTION_PATH/${log_type}_logs_part${file_counter}.txt"
+
+        # Initialize first output file
+        > "$current_file"
+
+        local total_collected=0
+        local batch_num=1
+        local last_timestamp=""
+
+        # Collect logs in batches
+        while [[ $batch_num -le $max_batches ]] && [[ $total_collected -lt $target_records ]]; do
+            echo "  Batch $batch_num/$max_batches (collected: $total_collected records, file: part$file_counter)"
+
+            # Build query parameters with pagination
+            local batch_params="query=${encoded_query}${time_params}&limit=${batch_size}&direction=backward"
+
+            # Add timestamp-based pagination for subsequent batches
+            if [[ -n "$last_timestamp" ]]; then
+                # For subsequent batches, query logs before the last timestamp
+                batch_params="${batch_params}&end=${last_timestamp}"
+            fi
+
+            local temp_output="/tmp/loki_batch_${log_type}_${batch_num}.json"
+
+            if command -v curl >/dev/null 2>&1; then
+                curl -s -k -H "Authorization: Bearer $(oc whoami -t)" \
+                    "${api_url}?${batch_params}" > "$temp_output" 2>/dev/null
+            else
+                echo "curl not available, skipping $log_type logs"
+                break
+            fi
+
+            # Process batch results
+            if [[ -f "$temp_output" ]] && jq -e '.status == "success"' "$temp_output" >/dev/null 2>&1; then
+                # Check if we got any results
+                local batch_count=$(jq -r '.data.result | length' "$temp_output" 2>/dev/null || echo "0")
+
+                if [[ "$batch_count" == "0" ]]; then
+                    echo "  No more logs available, stopping at batch $batch_num"
+                    rm -f "$temp_output"
+                    break
+                fi
+
+                # Extract logs
+                local batch_logs=$(jq -r '.data.result[]? | .values[]? | .[1] | fromjson | .message' "$temp_output" 2>/dev/null)
+                local batch_lines=$(echo "$batch_logs" | wc -l)
+
+                if [[ -n "$batch_logs" ]] && [[ "$batch_lines" -gt 0 ]]; then
+                    # Check if we need to start a new file
+                    if [[ $records_in_current_file -ge $records_per_file ]]; then
+                        file_counter=$((file_counter + 1))
+                        current_file="$LOKI_COLLECTION_PATH/${log_type}_logs_part${file_counter}.txt"
+                        > "$current_file"
+                        records_in_current_file=0
+                        echo "    Starting new file: part$file_counter"
+                    fi
+
+                    # Append to current file
+                    echo "$batch_logs" >> "$current_file"
+                    total_collected=$((total_collected + batch_lines))
+                    records_in_current_file=$((records_in_current_file + batch_lines))
+
+                    # Get the timestamp of the oldest log for next batch pagination
+                    last_timestamp=$(jq -r '.data.result[]? | .values[]? | .[0]' "$temp_output" 2>/dev/null | tail -1)
+
+                    echo "    Added $batch_lines logs (total: $total_collected, in file: $records_in_current_file)"
+                else
+                    echo "  No valid logs in batch, stopping"
+                    rm -f "$temp_output"
+                    break
+                fi
+            else
+                echo "  Batch $batch_num failed or returned no data"
+                rm -f "$temp_output"
+                break
+            fi
+
+            rm -f "$temp_output"
+            batch_num=$((batch_num + 1))
+
+            # Small delay to avoid overwhelming Loki
+            sleep 0.1
+        done
+
+        # Report final results
+        local files_created=$(ls -1 "$LOKI_COLLECTION_PATH/${log_type}_logs_part"*.txt 2>/dev/null | wc -l)
+        if [[ $files_created -gt 0 ]]; then
+            echo "Successfully collected $total_collected $log_type log records in $files_created file(s)"
+
+            # Show file sizes
+            echo "  File breakdown:"
+            for file in "$LOKI_COLLECTION_PATH/${log_type}_logs_part"*.txt; do
+                if [[ -f "$file" ]]; then
+                    local lines=$(wc -l < "$file")
+                    local size=$(du -h "$file" | cut -f1)
+                    echo "    $(basename "$file"): $lines records ($size)"
+                fi
+            done
+        else
+            echo "No $log_type logs collected"
+        fi
+    done
+
+    echo "Loki log collection completed"
+}
+
+collect_loki_logs
+
+sync
