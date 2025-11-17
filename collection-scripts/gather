@@ -122,6 +122,10 @@ pids+=($!)
 /usr/bin/gather_network_logs_basics &
 pids+=($!)
 
+# Gather cloud load balancer logs
+/usr/bin/gather-cloud-lb-logs.sh &
+pids+=($!)
+
 # Gather metallb logs
 /usr/bin/gather_metallb &
 pids+=($!)
