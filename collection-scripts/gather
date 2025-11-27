@@ -50,7 +50,7 @@ group_resources+=(networks.operator.openshift.io)
 resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
 
 # Assisted Installer
-all_ns_resources+=(ns/assisted-installer)
+named_resources+=(ns/assisted-installer)
 
 # Leases
 all_ns_resources+=(leases)
@@ -72,7 +72,8 @@ group_resources_text=$(IFS=, ; echo "${filtered_group_resources[*]}")
 oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${group_resources_text}" &
 pids+=($!)
 
-oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${all_ns_resources[@]}" --all-namespaces &
+all_ns_resources_text=$(IFS=, ; echo "${all_ns_resources[*]}")
+oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${all_ns_resources_text}" --all-namespaces &
 pids+=($!)
 
 # Gather Insights Operator Archives
