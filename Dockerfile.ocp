@@ -3,6 +3,9 @@ WORKDIR /go/src/github.com/openshift/must-gather
 COPY . .
 ENV GO_PACKAGE github.com/openshift/must-gather
 
+RUN make build \
+    && gzip must-gather-tests-ext
 FROM registry.ci.openshift.org/ocp/4.21:cli
 COPY --from=builder /go/src/github.com/openshift/must-gather/collection-scripts/* /usr/bin/
+COPY --from=builder /go/src/github.com/openshift/must-gather/must-gather-tests-ext.gz /usr/bin/
 RUN yum install --setopt=tsflags=nodocs -y jq && yum clean all && rm -rf /var/cache/yum/*

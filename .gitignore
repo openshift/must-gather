@@ -19,4 +19,5 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
-
+must-gather-tests-ext
+./_output
