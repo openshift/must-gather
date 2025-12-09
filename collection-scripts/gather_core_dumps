@@ -12,9 +12,22 @@ function get_dump_off_node {
     oc debug --to-namespace="default" node/"$1" -- /bin/bash -c 'sleep 300' > "$tmpfile" 2>&1 &
     local debug_pid=$!
 
-    #Wait for the debug pod to be created and extract its name
-    sleep 2
-    debugPod=$(grep -oP "(?<=pod/)[^ ]*" "$tmpfile" 2>/dev/null | head -1)
+    #Wait for the debug pod to be created and extract its name with exponential backoff
+    local max_attempts=10  # Fewer attempts needed with exponential backoff
+    local attempt=0
+    local base_delay=0.1  # Starting delay in seconds
+    local max_delay=2.0   # Cap the maximum delay
+
+    while [ -z "$debugPod" ] && [ $attempt -lt $max_attempts ]; do
+        debugPod=$(grep -oP "(?<=pod/)[^ ]*" "$tmpfile" 2>/dev/null | head -1)
+        if [ -z "$debugPod" ]; then
+            # Calculate exponential backoff: base_delay * 2^attempt
+            local delay=$(awk -v base="$base_delay" -v exponent="$attempt" -v max="$max_delay" \
+                'BEGIN {d = base * (2 ^ exponent); print (d > max) ? max : d}')
+            sleep "$delay"
+            attempt=$((attempt + 1))
+        fi
+    done
     rm -f "$tmpfile"
 
     #Wait for pod to be ready
@@ -39,6 +52,7 @@ function gather_core_dump_data {
   #Run coredump pull function on all nodes in parallel
   for NODE in ${NODES}; do
     get_dump_off_node "${NODE}" &
+    PIDS+=($!)
   done
 }
 
