@@ -13,6 +13,11 @@ NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
 POD_NAME=${HOSTNAME}
 POD_IP=$(hostname -I | tr -d "[:blank:]")
 
+function is_hosted_cluster() {
+  topology=$(oc get infrastructures.config.openshift.io cluster -o jsonpath="{.status.controlPlaneTopology}")
+  [[ "$topology" == "External" ]]
+}
+
 function check_node_gather_pods_ready() {
 	line=$(oc get ds perf-node-gather-daemonset -o=custom-columns=DESIRED:.status.desiredNumberScheduled,READY:.status.numberReady --no-headers -n $NAMESPACE)
 
@@ -41,7 +46,13 @@ function ppc_nodes() {
 
 	# Find the NTO image reference
 	# NTO contains all the tools needed here
-	NTO=$(oc get deployment -n openshift-cluster-node-tuning-operator cluster-node-tuning-operator -o jsonpath="{.spec.template.spec.containers[0].image}")
+	if ! is_hosted_cluster; then
+		NTO=$(oc get deployment -n openshift-cluster-node-tuning-operator cluster-node-tuning-operator -o jsonpath="{.spec.template.spec.containers[0].image}")
+	else
+		# On HyperShift platform, NTO deployment is running on the management cluster, so we need to get the image from the TuneD pod
+		echo "INFO: Hosted cluster detected, get NTO container image from the TuneD pod"
+		NTO=$(oc get pods -n openshift-cluster-node-tuning-operator --selector openshift-app=tuned -o jsonpath="{.items[0].spec.containers[0].image}")
+	fi
 	if [ $? -ne 0 ]; then
 		echo "INFO: Fallback to identify the container image from release info"
 		NTO=$(oc adm release info --image-for=cluster-node-tuning-operator)
