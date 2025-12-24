@@ -177,6 +177,14 @@ function main() {
     fi
   fi
 
+  if [ -n "$(oc get crd | grep ztunnels.sailoperator.io)" ]; then
+    ztunnelNamespace=$(oc get ZTunnel -A -o custom-columns=NAMESPACE:spec.namespace --no-headers | head -n 1)
+    if [ -n "$ztunnelNamespace" ]
+    then
+        inspectNamespace "${ztunnelNamespace}"
+    fi
+  fi
+
   
   if [ -n "$(oc get crd | grep istiorevisions.sailoperator.io)" ]; then
     # iterate over all Istio revisions
