@@ -10,7 +10,6 @@ function get_dump_off_node {
     #Start Debug pod in background and capture output to get pod name
     local tmpfile=$(mktemp)
     oc debug --to-namespace="default" node/"$1" -- /bin/bash -c 'sleep 300' > "$tmpfile" 2>&1 &
-    local debug_pid=$!
 
     #Wait for the debug pod to be created and extract its name with exponential backoff
     local max_attempts=10  # Fewer attempts needed with exponential backoff
@@ -18,8 +17,11 @@ function get_dump_off_node {
     local base_delay=0.1  # Starting delay in seconds
     local max_delay=2.0   # Cap the maximum delay
 
+    # Initial delay to allow pod creation to start
+    sleep 0.5
+
     while [ -z "$debugPod" ] && [ $attempt -lt $max_attempts ]; do
-        debugPod=$(grep -oP "(?<=pod/)[^ ]*" "$tmpfile" 2>/dev/null | head -1)
+        debugPod=$(sed -n 's/.*pod\/\([^ ]*\).*/\1/p' "$tmpfile" 2>/dev/null | head -1)
         if [ -z "$debugPod" ]; then
             # Calculate exponential backoff: base_delay * 2^attempt
             local delay=$(awk -v base="$base_delay" -v exponent="$attempt" -v max="$max_delay" \
@@ -41,7 +43,9 @@ function get_dump_off_node {
     else
       #Copy Core Dumps out of Nodes suppress Stdout
       echo "Copying core dumps on node ""$1"""
-      oc cp  --loglevel 1 -n "default" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump > /dev/null 2>&1
+      if ! oc cp  --loglevel 1 -n "default" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump > /dev/null 2>&1; then
+        echo "Warning: Failed to copy core dumps from node $1"
+      fi
 
       #clean up debug pod after we are done using them
       oc delete pod "$debugPod" -n "default"
