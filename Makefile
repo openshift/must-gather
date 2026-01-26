@@ -32,3 +32,29 @@ endif
 $(call build-image,ocp-must-gather,$(IMAGE_REGISTRY)/ocp/4.17:ocp-must-gather, ./Dockerfile.ocp,.)
 
 $(call verify-golang-versions,Dockerfile.ocp)
+
+.PHONY: lint
+lint: shellcheck
+	$(SHELLCHECK) -x ./**/*.sh
+
+.PHONY: fmt
+fmt: shfmt
+	$(SHFMT) -l -w ./**/*.sh
+
+## Location where binaries are installed
+LOCALBIN ?= $(shell pwd)/tmp/bin
+
+## Tool Binaries
+SHFMT ?= $(LOCALBIN)/shfmt
+SHELLCHECK ?= $(LOCALBIN)/shellcheck
+
+# NOTE: please keep this list sorted so that it can be easily searched
+TOOLS = shfmt \
+        shellcheck \
+
+.PHONY: tools
+tools:
+	./hack/tools.sh
+
+$(TOOLS):
+	./hack/tools.sh $@

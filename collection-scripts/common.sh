@@ -1,24 +1,26 @@
 #!/bin/bash
 
 function get_operator_ns() {
-    local operator_name=$(echo \"$1\")
-    cmd="$(echo "oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name ""${operator_name}""}}{{.metadata.namespace}}{{\"\\n\"}}{{end}}{{end}}'")"
-    operator_ns="$(eval "$cmd")"
+	local operator_name="\"$1\""
+	cmd="oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name ${operator_name}}}{{.metadata.namespace}}{{\"\\n\"}}{{end}}{{end}}'"
+	operator_ns="$(eval "$cmd")"
 
-    if [ -z "${operator_ns}" ]; then
-        echo "INFO: ${operator_name} not detected. Skipping."
-        exit 0
-    fi
+	if [ -z "${operator_ns}" ]; then
+		echo "INFO: ${operator_name} not detected. Skipping."
+		exit 0
+	fi
 
-    if [[ "$(echo "${operator_ns}" | wc -l)" -gt 1 ]]; then
-        echo "ERROR: found more than one ${operator_name} subscription. Exiting."
-        exit 1
-    fi
+	if [[ "$(echo "${operator_ns}" | wc -l)" -gt 1 ]]; then
+		echo "ERROR: found more than one ${operator_name} subscription. Exiting."
+		exit 1
+	fi
 }
 
 get_log_collection_args() {
 	# validation of MUST_GATHER_SINCE and MUST_GATHER_SINCE_TIME is done by the
 	# caller (oc adm must-gather) so it's safe to use the values as they are.
+	# These variables are used by scripts that source this file.
+	# shellcheck disable=SC2034
 	log_collection_args=""
 
 	if [ -n "${MUST_GATHER_SINCE:-}" ]; then
@@ -33,13 +35,16 @@ get_log_collection_args() {
 	# an ISO formatted time. since MUST_GATHER_SINCE and MUST_GATHER_SINCE_TIME
 	# are formatted differently, we re-format them so they can be used
 	# transparently by node-logs invocations.
+	# shellcheck disable=SC2034
 	node_log_collection_args=""
 
 	if [ -n "${MUST_GATHER_SINCE:-}" ]; then
+		# shellcheck disable=SC2001
 		since=$(echo "${MUST_GATHER_SINCE:-}" | sed 's/\([0-9]*[dhms]\).*/\1/')
 		node_log_collection_args=--since="-${since}"
 	fi
 	if [ -n "${MUST_GATHER_SINCE_TIME:-}" ]; then
+		# shellcheck disable=SC2001
 		iso_time=$(echo "${MUST_GATHER_SINCE_TIME}" | sed 's/T/ /; s/Z//')
 		node_log_collection_args=--since="${iso_time}"
 	fi
