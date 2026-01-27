@@ -6,16 +6,36 @@ mkdir -p "${CORE_DUMP_PATH}"/
 
 function get_dump_off_node {
     local debugPod=""
-    
-    #Get debug pod's name
-    debugPod=$(oc debug --to-namespace="default" node/"$1" -o jsonpath='{.metadata.name}')
 
-    #Start Debug pod force it to stay up until removed in "default" namespace
-    oc debug --to-namespace="default" node/"$1" -- /bin/bash -c 'sleep 300' > /dev/null 2>&1 &
+    #Start Debug pod in background and capture output to get pod name
+    local tmpfile=$(mktemp)
+    oc debug --to-namespace="default" node/"$1" -- /bin/bash -c 'sleep 300' > "$tmpfile" 2>&1 &
 
-    #Mimic a normal oc call, i.e pause between two successive calls to allow pod to register
-    sleep 2
-    oc wait -n "default" --for=condition=Ready pod/"$debugPod" --timeout=30s
+    #Wait for the debug pod to be created and extract its name with exponential backoff
+    local max_attempts=10  # Fewer attempts needed with exponential backoff
+    local attempt=0
+    local base_delay=0.1  # Starting delay in seconds
+    local max_delay=2.0   # Cap the maximum delay
+
+    # Initial delay to allow pod creation to start
+    sleep 0.5
+
+    while [ -z "$debugPod" ] && [ $attempt -lt $max_attempts ]; do
+        debugPod=$(sed -n 's/.*pod\/\([^ ]*\).*/\1/p' "$tmpfile" 2>/dev/null | head -1)
+        if [ -z "$debugPod" ]; then
+            # Calculate exponential backoff: base_delay * 2^attempt
+            local delay=$(awk -v base="$base_delay" -v exponent="$attempt" -v max="$max_delay" \
+                'BEGIN {d = base * (2 ^ exponent); print (d > max) ? max : d}')
+            sleep "$delay"
+            attempt=$((attempt + 1))
+        fi
+    done
+    rm -f "$tmpfile"
+
+    #Wait for pod to be ready
+    if [ -n "$debugPod" ]; then
+      oc wait -n "default" --for=condition=Ready pod/"$debugPod" --timeout=30s > /dev/null 2>&1
+    fi
 
     if [ -z "$debugPod" ]
     then
@@ -23,10 +43,12 @@ function get_dump_off_node {
     else
       #Copy Core Dumps out of Nodes suppress Stdout
       echo "Copying core dumps on node ""$1"""
-      oc cp  --loglevel 1 -n "default" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump > /dev/null 2>&1 && PIDS+=($!)
+      if ! oc cp  --loglevel 1 -n "default" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump > /dev/null 2>&1; then
+        echo "Warning: Failed to copy core dumps from node $1"
+      fi
 
-      #clean up debug pod after we are done using them  
-      oc delete pod "$debugPod" -n "default"  
+      #clean up debug pod after we are done using them
+      oc delete pod "$debugPod" -n "default"
     fi
 }
 
@@ -34,6 +56,7 @@ function gather_core_dump_data {
   #Run coredump pull function on all nodes in parallel
   for NODE in ${NODES}; do
     get_dump_off_node "${NODE}" &
+    PIDS+=($!)
   done
 }
 
@@ -52,3 +75,4 @@ echo "INFO: Node core dump collection to complete."
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
+
