@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# get_operator_ns operator_name
+# Sets:
+#	operator_ns     namespace of the operator subscription
+# Exits:
+#	0               operator not found (prints INFO message)
+#	1               multiple subscriptions found (prints ERROR message)
 function get_operator_ns() {
 	local operator_name="\"$1\""
 	cmd="oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name ${operator_name}}}{{.metadata.namespace}}{{\"\\n\"}}{{end}}{{end}}'"
@@ -16,6 +22,10 @@ function get_operator_ns() {
 	fi
 }
 
+# get_log_collection_args
+# Sets:
+#	log_collection_args        --since or --since-time flag for oc adm inspect
+#	node_log_collection_args   --since flag reformatted for oc adm node-logs
 get_log_collection_args() {
 	# validation of MUST_GATHER_SINCE and MUST_GATHER_SINCE_TIME is done by the
 	# caller (oc adm must-gather) so it's safe to use the values as they are.
@@ -27,6 +37,7 @@ get_log_collection_args() {
 		log_collection_args=--since="${MUST_GATHER_SINCE}"
 	fi
 	if [ -n "${MUST_GATHER_SINCE_TIME:-}" ]; then
+		# shellcheck disable=SC2034
 		log_collection_args=--since-time="${MUST_GATHER_SINCE_TIME}"
 	fi
 
@@ -46,6 +57,7 @@ get_log_collection_args() {
 	if [ -n "${MUST_GATHER_SINCE_TIME:-}" ]; then
 		# shellcheck disable=SC2001
 		iso_time=$(echo "${MUST_GATHER_SINCE_TIME}" | sed 's/T/ /; s/Z//')
+		# shellcheck disable=SC2034
 		node_log_collection_args=--since="${iso_time}"
 	fi
 }

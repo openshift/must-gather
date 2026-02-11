@@ -7,22 +7,32 @@ set -o pipefail
 
 METRICS_PATH=${METRICS_PATH:-"../must-gather/monitoring/metrics"}
 
+# get_first_ready_prom_pod
+# Returns:
+#	name of the first Running prometheus pod on stdout, empty if none found
 get_first_ready_prom_pod() {
 	readarray -t READY_PROM_PODS < <(
 		oc get pods -n openshift-monitoring -l prometheus=k8s --field-selector=status.phase==Running \
 			--no-headers -o custom-columns=":metadata.name"
 	)
-	echo "${READY_PROM_PODS[0]}"
+	echo "${READY_PROM_PODS[0]:-}"
 }
 
+# get_first_ready_alertmanager_pod
+# Returns:
+#	name of the first Running alertmanager pod on stdout, empty if none found
 get_first_ready_alertmanager_pod() {
 	readarray -t READY_AM_PODS < <(
 		oc get pods -n openshift-monitoring -l alertmanager=main --field-selector=status.phase==Running \
 			--no-headers -o custom-columns=":metadata.name"
 	)
-	echo "${READY_AM_PODS[0]}"
+	echo "${READY_AM_PODS[0]:-}"
 }
 
+# metrics_get [promtool_args...]
+# Writes:
+#	$METRICS_PATH/metrics.openmetrics   prometheus metrics dump
+#	$METRICS_PATH/metrics.stderr        stderr output from promtool
 metrics_get() {
 	mkdir -p "${METRICS_PATH}"
 
@@ -37,7 +47,9 @@ metrics_get() {
 		2>"${METRICS_PATH}/metrics.stderr"
 }
 
-# metrics_gather dumps metrics in OpenMetrics format at $METRICS_PATH.
+# metrics_gather promtool_args...
+# Exits:
+#	1       no arguments provided (prints ERROR with usage guidance)
 metrics_gather() {
 	if [ $# -eq 0 ]; then
 		echo "ERROR: Not setting any arguments will result in dumping all the metrics from the Prometheus instance.
