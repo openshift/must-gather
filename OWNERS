@@ -1,9 +1,19 @@
 reviewers:
   - sferich888
   - ingvagabund
+  - shivprakashmuley
+  - swghosh
+  - praveencodes
+  - Prashanth684
+  - TrilokGeer
 approvers:
   - ardaguclu
   - sferich888
   - soltysh
   - ingvagabund
+  - Prashanth684
+  - TrilokGeer
+  - shivprakashmuley
+  - swghosh
+  - praveencodes
 component: "oc"
