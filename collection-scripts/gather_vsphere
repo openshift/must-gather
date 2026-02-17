@@ -1,6 +1,7 @@
 #!/bin/bash
 
-source $(dirname "$0")/common.sh
+# shellcheck source=collection-scripts/common.sh
+source "$(dirname "$0")/common.sh"
 get_log_collection_args
 
 BASE_COLLECTION_PATH="must-gather"
@@ -12,7 +13,9 @@ if [ -z "$CSIDRIVER" ]; then
 fi
 
 echo "INFO: Collecting vSphere CSI driver CRDs"
+# shellcheck disable=SC2086
 oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" --rotated-pod-logs csinodetopologies.cns.vmware.com,cnsvspherevolumemigrations.cns.vmware.com
+# shellcheck disable=SC2086
 oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" --rotated-pod-logs --all-namespaces cnsvolumeoperationrequests.cns.vmware.com
 
 echo "INFO: Collecting vSphere CSI driver CRDs complete"

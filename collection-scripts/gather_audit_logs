@@ -3,7 +3,8 @@
 # /var/logs/{kube-apiserver,openshift-apiserver} on each
 # master node.
 
-source $(dirname "$0")/common.sh
+# shellcheck source=collection-scripts/common.sh
+source "$(dirname "$0")/common.sh"
 get_log_collection_args
 
 BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
@@ -38,6 +39,7 @@ echo "WARNING: Collecting one or more audit logs on ALL masters in your cluster.
 # $4 - log file name
 # $5 - --since=ISO time, if provided via MUST_GATHER_SINCE_TIME
 paths=(openshift-apiserver kube-apiserver oauth-apiserver etcd oauth-server)
+# shellcheck disable=SC2016
 for path in "${paths[@]}"; do
 	output_dir="${BASE_COLLECTION_PATH}/audit_logs/$path"
 	mkdir -p "$output_dir"
