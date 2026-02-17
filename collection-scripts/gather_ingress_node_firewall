@@ -1,6 +1,7 @@
 #!/bin/bash
 
-source $(dirname "$0")/common.sh
+# shellcheck source=collection-scripts/common.sh
+source "$(dirname "$0")/common.sh"
 BASE_COLLECTION_PATH="must-gather"
 get_operator_ns "ingress-node-firewall"
 get_log_collection_args
@@ -9,7 +10,8 @@ function get_ingress_node_firewall_namespaced_crs() {
 	declare -a INGRESS_NODE_FIREWALL_NAMESPACED_CRDS=("ingressnodefirewallconfigs" "ingressnodefirewallnodestates")
 
 	for CRD in "${INGRESS_NODE_FIREWALL_NAMESPACED_CRDS[@]}"; do
-		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n ${operator_ns} "${CRD}"
+		# shellcheck disable=SC2086
+		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n "${operator_ns}" "${CRD}"
 	done
 }
 
@@ -17,10 +19,12 @@ function get_ingress_node_firewall_cluster_crs() {
 	declare -a INGRESS_NODE_FIREWALL_CLUSTER_CRDS=("ingressnodefirewalls")
 
 	for CRD in "${INGRESS_NODE_FIREWALL_CLUSTER_CRDS[@]}"; do
+		# shellcheck disable=SC2086
 		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${CRD}"
 	done
 }
 
+# shellcheck disable=SC2086
 oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"
 get_ingress_node_firewall_namespaced_crs
 get_ingress_node_firewall_cluster_crs

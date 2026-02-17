@@ -9,7 +9,7 @@ fi
 
 function gather_aro() {
 	echo "INFO: Collecting ARO Cluster Data"
-	declare -a INSPECT_TARGETS=(${ARO_CR_NAME} "ns/openshift-azure-operator" "ns/openshift-azure-logging")
+	declare -a INSPECT_TARGETS=("${ARO_CR_NAME}" "ns/openshift-azure-operator" "ns/openshift-azure-logging")
 
 	for TARGET in "${INSPECT_TARGETS[@]}"; do
 		oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" "${TARGET}"
