@@ -25,10 +25,10 @@ function collect_service_logs {
     for service in "${@}"; do
         echo "INFO: Collecting host service logs for $service"
         if [[ ${selector} =~ '--role=' ]]; then
-            /usr/bin/oc adm node-logs "${node_log_collection_args:---since=${SINCE_TIMEFRAME:--7d}}" ${selector} -l kubernetes.io/os=linux -u "${service}"> "${DIR_PATH}/${service}_service.log" &
+            oc adm node-logs "${node_log_collection_args:---since=${SINCE_TIMEFRAME:--7d}}" ${selector} -l kubernetes.io/os=linux -u "${service}"> "${DIR_PATH}/${service}_service.log" &
 	    PIDS+=($!)
         else
-            /usr/bin/oc adm node-logs "${node_log_collection_args:---since=${SINCE_TIMEFRAME:--7d}}" ${selector} -u "${service}"> "${DIR_PATH}/${service}_service.log" &
+            oc adm node-logs "${node_log_collection_args:---since=${SINCE_TIMEFRAME:--7d}}" ${selector} -u "${service}"> "${DIR_PATH}/${service}_service.log" &
 	    PIDS+=($!)
         fi
     done

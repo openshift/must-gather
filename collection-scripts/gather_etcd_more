@@ -1,0 +1,63 @@
+#!/bin/bash
+
+#Safeguards
+set -o nounset
+set -o errexit
+set -o pipefail
+
+source "$(dirname "$0")"/monitoring_common.sh
+
+MIN_TIME="$(date -d '24 hours ago' +%s%3N)"
+
+BASE_COLLECTION_PATH="/must-gather"
+ETCD_LOG_PATH="${BASE_COLLECTION_PATH}/etcd_info"
+
+ETCDCTL_CONTAINER='etcdctl'
+
+ALL_RUNNING_ETCD_PODS=$(oc get pod -n openshift-etcd --no-headers -l app=etcd|grep Running|grep -o '\S*etcd\S*')
+CEO_POD=$(oc get pods -n openshift-etcd-operator -l app=etcd-operator --no-headers | awk '{print $1}')
+
+mkdir -p ${ETCD_LOG_PATH}
+
+function ocp4ip {
+    for pod in ${ALL_RUNNING_ETCD_PODS}; do
+        mkdir -p ${ETCD_LOG_PATH}/${pod}
+        echo "INFO: Gathering interface stats from pod ${pod}"
+        oc -n openshift-etcd exec -c "${ETCDCTL_CONTAINER}" "${pod}" -- ip -s link show "$@" > ${ETCD_LOG_PATH}/${pod}/interface_stats.txt || true
+    done
+}
+
+echo "INFO: Starting getting more etcd information"
+
+PIDS=()
+
+# etcd metrics
+echo "INFO: Getting etcd metrics"
+METRIC_MATCHES=(
+    '--match=etcd_disk_wal_fsync_duration_seconds_bucket{job=~".*etcd.*"}'
+    '--match=etcd_network_peer_sent_failures_total{job=~".*etcd.*"}'
+    '--match=etcd_network_peer_round_trip_time_seconds_bucket{job=~".*etcd.*"}'
+    '--match=etcd_server_proposals_failed_total{job=~".*etcd.*"}'
+    '--match=etcd_disk_backend_commit_duration_seconds_bucket{job=~".*etcd.*"}'
+    '--match=grpc_server_handling_seconds_bucket{job=~".*etcd.*", grpc_method!="Defragment", grpc_type="unary"}'
+    '--match=grpc_server_handled_total{job=~".*etcd.*"}'
+)
+METRICS_PATH=${ETCD_LOG_PATH} metrics_get --min-time="${MIN_TIME}" "${METRIC_MATCHES[@]}" &
+PIDS+=($!)
+
+# interface stats
+echo "INFO: Getting interface stats"
+ocp4ip &
+PIDS+=($!)
+
+# etcd pprof goroutine dump
+echo "INFO: Gathering CEO pprof goroutine dump from pod ${CEO_POD}"
+oc exec -n openshift-etcd-operator "${CEO_POD}" -- curl -s http://127.0.0.1:6060/debug/pprof/goroutine?debug=2 > "${ETCD_LOG_PATH}/ceo_pprof_goroutine_dump.txt" &
+PIDS+=($!)
+
+echo "INFO: Waiting for more etcd info collection to complete ..."
+wait "${PIDS[@]}"
+echo "INFO: Done collecting more etcd information"
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync

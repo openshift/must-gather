@@ -1,19 +1,21 @@
 #!/bin/bash
 
 function get_operator_ns() {
-    local operator_name=$(echo \"$1\")
-    cmd="$(echo "oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name ""${operator_name}""}}{{.metadata.namespace}}{{\"\\n\"}}{{end}}{{end}}'")"
-    operator_ns="$(eval "$cmd")"
+	# shellcheck disable=SC2155,SC2116,SC2086
+	local operator_name=$(echo \"$1\")
+	# shellcheck disable=SC2034,SC2116,SC2028
+	cmd="$(echo "oc get subs -A -o template --template '{{range .items}}{{if eq .spec.name ""${operator_name}""}}{{.metadata.namespace}}{{\"\\n\"}}{{end}}{{end}}'")"
+	operator_ns="$(eval "$cmd")"
 
-    if [ -z "${operator_ns}" ]; then
-        echo "INFO: ${operator_name} not detected. Skipping."
-        exit 0
-    fi
+	if [ -z "${operator_ns}" ]; then
+		echo "INFO: ${operator_name} not detected. Skipping."
+		exit 0
+	fi
 
-    if [[ "$(echo "${operator_ns}" | wc -l)" -gt 1 ]]; then
-        echo "ERROR: found more than one ${operator_name} subscription. Exiting."
-        exit 1
-    fi
+	if [[ "$(echo "${operator_ns}" | wc -l)" -gt 1 ]]; then
+		echo "ERROR: found more than one ${operator_name} subscription. Exiting."
+		exit 1
+	fi
 }
 
 get_log_collection_args() {
@@ -25,6 +27,7 @@ get_log_collection_args() {
 		log_collection_args=--since="${MUST_GATHER_SINCE}"
 	fi
 	if [ -n "${MUST_GATHER_SINCE_TIME:-}" ]; then
+		# shellcheck disable=SC2034
 		log_collection_args=--since-time="${MUST_GATHER_SINCE_TIME}"
 	fi
 
@@ -35,10 +38,12 @@ get_log_collection_args() {
 	# transparently by node-logs invocations.
 	node_log_collection_args=""
 
+	# shellcheck disable=SC2001
 	if [ -n "${MUST_GATHER_SINCE:-}" ]; then
 		since=$(echo "${MUST_GATHER_SINCE:-}" | sed 's/\([0-9]*[dhms]\).*/\1/')
 		node_log_collection_args=--since="-${since}"
 	fi
+	# shellcheck disable=SC2034
 	if [ -n "${MUST_GATHER_SINCE_TIME:-}" ]; then
 		iso_time=$(echo "${MUST_GATHER_SINCE_TIME}" | sed 's/T/ /; s/Z//')
 		node_log_collection_args=--since="${iso_time}"
