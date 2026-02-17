@@ -18,14 +18,14 @@ BASE_COLLECTION_PATH="/must-gather/istio"
 
 # Get Istio, sail operator, kiali, gateway.networking.k8s.io, inference.networking.x-k8s.io and inference.networking.k8s.io group CRDs
 function getCRDs() {
-  local result=()
-  local output
-  output=$(oc get crds -o custom-columns=NAME:metadata.name --no-headers | grep -e '\.istio\.io' -e '\.sailoperator\.io' -e '\.kiali\.io' -e '\.gateway\.networking\.k8s\.io' -e 'inference\.networking\.x-k8s\.io' -e 'inference\.networking\.k8s\.io')
-  for crd in ${output}; do
-    result+=("${crd}")
-  done
+	local result=()
+	local output
+	output=$(oc get crds -o custom-columns=NAME:metadata.name --no-headers | grep -e '\.istio\.io' -e '\.sailoperator\.io' -e '\.kiali\.io' -e '\.gateway\.networking\.k8s\.io' -e 'inference\.networking\.x-k8s\.io' -e 'inference\.networking\.k8s\.io')
+	for crd in ${output}; do
+		result+=("${crd}")
+	done
 
-  echo "${result[@]}"
+	echo "${result[@]}"
 }
 
 # getSynchronization dumps the synchronization status for the specified control plane revision
@@ -36,17 +36,17 @@ function getCRDs() {
 # Returns:
 #   nothing
 function getSynchronization() {
-  local namespace="${1}"
-  local revision="${2}"
+	local namespace="${1}"
+	local revision="${2}"
 
-  local istiodName
-  istiodName=$(oc get pod -n "${namespace}" -l "app=istiod,istio.io/rev=${revision}" -o jsonpath="{.items[0].metadata.name}")
+	local istiodName
+	istiodName=$(oc get pod -n "${namespace}" -l "app=istiod,istio.io/rev=${revision}" -o jsonpath="{.items[0].metadata.name}")
 
-  echo "Collecting /debug/syncz from ${istiodName} in namespace ${namespace}"
+	echo "Collecting /debug/syncz from ${istiodName} in namespace ${namespace}"
 
-  local logPath=${BASE_COLLECTION_PATH}/namespaces/${namespace}/${revision}
-  mkdir -p "${logPath}"
-  oc exec "${istiodName}" -n "${namespace}" -c discovery -- /usr/local/bin/pilot-discovery request GET /debug/syncz > "${logPath}/debug-syncz.json" 2>&1
+	local logPath=${BASE_COLLECTION_PATH}/namespaces/${namespace}/${revision}
+	mkdir -p "${logPath}"
+	oc exec "${istiodName}" -n "${namespace}" -c discovery -- /usr/local/bin/pilot-discovery request GET /debug/syncz >"${logPath}/debug-syncz.json" 2>&1
 }
 
 # getEnvoyConfigForPodsInNamespace dumps the envoy config for the specified namespace and
@@ -58,29 +58,29 @@ function getSynchronization() {
 # Returns:
 #   nothing
 function getEnvoyConfigForPodsInNamespace() {
-  local controlPlaneNamespace="${1}"
-  local revisionName="${2}"
-  local podNamespace="${3}"
+	local controlPlaneNamespace="${1}"
+	local revisionName="${2}"
+	local podNamespace="${3}"
 
-  local istiodName
-  istiodName=$(oc get pod -n "${controlPlaneNamespace}" -l "app=istiod,istio.io/rev=${revisionName}" -o jsonpath="{.items[0].metadata.name}")
+	local istiodName
+	istiodName=$(oc get pod -n "${controlPlaneNamespace}" -l "app=istiod,istio.io/rev=${revisionName}" -o jsonpath="{.items[0].metadata.name}")
 
-  echo "Collecting Envoy config for pods in ${podNamespace} pointing to ${revisionName} revision"
+	echo "Collecting Envoy config for pods in ${podNamespace} pointing to ${revisionName} revision"
 
-  local pods
-  pods="$(oc get pods -n "${podNamespace}" -o jsonpath='{ .items[*].metadata.name }')"
-  for podName in ${pods}; do
-    if oc get pod -o yaml "${podName}" -n "${podNamespace}" | grep -q proxyv2; then
-      echo "Collecting config_dump and stats for pod ${podName}.${podNamespace}"
+	local pods
+	pods="$(oc get pods -n "${podNamespace}" -o jsonpath='{ .items[*].metadata.name }')"
+	for podName in ${pods}; do
+		if oc get pod -o yaml "${podName}" -n "${podNamespace}" | grep -q proxyv2; then
+			echo "Collecting config_dump and stats for pod ${podName}.${podNamespace}"
 
-      local logPath=${BASE_COLLECTION_PATH}/namespaces/${podNamespace}/pods/${podName}
-      mkdir -p "${logPath}"
+			local logPath=${BASE_COLLECTION_PATH}/namespaces/${podNamespace}/pods/${podName}
+			mkdir -p "${logPath}"
 
-      oc exec "${istiodName}" -n "${controlPlaneNamespace}" -c discovery -- bash -c "/usr/local/bin/pilot-discovery request GET /debug/config_dump?proxyID=${podName}.${podNamespace}" > "${logPath}/config_dump_istiod.json" 2>&1
-      oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET config_dump > "${logPath}/config_dump_proxy.json" 2>&1
-      oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET stats > "${logPath}/proxy_stats" 2>&1
-    fi
-  done
+			oc exec "${istiodName}" -n "${controlPlaneNamespace}" -c discovery -- bash -c "/usr/local/bin/pilot-discovery request GET /debug/config_dump?proxyID=${podName}.${podNamespace}" >"${logPath}/config_dump_istiod.json" 2>&1
+			oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET config_dump >"${logPath}/config_dump_proxy.json" 2>&1
+			oc exec -n "${podNamespace}" "${podName}" -c istio-proxy -- /usr/local/bin/pilot-agent request GET stats >"${logPath}/proxy_stats" 2>&1
+		fi
+	done
 }
 
 # Inspect given resource in given namespace (optional)
@@ -88,140 +88,135 @@ function getEnvoyConfigForPodsInNamespace() {
 # related resources. Including pod logs.
 # Since OCP 4.16 it honors '--since' and '--since-time' args
 function inspect() {
-  local resource ns
-  resource=$1
-  ns=$2
+	local resource ns
+	resource=$1
+	ns=$2
 
-  if [ -z "$resource" ]; then
-    echo "No resource provided to inspect function"
-    return
-  fi
+	if [ -z "$resource" ]; then
+		echo "No resource provided to inspect function"
+		return
+	fi
 
-  if [ -n "$ns" ]; then
-    echo "Inspecting resource ${resource} in namespace ${ns}"
-    # it's here just to make the linter happy (we have to use double quotes arround the variable)
-    if [ -n "${log_collection_args}" ]
-    then
-      oc adm inspect "${log_collection_args}" "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}" -n "${ns}"
-    else
-      oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}" -n "${ns}"
-    fi
-  else
-    echo "Inspecting resource ${resource}"
-    # it's here just to make the linter happy
-    if [ -n "${log_collection_args}" ]
-    then
-      oc adm inspect "${log_collection_args}" "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}"
-    else
-      oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}"
-    fi
-  fi
+	if [ -n "$ns" ]; then
+		echo "Inspecting resource ${resource} in namespace ${ns}"
+		# it's here just to make the linter happy (we have to use double quotes arround the variable)
+		if [ -n "${log_collection_args}" ]; then
+			oc adm inspect "${log_collection_args}" "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}" -n "${ns}"
+		else
+			oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}" -n "${ns}"
+		fi
+	else
+		echo "Inspecting resource ${resource}"
+		# it's here just to make the linter happy
+		if [ -n "${log_collection_args}" ]; then
+			oc adm inspect "${log_collection_args}" "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}"
+		else
+			oc adm inspect "--dest-dir=${BASE_COLLECTION_PATH}" "${resource}"
+		fi
+	fi
 }
 
 function inspectNamespace() {
-  local ns
-  ns=$1
+	local ns
+	ns=$1
 
-  inspect "ns/$ns"
-  inspect net-attach-def,roles,rolebindings "$ns"
+	inspect "ns/$ns"
+	inspect net-attach-def,roles,rolebindings "$ns"
 }
 
 function main() {
-  local crds
-  echo "Executing Istio gather script"
+	local crds
+	echo "Executing Istio gather script"
 
-  # set global variable which is used when calling 'oc adm inspect'
-  get_log_collection_args
+	# set global variable which is used when calling 'oc adm inspect'
+	get_log_collection_args
 
-  operatorNamespace=$(oc get pods --all-namespaces -l app.kubernetes.io/created-by=servicemeshoperator3 -o custom-columns=NAME:metadata.namespace --no-headers | head -n 1)
-  if [ -n "${operatorNamespace}" ]; then
-    # this gets also logs for all pods in that namespace
-    inspect "ns/$operatorNamespace"
-    inspect clusterserviceversion "${operatorNamespace}"
-  fi
-  
-  # TODO: we have to add a new label in the helm postrenderer section in the operator the same way like 'metadata.ownerReferences' is added
-  # 'install.operator.istio.io/owning-resource' should not be used as it could interfere with istioctl
-  # using 'metadata.ownerReferences' is not a good solution, we should use the new label when ready
-  # this needs to be revisited when working on https://issues.redhat.com/browse/OSSM-6804
-  # Following label could be used - https://github.com/istio-ecosystem/sail-operator/pull/783
-  for r in $(oc get clusterroles,clusterrolebindings -l install.operator.istio.io/owning-resource -oname); do
-    inspect "$r"
-  done
-  for r in $(oc get clusterroles,clusterrolebindings -l 'app in (istiod,istio-reader)' -oname); do
-    inspect "$r"
-  done
+	operatorNamespace=$(oc get pods --all-namespaces -l app.kubernetes.io/created-by=servicemeshoperator3 -o custom-columns=NAME:metadata.namespace --no-headers | head -n 1)
+	if [ -n "${operatorNamespace}" ]; then
+		# this gets also logs for all pods in that namespace
+		inspect "ns/$operatorNamespace"
+		inspect clusterserviceversion "${operatorNamespace}"
+	fi
 
-  # inspect all istio, sail operator, kiali and gateway API+ CRDs
-  # this will also collect instances of those CRDs
-  crds="$(getCRDs)"
-  for crd in ${crds}; do
-    inspect "crd/${crd}"
-    oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${crd}" --all-namespaces
-  done
+	# TODO: we have to add a new label in the helm postrenderer section in the operator the same way like 'metadata.ownerReferences' is added
+	# 'install.operator.istio.io/owning-resource' should not be used as it could interfere with istioctl
+	# using 'metadata.ownerReferences' is not a good solution, we should use the new label when ready
+	# this needs to be revisited when working on https://issues.redhat.com/browse/OSSM-6804
+	# Following label could be used - https://github.com/istio-ecosystem/sail-operator/pull/783
+	for r in $(oc get clusterroles,clusterrolebindings -l install.operator.istio.io/owning-resource -oname); do
+		inspect "$r"
+	done
+	for r in $(oc get clusterroles,clusterrolebindings -l 'app in (istiod,istio-reader)' -oname); do
+		inspect "$r"
+	done
 
-  # inspect all controlled mutatingwebhookconfiguration
-  for mwc in $(oc get mutatingwebhookconfiguration -l app=sidecar-injector -o name);do
-    inspect "${mwc}"
-  done
-  # inspect all controlled validatingwebhookconfiguration
-  for vwc in $(oc get validatingwebhookconfiguration -l app=istiod -o name);do
-    inspect "${vwc}"
-  done
+	# inspect all istio, sail operator, kiali and gateway API+ CRDs
+	# this will also collect instances of those CRDs
+	crds="$(getCRDs)"
+	for crd in ${crds}; do
+		inspect "crd/${crd}"
+		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${crd}" --all-namespaces
+	done
 
-  if [ -n "$(oc get crd | grep istiocnis.sailoperator.io)" ]; then
-    istioCniNamespace=$(oc get IstioCNI -A -o custom-columns=NAMESPACE:spec.namespace --no-headers | head -n 1)
-    if [ -n "$istioCniNamespace" ]
-    then
-        inspectNamespace "${istioCniNamespace}"
-    fi
-  fi
+	# inspect all controlled mutatingwebhookconfiguration
+	for mwc in $(oc get mutatingwebhookconfiguration -l app=sidecar-injector -o name); do
+		inspect "${mwc}"
+	done
+	# inspect all controlled validatingwebhookconfiguration
+	for vwc in $(oc get validatingwebhookconfiguration -l app=istiod -o name); do
+		inspect "${vwc}"
+	done
 
-  if [ -n "$(oc get crd | grep ztunnels.sailoperator.io)" ]; then
-    ztunnelNamespace=$(oc get ZTunnel -A -o custom-columns=NAMESPACE:spec.namespace --no-headers | head -n 1)
-    if [ -n "$ztunnelNamespace" ]
-    then
-        inspectNamespace "${ztunnelNamespace}"
-    fi
-  fi
+	if [ -n "$(oc get crd | grep istiocnis.sailoperator.io)" ]; then
+		istioCniNamespace=$(oc get IstioCNI -A -o custom-columns=NAMESPACE:spec.namespace --no-headers | head -n 1)
+		if [ -n "$istioCniNamespace" ]; then
+			inspectNamespace "${istioCniNamespace}"
+		fi
+	fi
 
-  
-  if [ -n "$(oc get crd | grep istiorevisions.sailoperator.io)" ]; then
-    # iterate over all Istio revisions
-    for ir in $(oc get IstioRevision -o jsonpath="{.items[*].metadata.name}"); do
-        echo "Inspecting ${ir} IstioRevision"
-        cpNamespace=$(oc get IstioRevision "${ir}" -o jsonpath="{.spec.namespace}")
-        inspectNamespace "$cpNamespace"
+	if [ -n "$(oc get crd | grep ztunnels.sailoperator.io)" ]; then
+		ztunnelNamespace=$(oc get ZTunnel -A -o custom-columns=NAMESPACE:spec.namespace --no-headers | head -n 1)
+		if [ -n "$ztunnelNamespace" ]; then
+			inspectNamespace "${ztunnelNamespace}"
+		fi
+	fi
 
-        getSynchronization "${cpNamespace}" "${ir}"
+	if [ -n "$(oc get crd | grep istiorevisions.sailoperator.io)" ]; then
+		# iterate over all Istio revisions
+		for ir in $(oc get IstioRevision -o jsonpath="{.items[*].metadata.name}"); do
+			echo "Inspecting ${ir} IstioRevision"
+			cpNamespace=$(oc get IstioRevision "${ir}" -o jsonpath="{.spec.namespace}")
+			inspectNamespace "$cpNamespace"
 
-        # iterate over all namespaces which have pods with proxy pointing to this control plane revision
-        for dpn in $(oc get pods -A -o=jsonpath="{.items[?(@.metadata.annotations.istio\.io/rev==\"${ir}\")].metadata.namespace}" | tr ' ' '\n' | sort -u); do
-        echo "Inspecting ${dpn} data plane namespace"
-        inspectNamespace "${dpn}"
-        getEnvoyConfigForPodsInNamespace "${cpNamespace}" "${ir}" "${dpn}"
-        done
-    done
-  fi
+			getSynchronization "${cpNamespace}" "${ir}"
 
-  # inspect Kiali if it's installed
-  if oc get crd kialis.kiali.io &> /dev/null; then
-    # Inspect all Kialis
-    for kialiNS in $(oc get Kiali -A -o jsonpath="{.items[*].metadata.namespace}"); do
-      echo "Inspecting Kialis in ${kialiNS} namespace"
-      inspect "Kiali" "${kialiNS}"
-      inspectNamespace "$kialiNS"
-    done
+			# iterate over all namespaces which have pods with proxy pointing to this control plane revision
+			for dpn in $(oc get pods -A -o=jsonpath="{.items[?(@.metadata.annotations.istio\.io/rev==\"${ir}\")].metadata.namespace}" | tr ' ' '\n' | sort -u); do
+				echo "Inspecting ${dpn} data plane namespace"
+				inspectNamespace "${dpn}"
+				getEnvoyConfigForPodsInNamespace "${cpNamespace}" "${ir}" "${dpn}"
+			done
+		done
+	fi
 
-    # Inspect all ossmconsoles
-    for consoleNS in $(oc get ossmconsole -A -o jsonpath="{.items[*].metadata.namespace}"); do
-      echo "Inspecting ossmconsoles in ${consoleNS} namespace"
-      inspect "ossmconsole" "${consoleNS}"
-      inspectNamespace "$consoleNS"
-    done
-  fi
+	# inspect Kiali if it's installed
+	if oc get crd kialis.kiali.io &>/dev/null; then
+		# Inspect all Kialis
+		for kialiNS in $(oc get Kiali -A -o jsonpath="{.items[*].metadata.namespace}"); do
+			echo "Inspecting Kialis in ${kialiNS} namespace"
+			inspect "Kiali" "${kialiNS}"
+			inspectNamespace "$kialiNS"
+		done
 
-echo "Done executing Istio gather script"
+		# Inspect all ossmconsoles
+		for consoleNS in $(oc get ossmconsole -A -o jsonpath="{.items[*].metadata.namespace}"); do
+			echo "Inspecting ossmconsoles in ${consoleNS} namespace"
+			inspect "ossmconsole" "${consoleNS}"
+			inspectNamespace "$consoleNS"
+		done
+	fi
+
+	echo "Done executing Istio gather script"
 }
 
 main "$@"

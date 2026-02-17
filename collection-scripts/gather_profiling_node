@@ -14,24 +14,24 @@ PROFILING_NODE_IMAGE="${PROFILING_NODE_IMAGE:-"registry.redhat.io/rhel8/support-
 # _gather_profiling_node_node_exists $NODE
 # returns "true" if $NODE is found among the cluster nodes, "false" otherwise.
 _gather_profiling_node_node_exists() {
-    local node="$1"
+	local node="$1"
 
-    oc get node "$node" > /dev/null 2>&1
-    return "$?"
+	oc get node "$node" >/dev/null 2>&1
+	return "$?"
 }
 
 # _gather_profiling_node_is_apiserver_available
 # returns "true" if the kubernetes apiserver can be reached, returns "false" otherwise.
 _gather_profiling_node_is_apiserver_available() {
-    oc get --raw https://${PROFILING_NODE_APISERVER}/api > /dev/null 2>&1
-    return "$?"
+	oc get --raw https://${PROFILING_NODE_APISERVER}/api >/dev/null 2>&1
+	return "$?"
 }
 
 _gather_profiling_node_start_crio_collection_pod() {
-    local node="$1"
-    local pod_name="$2"
+	local node="$1"
+	local pod_name="$2"
 
-    cat << EOF | kubectl apply -f -
+	cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
 metadata:
@@ -73,78 +73,82 @@ EOF
 }
 
 _gather_profiling_node_collect_crio_data() {
-    local node="$1"
-    local pod_name="pprof.${node}"
-    local extract_timeout=$((PROFILING_NODE_SECONDS+300))
+	local node="$1"
+	local pod_name="pprof.${node}"
+	local extract_timeout=$((PROFILING_NODE_SECONDS + 300))
 
-    _gather_profiling_node_start_crio_collection_pod "$node" "$pod_name"
-    if oc wait --for=condition=Ready pod/${pod_name} --timeout=${extract_timeout}s; then
-        oc cp -c crio-prof-expose "${pod_name}:/tmp/pprof/" "$PROFILING_NODE_CRIO_LOG_PATH"
-        oc delete pod "$pod_name"
-    else
-        oc delete pod --grace-period=0 --force "$pod_name"
-    fi
+	_gather_profiling_node_start_crio_collection_pod "$node" "$pod_name"
+	if oc wait --for=condition=Ready pod/${pod_name} --timeout=${extract_timeout}s; then
+		oc cp -c crio-prof-expose "${pod_name}:/tmp/pprof/" "$PROFILING_NODE_CRIO_LOG_PATH"
+		oc delete pod "$pod_name"
+	else
+		oc delete pod --grace-period=0 --force "$pod_name"
+	fi
 }
 
 _gather_profiling_node_collect_kubelet_data() {
-    local node="$1"
-    local out_kub_base="${PROFILING_NODE_KUBELET_LOG_PATH}/${node}"
-    local out_kub_heap="${out_kub_base}_heap.out"
-    local out_kub_prof="${out_kub_base}_prof.out"
-    local url_base="https://${PROFILING_NODE_APISERVER}/api/v1/nodes/${node}/proxy/debug/pprof"
+	local node="$1"
+	local out_kub_base="${PROFILING_NODE_KUBELET_LOG_PATH}/${node}"
+	local out_kub_heap="${out_kub_base}_heap.out"
+	local out_kub_prof="${out_kub_base}_prof.out"
+	local url_base="https://${PROFILING_NODE_APISERVER}/api/v1/nodes/${node}/proxy/debug/pprof"
 
-    oc get --raw "${url_base}/profile?seconds=${PROFILING_NODE_SECONDS}" > "$out_kub_prof"
-    oc get --raw "${url_base}/heap" > "$out_kub_heap"
+	oc get --raw "${url_base}/profile?seconds=${PROFILING_NODE_SECONDS}" >"$out_kub_prof"
+	oc get --raw "${url_base}/heap" >"$out_kub_heap"
 }
 
 _gather_profiling_node_collect_data_loop() {
-    local pids=()
-    local node
+	local pids=()
+	local node
 
-    mkdir -p "$PROFILING_NODE_KUBELET_LOG_PATH" "$PROFILING_NODE_CRIO_LOG_PATH"
-    for node in ${NODES}; do
-        if _gather_profiling_node_node_exists "$node"; then
-            if [ "$DO_PROF_CRIO" = true ]; then
-                echo "INFO: start crio profiling task on node ${node}"
-                _gather_profiling_node_collect_crio_data "$node" & pids+=($!)
-            fi
-            if [ "$DO_PROF_KUBELET" = true ]; then
-                echo "INFO: start kubelet profiling task on node ${node}"
-                _gather_profiling_node_collect_kubelet_data "$node" & pids+=($!)
-            fi
-        else
-            echo "ERROR: node ${node} not found in the cluster"
-        fi
-    done
+	mkdir -p "$PROFILING_NODE_KUBELET_LOG_PATH" "$PROFILING_NODE_CRIO_LOG_PATH"
+	for node in ${NODES}; do
+		if _gather_profiling_node_node_exists "$node"; then
+			if [ "$DO_PROF_CRIO" = true ]; then
+				echo "INFO: start crio profiling task on node ${node}"
+				_gather_profiling_node_collect_crio_data "$node" &
+				pids+=($!)
+			fi
+			if [ "$DO_PROF_KUBELET" = true ]; then
+				echo "INFO: start kubelet profiling task on node ${node}"
+				_gather_profiling_node_collect_kubelet_data "$node" &
+				pids+=($!)
+			fi
+		else
+			echo "ERROR: node ${node} not found in the cluster"
+		fi
+	done
 
-    [ -z "$pids" ] && return
-    echo "INFO: wait for crio/kubelet profiling tasks"
-    wait ${pids[@]}
+	[ -z "$pids" ] && return
+	echo "INFO: wait for crio/kubelet profiling tasks"
+	wait ${pids[@]}
 }
 
 NODES="${@}"
 if [ -z "$NODES" ]; then
-    echo -e "\nWARNING: since no nodes have been specified for the profiling task, data will\n"\
-            "be collected on ALL the nodes in the cluster. This may take quite some time.\n"
-    NODES="$(oc get nodes -o jsonpath='{.items[?(@.kind=="Node")].metadata.name}')"
+	echo -e "\nWARNING: since no nodes have been specified for the profiling task, data will\n" \
+		"be collected on ALL the nodes in the cluster. This may take quite some time.\n"
+	NODES="$(oc get nodes -o jsonpath='{.items[?(@.kind=="Node")].metadata.name}')"
 fi
 
 DO_PROF_CRIO=true
 DO_PROF_KUBELET=true
 
 case "$PROFILING_NODE_TARGET" in
-    all | ALL)    ;;
-    crio | CRIO | CRI-O)    DO_PROF_KUBELET=false ;;
-    kubelet | KUBELET)      DO_PROF_CRIO=false ;;
-    *) echo -e "\nWARNING: PROFILING_NODE_TARGET set to unknown value = [$PROFILING_NODE_TARGET].\n"\
-               "allowed values are: 'all' (default), 'crio' or 'kubelet'.\n"
-               "Running with 'all'"
+all | ALL) ;;
+crio | CRIO | CRI-O) DO_PROF_KUBELET=false ;;
+kubelet | KUBELET) DO_PROF_CRIO=false ;;
+*)
+	echo -e "\nWARNING: PROFILING_NODE_TARGET set to unknown value = [$PROFILING_NODE_TARGET].\n" \
+		"allowed values are: 'all' (default), 'crio' or 'kubelet'.\n"
+	"Running with 'all'"
+	;;
 esac
 
 echo "INFO: GATHER NODE PROFILING DATA [${PROFILING_NODE_SECONDS}s]"
 if _gather_profiling_node_is_apiserver_available; then
-    _gather_profiling_node_collect_data_loop
+	_gather_profiling_node_collect_data_loop
 else
-    echo "ERROR: failed connecting to the kubernetes apiserver"
+	echo "ERROR: failed connecting to the kubernetes apiserver"
 fi
 echo "INFO: gather node profiling data completed"

@@ -11,52 +11,51 @@ NODES_PATH=${BASE_COLLECTION_PATH}/nodes
 NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
 
 POD_NAME=${HOSTNAME}
-POD_IP=$(hostname -I |  tr -d "[:blank:]" )
+POD_IP=$(hostname -I | tr -d "[:blank:]")
 
 function check_node_gather_pods_ready() {
-  line=$(oc get ds perf-node-gather-daemonset -o=custom-columns=DESIRED:.status.desiredNumberScheduled,READY:.status.numberReady --no-headers -n $NAMESPACE)
+	line=$(oc get ds perf-node-gather-daemonset -o=custom-columns=DESIRED:.status.desiredNumberScheduled,READY:.status.numberReady --no-headers -n $NAMESPACE)
 
-  IFS=$' '
-  read desired ready <<< $line
-  IFS=$'\n'
+	IFS=$' '
+	read desired ready <<<$line
+	IFS=$'\n'
 
-  if [[ "$desired" != "0" ]] && [[ "$ready" == "$desired" ]]
-  then
-    echo "Daemonset perf-node-gather-daemonset ready $ready out of $desired"
-    return 0
-  else
-    return 1
-  fi
+	if [[ "$desired" != "0" ]] && [[ "$ready" == "$desired" ]]; then
+		echo "Daemonset perf-node-gather-daemonset ready $ready out of $desired"
+		return 0
+	else
+		return 1
+	fi
 }
 
 # Start a specially privileged pod on each node and collect node level performance tuning data
 function ppc_nodes() {
-  IFS=$'\n'
+	IFS=$'\n'
 
-  # Create the destination
-  mkdir -p ${NODES_PATH}
+	# Create the destination
+	mkdir -p ${NODES_PATH}
 
-  # Save the debug pod info
-  echo "[$NAMESPACE/$POD_IP/$POD_NAME]" >> ${NODES_PATH}/debug
-  oc get pod -n $NAMESPACE $POD_NAME -o json >> ${NODES_PATH}/debug
+	# Save the debug pod info
+	echo "[$NAMESPACE/$POD_IP/$POD_NAME]" >>${NODES_PATH}/debug
+	oc get pod -n $NAMESPACE $POD_NAME -o json >>${NODES_PATH}/debug
 
-  # Find the NTO image reference
-  # NTO contains all the tools needed here
-  NTO=$(oc get deployment -n openshift-cluster-node-tuning-operator cluster-node-tuning-operator -o jsonpath="{.spec.template.spec.containers[0].image}")
-  if [ $? -ne 0 ]; then
-    echo "INFO: Fallback to identify the container image from release info"
-    NTO=$(oc adm release info --image-for=cluster-node-tuning-operator)
-    if [ $? -ne 0 ]; then
-      echo "ERROR: Failed to identify the container image with node tools."
-      echo "INFO: Node performance data collection will not contain node level data."
-      return
-    fi
-  fi
+	# Find the NTO image reference
+	# NTO contains all the tools needed here
+	NTO=$(oc get deployment -n openshift-cluster-node-tuning-operator cluster-node-tuning-operator -o jsonpath="{.spec.template.spec.containers[0].image}")
+	if [ $? -ne 0 ]; then
+		echo "INFO: Fallback to identify the container image from release info"
+		NTO=$(oc adm release info --image-for=cluster-node-tuning-operator)
+		if [ $? -ne 0 ]; then
+			echo "ERROR: Failed to identify the container image with node tools."
+			echo "INFO: Node performance data collection will not contain node level data."
+			return
+		fi
+	fi
 
-  echo "INFO: Image with low level tools to use: ${NTO}"
+	echo "INFO: Image with low level tools to use: ${NTO}"
 
-  # Start the collection daemon set
-  cat << EOF | oc apply -f -
+	# Start the collection daemon set
+	cat <<EOF | oc apply -f -
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -132,56 +131,53 @@ spec:
         - operator: Exists
 EOF
 
-  COUNTER=0
-  until check_node_gather_pods_ready || [ $COUNTER -eq 300 ]; do
-     (( COUNTER++ ))
-     echo "Waiting for performance profile collector pods to become ready: $COUNTER"
-     sleep 1
-  done
+	COUNTER=0
+	until check_node_gather_pods_ready || [ $COUNTER -eq 300 ]; do
+		((COUNTER++))
+		echo "Waiting for performance profile collector pods to become ready: $COUNTER"
+		sleep 1
+	done
 
-  for line in $(oc get pod -o=custom-columns=NODE:.spec.nodeName --no-headers -l name=perf-node-gather-daemonset --field-selector=status.phase!=Running -n $NAMESPACE)
-  do
-      echo "Failed to collect performance data from node ${line} due to pod scheduling failure." >> ${NODES_PATH}/skipped_nodes.txt
-  done
+	for line in $(oc get pod -o=custom-columns=NODE:.spec.nodeName --no-headers -l name=perf-node-gather-daemonset --field-selector=status.phase!=Running -n $NAMESPACE); do
+		echo "Failed to collect performance data from node ${line} due to pod scheduling failure." >>${NODES_PATH}/skipped_nodes.txt
+	done
 
-  COLLECTABLE_NODES=()
-  NODE_PIDS=()
-  for line in $(oc get pod -o=custom-columns=NODE:.spec.nodeName,NAME:.metadata.name --no-headers -l name=perf-node-gather-daemonset --field-selector=status.phase=Running -n $NAMESPACE)
-  do
-      node=$(echo $line | awk -F ' ' '{print $1}')
-      pod=$(echo $line | awk -F ' ' '{print $2}')
-      NODE_PATH=${NODES_PATH}/$node
-      mkdir -p "${NODE_PATH}"
+	COLLECTABLE_NODES=()
+	NODE_PIDS=()
+	for line in $(oc get pod -o=custom-columns=NODE:.spec.nodeName,NAME:.metadata.name --no-headers -l name=perf-node-gather-daemonset --field-selector=status.phase=Running -n $NAMESPACE); do
+		node=$(echo $line | awk -F ' ' '{print $1}')
+		pod=$(echo $line | awk -F ' ' '{print $2}')
+		NODE_PATH=${NODES_PATH}/$node
+		mkdir -p "${NODE_PATH}"
 
-      COLLECTABLE_NODES+=($node)
+		COLLECTABLE_NODES+=($node)
 
-      # Run per node data collection in parallel
-      timeout -k 1m 5m /usr/bin/gather_ppc_single_node "${pod}" "${NAMESPACE}" "${node}" "${NODE_PATH}" &
-      NODE_PIDS+=($!)
-  done
-  wait "${NODE_PIDS[@]}"
+		# Run per node data collection in parallel
+		timeout -k 1m 5m /usr/bin/gather_ppc_single_node "${pod}" "${NAMESPACE}" "${node}" "${NODE_PATH}" &
+		NODE_PIDS+=($!)
+	done
+	wait "${NODE_PIDS[@]}"
 
-  # Collect journal logs for specified units for all nodes
-  NODE_UNITS=(kubelet)
-  ADM_PIDS=()
-  for NODE in ${COLLECTABLE_NODES[@]}; do
-      NODE_PATH=${NODES_PATH}/$NODE
-      mkdir -p ${NODE_PATH}
-      for UNIT in ${NODE_UNITS[@]}; do
-          echo "Collecting ${UNIT} logs for node ${NODE}"
-          timeout -k 5m 30m bash -c "oc adm node-logs \"${node_log_collection_args:---since=-8h}\" $NODE -u $UNIT | gzip" > ${NODE_PATH}/${NODE}_logs_$UNIT.gz &
-          ADM_PIDS+=($!)
-      done
-  done
-  wait "${ADM_PIDS[@]}"
+	# Collect journal logs for specified units for all nodes
+	NODE_UNITS=(kubelet)
+	ADM_PIDS=()
+	for NODE in ${COLLECTABLE_NODES[@]}; do
+		NODE_PATH=${NODES_PATH}/$NODE
+		mkdir -p ${NODE_PATH}
+		for UNIT in ${NODE_UNITS[@]}; do
+			echo "Collecting ${UNIT} logs for node ${NODE}"
+			timeout -k 5m 30m bash -c "oc adm node-logs \"${node_log_collection_args:---since=-8h}\" $NODE -u $UNIT | gzip" >${NODE_PATH}/${NODE}_logs_$UNIT.gz &
+			ADM_PIDS+=($!)
+		done
+	done
+	wait "${ADM_PIDS[@]}"
 
-  oc delete ds perf-node-gather-daemonset -n $NAMESPACE
+	oc delete ds perf-node-gather-daemonset -n $NAMESPACE
 }
 
 #
 # The main section follows
 #
-
 
 # resource list
 resources=()
@@ -196,7 +192,7 @@ echo "INFO: Waiting for node performance related collection to complete ..."
 
 # run the collection of resources using must-gather
 for resource in ${resources[@]}; do
-  oc adm inspect ${log_collection_args} --dest-dir must-gather --all-namespaces ${resource}
+	oc adm inspect ${log_collection_args} --dest-dir must-gather --all-namespaces ${resource}
 done
 
 # Collect nodes details

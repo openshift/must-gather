@@ -17,16 +17,16 @@ LOGS+=(csi-proxy/csi-proxy.log)
 # if the cluster has no Windows nodes skip this script
 WIN_NODES=$(/usr/bin/oc get no -l kubernetes.io/os=windows)
 if [ -z "$WIN_NODES" ]; then
-    exit 0
+	exit 0
 fi
 
 PIDS=()
 echo INFO: Collecting logs for all Windows nodes
 for log in ${LOGS[@]}; do
-    LOG_FILE_DIR=${WINDOWS_NODE_LOGS}/log_files/$(dirname $log)
-    mkdir -p ${LOG_FILE_DIR}
-    /usr/bin/oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} -l kubernetes.io/os=windows --path=$log > ${LOG_FILE_DIR}/$(basename $log) &
-    PIDS+=($!)
+	LOG_FILE_DIR=${WINDOWS_NODE_LOGS}/log_files/$(dirname $log)
+	mkdir -p ${LOG_FILE_DIR}
+	/usr/bin/oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} -l kubernetes.io/os=windows --path=$log >${LOG_FILE_DIR}/$(basename $log) &
+	PIDS+=($!)
 done
 wait ${PIDS[@]}
 

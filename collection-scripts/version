@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 function version() {
-  if [[ ! -z $OS_GIT_VERSION ]] ; then
-    echo "${OS_GIT_VERSION}"
-  else
-    echo "0.0.0-unknown"
-  fi
+	if [[ ! -z $OS_GIT_VERSION ]]; then
+		echo "${OS_GIT_VERSION}"
+	else
+		echo "0.0.0-unknown"
+	fi
 }

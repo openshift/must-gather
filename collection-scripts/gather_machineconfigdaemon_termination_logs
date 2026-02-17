@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 
 BASE_COLLECTION_PATH="must-gather"
 MACHINECONFIG_DAEMON_LOG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/machine_config_termination_logs"}
@@ -7,22 +7,22 @@ mkdir -p "${MACHINECONFIG_DAEMON_LOG_PATH}"/
 
 # gather_machineconfigdaemon_termination_logs collects the daemon logs before it was last terminated
 function gather_machineconfigdaemon_termination_logs {
-     
-    echo "INFO: Gathering machine config daemon's old logs from all nodes"
-    NODES=$(oc get nodes -o jsonpath='{.items[?(@.kind=="Node")].metadata.name}')
-    for NODE in ${NODES}; do
-         # use the existing MCD pod on the node to get the files
-         DAEMONPOD=$(oc get pods -n openshift-machine-config-operator --field-selector spec.nodeName=${NODE} --selector k8s-app=machine-config-daemon -o custom-columns=:metadata.name --no-headers)
-         # Check if the 'previous-logs' folder exists on the MCD pod
-         FOLDER_EXISTS=$(oc exec -n openshift-machine-config-operator "${DAEMONPOD}" -c machine-config-daemon -- sh -c '[ -d "/rootfs/etc/machine-config-daemon/previous-logs" ] && echo "exists"' 2>/dev/null)
-         # collect the logs from the location that MCD saves to prior to shutdown
-         if [ "${FOLDER_EXISTS}" == "exists" ]; then
-           timeout -v 1m oc cp -c machine-config-daemon openshift-machine-config-operator/"${DAEMONPOD}":rootfs/etc/machine-config-daemon/previous-logs "${MACHINECONFIG_DAEMON_LOG_PATH}"/"${NODE}"/ &
-           PIDS+=($!)
-         else
-           echo "INFO: 'previous-logs' folder not found on ${NODE}, skipping..."
-         fi
-    done
+
+	echo "INFO: Gathering machine config daemon's old logs from all nodes"
+	NODES=$(oc get nodes -o jsonpath='{.items[?(@.kind=="Node")].metadata.name}')
+	for NODE in ${NODES}; do
+		# use the existing MCD pod on the node to get the files
+		DAEMONPOD=$(oc get pods -n openshift-machine-config-operator --field-selector spec.nodeName=${NODE} --selector k8s-app=machine-config-daemon -o custom-columns=:metadata.name --no-headers)
+		# Check if the 'previous-logs' folder exists on the MCD pod
+		FOLDER_EXISTS=$(oc exec -n openshift-machine-config-operator "${DAEMONPOD}" -c machine-config-daemon -- sh -c '[ -d "/rootfs/etc/machine-config-daemon/previous-logs" ] && echo "exists"' 2>/dev/null)
+		# collect the logs from the location that MCD saves to prior to shutdown
+		if [ "${FOLDER_EXISTS}" == "exists" ]; then
+			timeout -v 1m oc cp -c machine-config-daemon openshift-machine-config-operator/"${DAEMONPOD}":rootfs/etc/machine-config-daemon/previous-logs "${MACHINECONFIG_DAEMON_LOG_PATH}"/"${NODE}"/ &
+			PIDS+=($!)
+		else
+			echo "INFO: 'previous-logs' folder not found on ${NODE}, skipping..."
+		fi
+	done
 
 }
 
@@ -35,4 +35,3 @@ echo "INFO: Machine Config Daemon termination log collection complete."
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
-

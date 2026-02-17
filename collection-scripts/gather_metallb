@@ -7,21 +7,20 @@ get_log_collection_args
 METALLB_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${operator_ns}/pods"
 
 function get_metallb_crs() {
-    declare -a METALLB_CRDS=("bgppeers" "bfdprofiles" "bgpAdvertisements" "ipaddresspools" "l2advertisements" "communities")
+	declare -a METALLB_CRDS=("bgppeers" "bfdprofiles" "bgpAdvertisements" "ipaddresspools" "l2advertisements" "communities")
 
-    for CRD in "${METALLB_CRDS[@]}"; do
-        oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n ${operator_ns} "${CRD}"
-    done
+	for CRD in "${METALLB_CRDS[@]}"; do
+		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n ${operator_ns} "${CRD}"
+	done
 }
 
 oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"
 
 get_metallb_crs
 
-
-if ! oc get metallb metallb -n ${operator_ns} > /dev/null 2>&1; then
-    echo "metallb not started"
-    exit 0
+if ! oc get metallb metallb -n ${operator_ns} >/dev/null 2>&1; then
+	echo "metallb not started"
+	exit 0
 fi
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
