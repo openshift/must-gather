@@ -33,13 +33,16 @@ $(call build-image,ocp-must-gather,$(IMAGE_REGISTRY)/ocp/4.17:ocp-must-gather, .
 
 $(call verify-golang-versions,Dockerfile.ocp)
 
+# Directories containing shell scripts to lint and format
+SCRIPT_DIRS := collection-scripts/ hack/ tests/
+
 .PHONY: lint
 lint: shellcheck
 	$(SHELLCHECK) -x ./**/*.sh
 
 .PHONY: fmt
 fmt: shfmt
-	$(SHFMT) -l -w ./**/*.sh
+	$(SHFMT) -l -w $(SCRIPT_DIRS)
 
 .PHONY: test
 test: bats

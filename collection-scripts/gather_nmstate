@@ -6,11 +6,11 @@ get_operator_ns "kubernetes-nmstate-operator"
 get_log_collection_args
 
 function get_nmstate_crs() {
-    declare -a NMSTATE_CRDS=("nmstates" "nodenetworkconfigurationenactments" "nodenetworkconfigurationpolicies" "nodenetworkstates")
+	declare -a NMSTATE_CRDS=("nmstates" "nodenetworkconfigurationenactments" "nodenetworkconfigurationpolicies" "nodenetworkstates")
 
-    for CRD in "${NMSTATE_CRDS[@]}"; do
-        oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${CRD}"
-    done
+	for CRD in "${NMSTATE_CRDS[@]}"; do
+		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${CRD}"
+	done
 }
 
 oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"

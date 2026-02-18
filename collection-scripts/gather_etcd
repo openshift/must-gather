@@ -10,18 +10,18 @@ ETCD_LOG_PATH="${BASE_COLLECTION_PATH}/etcd_info"
 
 ETCDCTL_CONTAINER='etcdctl'
 
-RUNNING_ETCD_POD=$(oc get pod -n openshift-etcd --no-headers -l app=etcd|grep Running| grep -o -m 1 '\S*etcd\S*')
+RUNNING_ETCD_POD=$(oc get pod -n openshift-etcd --no-headers -l app=etcd | grep Running | grep -o -m 1 '\S*etcd\S*')
 
 # We cannot rely on ETCDCTL_ENDPOINTS on container because it may contain bootstrap VM
-ETCDCTL_ENDPOINTS=$(oc exec "${RUNNING_ETCD_POD}"  -n openshift-etcd -c ${ETCDCTL_CONTAINER} -- /bin/sh -c "etcdctl member list" | awk -F', ' '{printf "%s%s",sep,$5; sep=","}')
+ETCDCTL_ENDPOINTS=$(oc exec "${RUNNING_ETCD_POD}" -n openshift-etcd -c ${ETCDCTL_CONTAINER} -- /bin/sh -c "etcdctl member list" | awk -F', ' '{printf "%s%s",sep,$5; sep=","}')
 
 function ocp4etcdctl {
-    oc -n openshift-etcd exec -c "${ETCDCTL_CONTAINER}" "${RUNNING_ETCD_POD}" -- env "ETCDCTL_ENDPOINTS=${ETCDCTL_ENDPOINTS}" etcdctl "$@"
+	oc -n openshift-etcd exec -c "${ETCDCTL_CONTAINER}" "${RUNNING_ETCD_POD}" -- env "ETCDCTL_ENDPOINTS=${ETCDCTL_ENDPOINTS}" etcdctl "$@"
 }
 
-if [[ -z $RUNNING_ETCD_POD ]];then
-    echo "ERROR: No running etcd pods found" >&2
-    exit 1
+if [[ -z $RUNNING_ETCD_POD ]]; then
+	echo "ERROR: No running etcd pods found" >&2
+	exit 1
 fi
 
 echo "Getting information from pod \"${RUNNING_ETCD_POD}\", container \"${ETCDCTL_CONTAINER}\""
@@ -38,27 +38,27 @@ PIDS=()
 
 # member list
 echo "INFO: Getting etcdctl member list"
-ocp4etcdctl member list -w json > ${ETCD_LOG_PATH}/member_list.json &
+ocp4etcdctl member list -w json >${ETCD_LOG_PATH}/member_list.json &
 PIDS+=($!)
 
 # endpoint status
 echo "INFO: Getting etcdctl endpoint status"
-ocp4etcdctl endpoint status -w json > ${ETCD_LOG_PATH}/endpoint_status.json &
+ocp4etcdctl endpoint status -w json >${ETCD_LOG_PATH}/endpoint_status.json &
 PIDS+=($!)
 
 # endpoint health
 echo "INFO: Getting etcdctl endpoint health"
-ocp4etcdctl endpoint health -w json > ${ETCD_LOG_PATH}/endpoint_health.json &
+ocp4etcdctl endpoint health -w json >${ETCD_LOG_PATH}/endpoint_health.json &
 PIDS+=($!)
 
 # alarm list
 echo "INFO: Getting etcdctl alarm list"
-ocp4etcdctl alarm list -w json > ${ETCD_LOG_PATH}/alarm_list.json &
+ocp4etcdctl alarm list -w json >${ETCD_LOG_PATH}/alarm_list.json &
 PIDS+=($!)
 
 # object count
 echo "INFO: Getting object count"
-ocp4etcdctl get / --prefix --keys-only | sed '/^$/d' | cut -d/ -f3 | sort | uniq -c | sort -rn | awk '{print $2 ":" $1}' | jq -nRc ' [inputs | index(":") as $ix | {(.[:$ix]): .[$ix+1:]}] | add' > ${ETCD_LOG_PATH}/object_count.json &
+ocp4etcdctl get / --prefix --keys-only | sed '/^$/d' | cut -d/ -f3 | sort | uniq -c | sort -rn | awk '{print $2 ":" $1}' | jq -nRc ' [inputs | index(":") as $ix | {(.[:$ix]): .[$ix+1:]}] | add' >${ETCD_LOG_PATH}/object_count.json &
 PIDS+=($!)
 
 echo "INFO: Waiting for etcd info collection to complete ..."

@@ -6,15 +6,15 @@ HAPROXY_CONFIG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/ingress_controllers"}
 mkdir -p "${HAPROXY_CONFIG_PATH}"/
 
 function gather_haproxy_config {
-    echo "INFO: Gathering HAProxy config files"
-    INGRESS_CONTROLLERS=$(oc get ingresscontroller -n openshift-ingress-operator --no-headers -o custom-columns=":metadata.name")
-    for IC in ${INGRESS_CONTROLLERS}; do
-        PODS=$(oc get pods -n openshift-ingress --no-headers -o custom-columns=":metadata.name" --selector ingresscontroller.operator.openshift.io/deployment-ingresscontroller="${IC}")
-        for POD in ${PODS}; do
-            timeout -v 3m oc cp openshift-ingress/"${POD}":/var/lib/haproxy/conf/haproxy.config "${HAPROXY_CONFIG_PATH}"/"${IC}"/"${POD}"/haproxy.config &
-            PIDS+=($!)
-        done
-    done
+	echo "INFO: Gathering HAProxy config files"
+	INGRESS_CONTROLLERS=$(oc get ingresscontroller -n openshift-ingress-operator --no-headers -o custom-columns=":metadata.name")
+	for IC in ${INGRESS_CONTROLLERS}; do
+		PODS=$(oc get pods -n openshift-ingress --no-headers -o custom-columns=":metadata.name" --selector ingresscontroller.operator.openshift.io/deployment-ingresscontroller="${IC}")
+		for POD in ${PODS}; do
+			timeout -v 3m oc cp openshift-ingress/"${POD}":/var/lib/haproxy/conf/haproxy.config "${HAPROXY_CONFIG_PATH}"/"${IC}"/"${POD}"/haproxy.config &
+			PIDS+=($!)
+		done
+	done
 }
 
 PIDS=()

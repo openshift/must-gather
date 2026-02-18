@@ -10,23 +10,23 @@ BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
 
 profile=$(oc get apiservers.v1.config.openshift.io -o jsonpath='{.items[0].spec.audit.profile}')
 if [ -z "${profile}" ] || [ "${profile}" == None ]; then
-  if [ "${1}" == "--force" ]; then
-    cat << EOF
+	if [ "${1}" == "--force" ]; then
+		cat <<EOF
 WARNING: To raise a Red Hat support request, it is required to set the top level audit policy to
          Default, WriteRequestBodies, or AllRequestBodies to generate audit log events that can
          be analyzed by support. Try 'oc edit apiservers' and set 'spec.audit.profile' back to
          Default" and reproduce the issue while gathering audit logs.
 EOF
-  else
-    cat << EOF
+	else
+		cat <<EOF
 ERROR: To raise a Red Hat support request, it is required to set the top level audit policy to
        Default, WriteRequestBodies, or AllRequestBodies to generate audit log events that can
        be analyzed by support. Try 'oc edit apiservers' and set 'spec.audit.profile' back to
        "Default" and reproduce the issue while gathering audit logs. You can use "--force" to
        override this error.
 EOF
-    exit 1
-  fi
+		exit 1
+	fi
 fi
 
 echo "WARNING: Collecting one or more audit logs on ALL masters in your cluster. This could take a large amount of time." >&2
@@ -38,61 +38,61 @@ echo "WARNING: Collecting one or more audit logs on ALL masters in your cluster.
 # $4 - log file name
 # $5 - --since=ISO time, if provided via MUST_GATHER_SINCE_TIME
 paths=(openshift-apiserver kube-apiserver oauth-apiserver etcd oauth-server)
-for path in "${paths[@]}" ; do
-  output_dir="${BASE_COLLECTION_PATH}/audit_logs/$path"
-  mkdir -p "$output_dir"
-  oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} --role=master --path="$path" | \
-  tee "${BASE_COLLECTION_PATH}/audit_logs/$path.audit_logs_listing" | \
-  grep -v ".terminating" | \
-  grep -v ".lock" | \
-  sed "s|^|$path $output_dir |" | \
-  sed "s|$| '${node_log_collection_args}'|"
-done | \
-xargs --max-args=5 --max-procs=45 bash -c \
-  'echo "INFO: Started  downloading $1/$4 from $3";
+for path in "${paths[@]}"; do
+	output_dir="${BASE_COLLECTION_PATH}/audit_logs/$path"
+	mkdir -p "$output_dir"
+	oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} --role=master --path="$path" |
+		tee "${BASE_COLLECTION_PATH}/audit_logs/$path.audit_logs_listing" |
+		grep -v ".terminating" |
+		grep -v ".lock" |
+		sed "s|^|$path $output_dir |" |
+		sed "s|$| '${node_log_collection_args}'|"
+done |
+	xargs --max-args=5 --max-procs=45 bash -c \
+		'echo "INFO: Started  downloading $1/$4 from $3";
   oc adm node-logs ${5:+"$5"} $3 --path=$1/$4 | gzip > $2/$3-$4.gz;
   echo "INFO: Finished downloading $1/$4 from $3"' \
-  bash
+		bash
 
 # gathers audit logs from prometheus-adapter pod running in openshift-monitoring namespace.
 gather_monitoring_audit_logs() {
-  local prometheus_adapter_pods
-  prometheus_adapter_pods="$(oc get pods \
-    -n openshift-monitoring \
-    -l app.kubernetes.io/name=prometheus-adapter \
-    -o jsonpath='{.items[*].metadata.name}' )"
+	local prometheus_adapter_pods
+	prometheus_adapter_pods="$(oc get pods \
+		-n openshift-monitoring \
+		-l app.kubernetes.io/name=prometheus-adapter \
+		-o jsonpath='{.items[*].metadata.name}')"
 
-  num_prom_adapter_pods=$(echo "$prometheus_adapter_pods" | wc -w)
-  # Only either of prometheus-adapter or metrics-server will be running
-  # in a cluster at a time. Currently metrics-server is tech preview but
-  # planning to go GA in 4.16
-  #
-  # TODO(slashpai): Remove prometheus-adapter code once it's completely removed in CMO
-  if [ "$num_prom_adapter_pods" -gt 0 ]; then
-    # NOTE: there should only be one pod for prometheus-adapter but treating it
-    # as array ensures multiple pods are covered as well.
-    for pod in $prometheus_adapter_pods; do
-      local output_dir="${BASE_COLLECTION_PATH}/audit_logs/monitoring/$pod"
-      mkdir -p "$output_dir"
+	num_prom_adapter_pods=$(echo "$prometheus_adapter_pods" | wc -w)
+	# Only either of prometheus-adapter or metrics-server will be running
+	# in a cluster at a time. Currently metrics-server is tech preview but
+	# planning to go GA in 4.16
+	#
+	# TODO(slashpai): Remove prometheus-adapter code once it's completely removed in CMO
+	if [ "$num_prom_adapter_pods" -gt 0 ]; then
+		# NOTE: there should only be one pod for prometheus-adapter but treating it
+		# as array ensures multiple pods are covered as well.
+		for pod in $prometheus_adapter_pods; do
+			local output_dir="${BASE_COLLECTION_PATH}/audit_logs/monitoring/$pod"
+			mkdir -p "$output_dir"
 
-      echo "Collecting logs from prometheus adapter pod: $pod"
-      oc cp -n openshift-monitoring "$pod:var/log/adapter" "$output_dir"
-    done
-  else
-    local metrics_server_pods
-    metrics_server_pods="$(oc get pods \
-      -n openshift-monitoring \
-      -l app.kubernetes.io/name=metrics-server \
-      -o jsonpath='{.items[*].metadata.name}' )"
+			echo "Collecting logs from prometheus adapter pod: $pod"
+			oc cp -n openshift-monitoring "$pod:var/log/adapter" "$output_dir"
+		done
+	else
+		local metrics_server_pods
+		metrics_server_pods="$(oc get pods \
+			-n openshift-monitoring \
+			-l app.kubernetes.io/name=metrics-server \
+			-o jsonpath='{.items[*].metadata.name}')"
 
-    for pod in $metrics_server_pods; do
-      local output_dir="${BASE_COLLECTION_PATH}/audit_logs/monitoring/$pod"
-      mkdir -p "$output_dir"
+		for pod in $metrics_server_pods; do
+			local output_dir="${BASE_COLLECTION_PATH}/audit_logs/monitoring/$pod"
+			mkdir -p "$output_dir"
 
-      echo "Collecting logs from metrics server pod: $pod"
-      oc cp -n openshift-monitoring "$pod:var/log/metrics-server" "$output_dir"
-    done
-  fi
+			echo "Collecting logs from metrics server pod: $pod"
+			oc cp -n openshift-monitoring "$pod:var/log/metrics-server" "$output_dir"
+		done
+	fi
 }
 
 gather_monitoring_audit_logs

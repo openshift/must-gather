@@ -14,106 +14,113 @@ source "$(dirname "$0")"/monitoring_common.sh
 # init initializes global variables that need to be computed.
 # E.g. get token of the default ServiceAccount
 init() {
-  mkdir -p "${MONITORING_PATH}"
+	mkdir -p "${MONITORING_PATH}"
 
-  readarray -t PROM_PODS < <(
-    oc get pods -n openshift-monitoring  -l prometheus=k8s \
-      --no-headers -o custom-columns=":metadata.name"
-  )
+	readarray -t PROM_PODS < <(
+		oc get pods -n openshift-monitoring -l prometheus=k8s \
+			--no-headers -o custom-columns=":metadata.name"
+	)
 }
 
 # prom_get makes http GET requests to prometheus /api/v1/$object and stores
 # the stdout and stderr results
 prom_get() {
-  local object="$1"; shift
-  local path="${1:-$object}"; shift || true
-  local pod
-  pod=$(get_first_ready_prom_pod)
+	local object="$1"
+	shift
+	local path="${1:-$object}"
+	shift || true
+	local pod
+	pod=$(get_first_ready_prom_pod)
 
-  local result_path="$MONITORING_PATH/prometheus/$path"
-  mkdir -p "$(dirname "$result_path")"
+	local result_path="$MONITORING_PATH/prometheus/$path"
+	mkdir -p "$(dirname "$result_path")"
 
-  echo "INFO: Getting ${object} from ${pod}"
-  oc exec "${pod}" \
-    -c prometheus \
-    -n openshift-monitoring \
-    -- /bin/bash -c "curl -sG http://localhost:9090/api/v1/${object}" \
-      >  "${result_path}.json" \
-      2> "${result_path}.stderr"
+	echo "INFO: Getting ${object} from ${pod}"
+	oc exec "${pod}" \
+		-c prometheus \
+		-n openshift-monitoring \
+		-- /bin/bash -c "curl -sG http://localhost:9090/api/v1/${object}" \
+		>"${result_path}.json" \
+		2>"${result_path}.stderr"
 }
 
 # prom_get_from_replica makes http GET requests to prometheus pod $replica
 # /api/v1/$object and stores the stdout and stderr results
 prom_get_from_replica() {
-  local replica="$1"; shift
-  local object="$1"; shift
-  local path="${1:-$object}"; shift || true
+	local replica="$1"
+	shift
+	local object="$1"
+	shift
+	local path="${1:-$object}"
+	shift || true
 
-  local result_path="${MONITORING_PATH}/prometheus/${path}"
-  mkdir -p "$(dirname "${result_path}")"
+	local result_path="${MONITORING_PATH}/prometheus/${path}"
+	mkdir -p "$(dirname "${result_path}")"
 
-  echo "INFO: Getting ${object} from ${replica}"
-  oc exec "${replica}" \
-    -c prometheus \
-    -n openshift-monitoring \
-    -- /bin/bash -c "curl -sG http://localhost:9090/api/v1/${object}" \
-      >  "${result_path}.json" \
-      2> "${result_path}.stderr"
+	echo "INFO: Getting ${object} from ${replica}"
+	oc exec "${replica}" \
+		-c prometheus \
+		-n openshift-monitoring \
+		-- /bin/bash -c "curl -sG http://localhost:9090/api/v1/${object}" \
+		>"${result_path}.json" \
+		2>"${result_path}.stderr"
 }
 
 prom_get_from_replicas() {
-  local object="$1"; shift
-  local path="${1:-$object}"; shift || true
+	local object="$1"
+	shift
+	local path="${1:-$object}"
+	shift || true
 
-  for pod in "${PROM_PODS[@]}"; do
-    prom_get_from_replica "${pod}" "${object}" "${pod}/${path}" || true
-  done
+	for pod in "${PROM_PODS[@]}"; do
+		prom_get_from_replica "${pod}" "${object}" "${pod}/${path}" || true
+	done
 }
 
 alertmanager_get() {
-  local object="$1"; shift
-  local path="${1:-$object}"; shift || true
-  local pod
-  pod=$(get_first_ready_alertmanager_pod)
+	local object="$1"
+	shift
+	local path="${1:-$object}"
+	shift || true
+	local pod
+	pod=$(get_first_ready_alertmanager_pod)
 
-  local result_path="$MONITORING_PATH/alertmanager/$path"
-  mkdir -p "$(dirname "$result_path")"
+	local result_path="$MONITORING_PATH/alertmanager/$path"
+	mkdir -p "$(dirname "$result_path")"
 
-  echo "INFO: Getting ${object} from ${pod}"
-  oc exec "${pod}" \
-    -c alertmanager\
-    -n openshift-monitoring \
-    -- /bin/bash -c "curl -sG http://localhost:9093/api/v2/${object}" \
-      >  "${result_path}.json" \
-      2> "${result_path}.stderr"
+	echo "INFO: Getting ${object} from ${pod}"
+	oc exec "${pod}" \
+		-c alertmanager -n openshift-monitoring \
+		-- /bin/bash -c "curl -sG http://localhost:9093/api/v2/${object}" \
+		>"${result_path}.json" \
+		2>"${result_path}.stderr"
 }
 
+monitoring_gather() {
+	init
 
-monitoring_gather(){
-  init
+	echo "INFO: Found ${#PROM_PODS[@]} replicas - ${PROM_PODS[*]}"
 
-  echo "INFO: Found ${#PROM_PODS[@]} replicas - ${PROM_PODS[*]}"
+	# begin gathering
+	# NOTE || true ignores failures
 
-  # begin gathering
-  # NOTE || true ignores failures
+	prom_get alertmanagers || true
+	prom_get rules || true
+	prom_get status/config || true
+	prom_get status/flags || true
 
-  prom_get alertmanagers   || true
-  prom_get rules    || true
-  prom_get status/config  || true
-  prom_get status/flags  || true
+	# using prom_get_from_replica as the state differs for each replica
+	prom_get_from_replicas status/runtimeinfo || true
+	prom_get_from_replicas 'targets?state=active' active-targets || true
+	prom_get_from_replicas status/tsdb || true
 
-  # using prom_get_from_replica as the state differs for each replica
-  prom_get_from_replicas status/runtimeinfo  || true
-  prom_get_from_replicas 'targets?state=active' active-targets  || true
-  prom_get_from_replicas status/tsdb  || true
+	alertmanager_get status || true
 
-  alertmanager_get status  || true
+	# TODO: Add out of the box metrics.
+	# metrics_gather --min-time=${promtool_min_time} --match=xxx || true
 
-  # TODO: Add out of the box metrics.
-  # metrics_gather --min-time=${promtool_min_time} --match=xxx || true
-
-  # force disk flush to ensure that all data gathered are written
-  sync
+	# force disk flush to ensure that all data gathered are written
+	sync
 }
 
 monitoring_gather

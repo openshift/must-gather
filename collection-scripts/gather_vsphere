@@ -5,10 +5,10 @@ get_log_collection_args
 
 BASE_COLLECTION_PATH="must-gather"
 
-CSIDRIVER=$( /usr/bin/oc get clustercsidriver csi.vsphere.vmware.com --ignore-not-found=true )
+CSIDRIVER=$(/usr/bin/oc get clustercsidriver csi.vsphere.vmware.com --ignore-not-found=true)
 if [ -z "$CSIDRIVER" ]; then
-    # vSphere CSI driver is not installed, most probably this is not vSphere platform
-    exit 0
+	# vSphere CSI driver is not installed, most probably this is not vSphere platform
+	exit 0
 fi
 
 echo "INFO: Collecting vSphere CSI driver CRDs"

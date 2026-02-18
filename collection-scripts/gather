@@ -2,8 +2,8 @@
 
 # generate /must-gather/version file
 . version
-echo "openshift/must-gather"> /must-gather/version
-version >> /must-gather/version
+echo "openshift/must-gather" >/must-gather/version
+version >>/must-gather/version
 
 source $(dirname "$0")/common.sh
 get_log_collection_args
@@ -67,18 +67,23 @@ oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs 
 pids+=($!)
 
 filtered_group_resources=()
-for gr in "${group_resources[@]}"
-do
-  oc get "$gr" > /dev/null 2>&1
-  if [[ "$?" -eq 0 ]]; then
-    filtered_group_resources+=("$gr")
-  fi
+for gr in "${group_resources[@]}"; do
+	oc get "$gr" >/dev/null 2>&1
+	if [[ "$?" -eq 0 ]]; then
+		filtered_group_resources+=("$gr")
+	fi
 done
-group_resources_text=$(IFS=, ; echo "${filtered_group_resources[*]}")
+group_resources_text=$(
+	IFS=,
+	echo "${filtered_group_resources[*]}"
+)
 oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${group_resources_text}" &
 pids+=($!)
 
-all_ns_resources_text=$(IFS=, ; echo "${all_ns_resources[*]}")
+all_ns_resources_text=$(
+	IFS=,
+	echo "${all_ns_resources[*]}"
+)
 oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${all_ns_resources_text}" --all-namespaces &
 pids+=($!)
 
@@ -172,8 +177,8 @@ pids+=($!)
 
 # Check if PID array has any values, if so, wait for them to finish
 if [ ${#pids[@]} -ne 0 ]; then
-    echo "Waiting on subprocesses to finish execution."
-    wait "${pids[@]}"
+	echo "Waiting on subprocesses to finish execution."
+	wait "${pids[@]}"
 fi
 
 # Gather ARO information

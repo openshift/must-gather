@@ -7,17 +7,17 @@ get_log_collection_args
 
 HAS_OSUS=$(oc get csv -A --no-headers -o custom-columns=NS:.metadata.namespace,OPERATOR:.metadata.name --ignore-not-found=true | awk '/'${OSUS_OPERATOR_NAME}'/ {print $1}')
 if [ -z "$HAS_OSUS" ]; then
-    exit 0
+	exit 0
 fi
 
 function gather_osus() {
-    echo "INFO: Collecting OSUS Data"
-    declare -a OSUS_NAMESPACES=(${HAS_OSUS})
+	echo "INFO: Collecting OSUS Data"
+	declare -a OSUS_NAMESPACES=(${HAS_OSUS})
 
-    for OSUS_NAMESPACE in "${OSUS_NAMESPACES[@]}"; do
-        oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${OSUS_NAMESPACE}"
-        oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" updateservices --namespace "${OSUS_NAMESPACE}"
-    done
+	for OSUS_NAMESPACE in "${OSUS_NAMESPACES[@]}"; do
+		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${OSUS_NAMESPACE}"
+		oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" updateservices --namespace "${OSUS_NAMESPACE}"
+	done
 }
 
 gather_osus
