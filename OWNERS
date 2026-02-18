@@ -3,7 +3,7 @@ reviewers:
   - ingvagabund
   - shivprakashmuley
   - swghosh
-  - praveencodes
+  - pravekum
   - Prashanth684
   - TrilokGeer
 approvers:
@@ -15,5 +15,5 @@ approvers:
   - TrilokGeer
   - shivprakashmuley
   - swghosh
-  - praveencodes
+  - pravekum
 component: "oc"
