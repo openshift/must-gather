@@ -5,6 +5,7 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-source $(dirname "$0")/monitoring_common.sh
+# shellcheck source=collection-scripts/monitoring_common.sh
+source "$(dirname "$0")/monitoring_common.sh"
 
 metrics_gather "$@"

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-source $(dirname "$0")/common.sh
+# shellcheck source=collection-scripts/common.sh
+source "$(dirname "$0")/common.sh"
 BASE_COLLECTION_PATH="must-gather"
 OSUS_OPERATOR_NAME="update-service-operator"
 get_log_collection_args
@@ -12,9 +13,10 @@ fi
 
 function gather_osus() {
 	echo "INFO: Collecting OSUS Data"
-	declare -a OSUS_NAMESPACES=(${HAS_OSUS})
+	read -ra OSUS_NAMESPACES <<< "${HAS_OSUS}"
 
 	for OSUS_NAMESPACE in "${OSUS_NAMESPACES[@]}"; do
+		# shellcheck disable=SC2086
 		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${OSUS_NAMESPACE}"
 		oc adm inspect --dest-dir "${BASE_COLLECTION_PATH}" updateservices --namespace "${OSUS_NAMESPACE}"
 	done

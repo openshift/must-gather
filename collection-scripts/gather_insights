@@ -10,6 +10,7 @@ COLLECTOR=${1:-rsync} #Define what oc collector to use (oc rsync or oc cp)
 INSIGHTS_OPERATOR_POD=$(oc get pods --namespace=openshift-insights -o custom-columns=:metadata.name --no-headers --field-selector=status.phase=Running)
 
 echo "INFO: Collecting Insights Archives from $INSIGHTS_OPERATOR_POD"
+# shellcheck disable=SC2086
 oc $COLLECTOR --namespace=openshift-insights openshift-insights/$INSIGHTS_OPERATOR_POD:/var/lib/insights-operator $INSIGHTS_DATA_PATH
 
 #TODO: Prune or Limit the data that is collected/synced (as this might be a lot to add to the archive).

@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-source $(dirname "$0")/common.sh
+# shellcheck source=collection-scripts/common.sh
+source "$(dirname "$0")/common.sh"
 BASE_COLLECTION_PATH="/must-gather/istio"
 
 # Get Istio, sail operator, kiali, gateway.networking.k8s.io, inference.networking.x-k8s.io and inference.networking.k8s.io group CRDs
@@ -155,6 +156,7 @@ function main() {
 	crds="$(getCRDs)"
 	for crd in ${crds}; do
 		inspect "crd/${crd}"
+		# shellcheck disable=SC2086
 		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${crd}" --all-namespaces
 	done
 
@@ -167,21 +169,21 @@ function main() {
 		inspect "${vwc}"
 	done
 
-	if [ -n "$(oc get crd | grep istiocnis.sailoperator.io)" ]; then
+	if oc get crd | grep -q istiocnis.sailoperator.io; then
 		istioCniNamespace=$(oc get IstioCNI -A -o custom-columns=NAMESPACE:spec.namespace --no-headers | head -n 1)
 		if [ -n "$istioCniNamespace" ]; then
 			inspectNamespace "${istioCniNamespace}"
 		fi
 	fi
 
-	if [ -n "$(oc get crd | grep ztunnels.sailoperator.io)" ]; then
+	if oc get crd | grep -q ztunnels.sailoperator.io; then
 		ztunnelNamespace=$(oc get ZTunnel -A -o custom-columns=NAMESPACE:spec.namespace --no-headers | head -n 1)
 		if [ -n "$ztunnelNamespace" ]; then
 			inspectNamespace "${ztunnelNamespace}"
 		fi
 	fi
 
-	if [ -n "$(oc get crd | grep istiorevisions.sailoperator.io)" ]; then
+	if oc get crd | grep -q istiorevisions.sailoperator.io; then
 		# iterate over all Istio revisions
 		for ir in $(oc get IstioRevision -o jsonpath="{.items[*].metadata.name}"); do
 			echo "Inspecting ${ir} IstioRevision"
