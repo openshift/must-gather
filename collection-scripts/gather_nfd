@@ -1,0 +1,21 @@
+#!/bin/bash
+
+source $(dirname "$0")/common.sh
+BASE_COLLECTION_PATH="must-gather"
+get_operator_ns "nfd"
+get_log_collection_args
+
+function get_nfd_crs() {
+    declare -a NFD_CRDS=("nodefeaturediscoveries" "nodefeaturegroups" "nodefeaturerules" "nodefeatures")
+
+    for CRD in "${NFD_CRDS[@]}"; do
+        echo "INFO: Collecting NFD Data for ${CRD} in namespace ${operator_ns}"
+        oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${CRD}" -n "${operator_ns}"
+    done
+}
+
+oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"
+get_nfd_crs
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
