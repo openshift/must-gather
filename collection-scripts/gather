@@ -171,6 +171,10 @@ pids+=($!)
 /usr/bin/gather_osus &
 pids+=($!)
 
+# Gather node resource allocation information
+/usr/bin/gather_resource_allocation &
+pids+=($!)
+
 # Gather Istio/Gateway API information
 /usr/bin/gather_istio &
 pids+=($!)
