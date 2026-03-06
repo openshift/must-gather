@@ -197,7 +197,11 @@ resources=()
 resources+=(performanceprofile)
 
 # machine/node resources
-resources+=(nodes machineconfigs machineconfigpools featuregates kubeletconfigs tuneds runtimeclasses machineosconfigs machineosbuilds machineconfigurations machineconfignodes pinnedimagesets)
+# Include 'nodes' only when running standalone (main gather already inspects nodes via group_resources)
+if [ -z "${MUST_GATHER_NODES_INSPECTED:-}" ]; then
+	resources+=(nodes)
+fi
+resources+=(machineconfigs machineconfigpools featuregates kubeletconfigs tuneds runtimeclasses machineosconfigs machineosbuilds machineconfigurations machineconfignodes pinnedimagesets)
 
 echo "INFO: Waiting for node performance related collection to complete ..."
 
