@@ -22,13 +22,21 @@ function collect_service_logs {
 	fi
 
 	mkdir -p "${DIR_PATH}"
+	# In CI (OPENSHIFT_CI/ARTIFACTS_DIR) skip gzip for easier inspection of artifacts
+	if [[ -n "${OPENSHIFT_CI:-}" || -n "${ARTIFACTS_DIR:-}" ]]; then
+		LOG_SUFFIX=".log"
+		LOG_PIPE="cat"
+	else
+		LOG_SUFFIX=".log.gz"
+		LOG_PIPE="gzip"
+	fi
 	for service in "${@}"; do
 		echo "INFO: Collecting host service logs for $service"
 		if [[ ${selector} =~ '--role=' ]]; then
-			oc adm node-logs "${node_log_collection_args:---since=${SINCE_TIMEFRAME:--7d}}" ${selector} -l kubernetes.io/os=linux -u "${service}" | gzip >"${DIR_PATH}/${service}_service.log.gz" &
+			oc adm node-logs "${node_log_collection_args:---since=${SINCE_TIMEFRAME:--7d}}" ${selector} -l kubernetes.io/os=linux -u "${service}" | ${LOG_PIPE} >"${DIR_PATH}/${service}_service${LOG_SUFFIX}" &
 			PIDS+=($!)
 		else
-			oc adm node-logs "${node_log_collection_args:---since=${SINCE_TIMEFRAME:--7d}}" ${selector} -u "${service}" | gzip >"${DIR_PATH}/${service}_service.log.gz" &
+			oc adm node-logs "${node_log_collection_args:---since=${SINCE_TIMEFRAME:--7d}}" ${selector} -u "${service}" | ${LOG_PIPE} >"${DIR_PATH}/${service}_service${LOG_SUFFIX}" &
 			PIDS+=($!)
 		fi
 	done

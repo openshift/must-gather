@@ -217,6 +217,7 @@ function main() {
 	fi
 
 	echo "Done executing Istio gather script"
+	compress_pod_logs_must_gather
 }
 
 main "$@"

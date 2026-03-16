@@ -46,6 +46,9 @@ group_resources+=(imagecontentsourcepolicies.operator.openshift.io)
 # Networking Resources
 group_resources+=(networks.operator.openshift.io)
 
+# NodeNetworkState
+resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
+
 # Assisted Installer
 named_resources+=(ns/assisted-installer)
 
@@ -160,8 +163,8 @@ pids+=($!)
 /usr/bin/gather_vsphere &
 pids+=($!)
 
-# Gather Performance profile information (nodes already inspected above via group_resources)
-MUST_GATHER_NODES_INSPECTED=1 /usr/bin/gather_ppc &
+# Gather Performance profile information
+/usr/bin/gather_ppc &
 pids+=($!)
 
 # Gather OSUS information
@@ -172,28 +175,23 @@ pids+=($!)
 /usr/bin/gather_istio &
 pids+=($!)
 
-# Gather ARO information
-/usr/bin/gather_aro &
-pids+=($!)
-
-# Check if PID array has any values, if so, wait for them to finish
+# Wait for oc adm inspect jobs first, compress their pod logs to free disk before other scripts add more data
+if [ ${#pids[@]} -ge 3 ]; then
+	wait "${pids[0]}" "${pids[1]}" "${pids[2]}"
+	compress_pod_logs_must_gather
+fi
+# Wait for remaining subprocesses (each may call compress_pod_logs_must_gather when they finish)
 if [ ${#pids[@]} -ne 0 ]; then
 	echo "Waiting on subprocesses to finish execution."
 	wait "${pids[@]}"
 fi
 
-# Gzip pod log files (current.log, previous.log, rotated/*.log) from oc adm inspect to reduce size
-# e.g. .../namespaces/.../pods/.../.../logs/current.log
-# and .../logs/rotated/0.log.20260225-092814
-_gzip_root=/must-gather
-if [ -d "${_gzip_root}" ]; then
-	# Match exact oc adm inspect layout: namespaces/<ns>/pods/<pod>/.../logs/<files>
-	pod_log_count=$(find "${_gzip_root}" -path '*/namespaces/*/pods/*/logs/*' -type f ! -name '*.gz' 2>/dev/null | wc -l)
-	if [ "${pod_log_count}" -gt 0 ]; then
-		echo "Compressing ${pod_log_count} pod log file(s) under ${_gzip_root} to reduce must-gather size."
-		find "${_gzip_root}" -path '*/namespaces/*/pods/*/logs/*' -type f ! -name '*.gz' -print0 | xargs -0 -P 8 -r gzip -f
-	fi
-fi
+# Gather ARO information
+/usr/bin/gather_aro &
+pids+=($!)
+
+# Final compression pass for any remaining pod logs
+compress_pod_logs_must_gather
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
