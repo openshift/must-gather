@@ -134,5 +134,7 @@ echo "INFO: Waiting for sriov info collection to complete ..."
 wait "${PIDS[@]}"
 echo "INFO: sriov info collection complete."
 
+compress_pod_logs_must_gather
+
 # force disk flush to ensure that all data gathered are written
 sync

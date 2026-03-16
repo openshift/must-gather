@@ -190,5 +190,7 @@ fi
 wait "${PIDS[@]}"
 echo "INFO: Network log collection complete."
 
+compress_pod_logs_must_gather
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

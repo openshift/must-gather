@@ -49,3 +49,26 @@ get_log_collection_args() {
 		node_log_collection_args=--since="${iso_time}"
 	fi
 }
+
+# Gzip pod log files under must-gather (oc adm inspect layout: .../namespaces/<ns>/pods/<pod>/.../logs/
+# e.g. current.log, previous.log, rotated/*.log). Reduces must-gather size and frees disk during
+# collection so the node does not run out of space. Call from gather scripts after they write logs.
+# Each file is gzipped only if it still exists when reached (avoids errors when parallel compress
+# runs overlap). Skipped when OPENSHIFT_CI or ARTIFACTS_DIR is set (CI environments).
+# Usage: compress_pod_logs_must_gather [root]  (default: /must-gather)
+compress_pod_logs_must_gather() {
+	if [ -n "${OPENSHIFT_CI:-}" ] || [ -n "${ARTIFACTS_DIR:-}" ]; then
+		echo "Skipping pod log compression: OPENSHIFT_CI=${OPENSHIFT_CI:-} ARTIFACTS_DIR=${ARTIFACTS_DIR:-}"
+		return 0
+	fi
+	local _root="${1:-/must-gather}"
+	if [ ! -d "${_root}" ]; then
+		return 0
+	fi
+	local pod_log_count
+	pod_log_count=$(find "${_root}" -path '*/namespaces/*/pods/*/logs/*' -type f ! -name '*.gz' 2>/dev/null | wc -l)
+	if [ "${pod_log_count}" -gt 0 ]; then
+		echo "Compressing ${pod_log_count} pod log file(s) under ${_root} to reduce must-gather size."
+		find "${_root}" -path '*/namespaces/*/pods/*/logs/*' -type f ! -name '*.gz' -print0 | xargs -0 -P 8 -r sh -c 'for f; do [ -f "$f" ] && gzip -f "$f" 2>/dev/null; done' _
+	fi
+}

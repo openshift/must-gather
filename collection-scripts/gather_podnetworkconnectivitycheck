@@ -1,7 +1,12 @@
 #!/bin/bash
+
+source "$(dirname "$0")/common.sh"
+
 BASE_COLLECTION_PATH="/must-gather"
 POD_NETWORK_CHECK="${BASE_COLLECTION_PATH}/pod_network_connectivity_check/"
 
 mkdir -p ${POD_NETWORK_CHECK}
 
 oc get podnetworkconnectivitychecks -n openshift-network-diagnostics -o yaml >${POD_NETWORK_CHECK}/podnetworkconnectivitychecks.yaml
+
+compress_pod_logs_must_gather
