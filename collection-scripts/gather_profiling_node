@@ -78,7 +78,7 @@ _gather_profiling_node_collect_crio_data() {
 	local extract_timeout=$((PROFILING_NODE_SECONDS + 300))
 
 	_gather_profiling_node_start_crio_collection_pod "$node" "$pod_name"
-	if oc wait --for=condition=Ready pod/${pod_name} --timeout=${extract_timeout}s; then
+	if oc wait --for=condition=Ready "pod/${pod_name}" --timeout=${extract_timeout}s; then
 		oc cp -c crio-prof-expose "${pod_name}:/tmp/pprof/" "$PROFILING_NODE_CRIO_LOG_PATH"
 		oc delete pod "$pod_name"
 	else
@@ -119,12 +119,12 @@ _gather_profiling_node_collect_data_loop() {
 		fi
 	done
 
-	[ -z "$pids" ] && return
+	[ ${#pids[@]} -eq 0 ] && return
 	echo "INFO: wait for crio/kubelet profiling tasks"
-	wait ${pids[@]}
+	wait "${pids[@]}"
 }
 
-NODES="${@}"
+NODES="$*"
 if [ -z "$NODES" ]; then
 	echo -e "\nWARNING: since no nodes have been specified for the profiling task, data will\n" \
 		"be collected on ALL the nodes in the cluster. This may take quite some time.\n"
@@ -134,6 +134,7 @@ fi
 DO_PROF_CRIO=true
 DO_PROF_KUBELET=true
 
+# shellcheck disable=SC2288
 case "$PROFILING_NODE_TARGET" in
 all | ALL) ;;
 crio | CRIO | CRI-O) DO_PROF_KUBELET=false ;;

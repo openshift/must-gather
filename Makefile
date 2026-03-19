@@ -38,7 +38,7 @@ SCRIPT_DIRS := collection-scripts/ hack/ tests/
 
 .PHONY: lint
 lint: shellcheck
-	$(SHELLCHECK) -x ./**/*.sh
+	find $(SCRIPT_DIRS) -type f -exec grep -Eq '^#!/' {} \; -exec $(SHELLCHECK) -x {} +
 
 .PHONY: fmt
 fmt: shfmt
