@@ -17,5 +17,7 @@ oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" --rot
 
 echo "INFO: Collecting vSphere CSI driver CRDs complete"
 
+compress_pod_logs_must_gather
+
 # force disk flush to ensure that all data gathered are written
 sync

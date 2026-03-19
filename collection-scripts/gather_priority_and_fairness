@@ -9,6 +9,8 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
+source "$(dirname "$0")/common.sh"
+
 BASE_COLLECTION_PATH="/must-gather"
 NAMESPACE_PATH="namespaces/openshift-kube-apiserver"
 POD_PATH="kube-apiserver/kube-apiserver/api_priority_and_fairness"
@@ -80,3 +82,5 @@ for API_SERVER in ${KUBE_API_SERVERS}; do
 		>"${OUTPUT_DIR}"/requests
 
 done
+
+compress_pod_logs_must_gather

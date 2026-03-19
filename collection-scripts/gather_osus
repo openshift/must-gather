@@ -22,5 +22,7 @@ function gather_osus() {
 
 gather_osus
 
+compress_pod_logs_must_gather
+
 # force disk flush to ensure that all data gathered are written
 sync

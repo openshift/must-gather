@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source "$(dirname "$0")/common.sh"
+
 BASE_COLLECTION_PATH="must-gather"
 HAPROXY_CONFIG_PATH=${OUT:-"${BASE_COLLECTION_PATH}/ingress_controllers"}
 
@@ -23,6 +25,8 @@ gather_haproxy_config
 echo "INFO: Waiting for HAProxy config collection to complete ..."
 wait "${PIDS[@]}"
 echo "INFO: HAProxy config collection complete."
+
+compress_pod_logs_must_gather
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

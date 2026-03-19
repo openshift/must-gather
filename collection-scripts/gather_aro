@@ -1,4 +1,7 @@
 #!/bin/bash
+
+source "$(dirname "$0")/common.sh"
+
 BASE_COLLECTION_PATH="must-gather"
 ARO_CR_NAME="clusters.aro.openshift.io"
 
@@ -17,6 +20,8 @@ function gather_aro() {
 }
 
 gather_aro
+
+compress_pod_logs_must_gather
 
 # force disk flush to ensure that all data gathered are written
 sync

@@ -16,5 +16,7 @@ function get_nmstate_crs() {
 oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"
 get_nmstate_crs
 
+compress_pod_logs_must_gather
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

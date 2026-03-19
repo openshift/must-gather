@@ -49,5 +49,7 @@ for POD in ${FRR_PODS[@]}; do
 done
 wait ${PIDS[@]}
 
+compress_pod_logs_must_gather
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
