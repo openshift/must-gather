@@ -5,11 +5,17 @@ CORE_DUMP_PATH=${OUT:-"${BASE_COLLECTION_PATH}/node_core_dumps"}
 mkdir -p "${CORE_DUMP_PATH}"/
 
 function get_dump_off_node {
+	local node="$1"
 	local debugPod=""
+	local oc_debug_pid=""
+	local tmpfile
 
-	#Start Debug pod in background and capture output to get pod name
-	local tmpfile=$(mktemp)
-	oc debug --to-namespace="default" node/"$1" -- /bin/bash -c 'sleep 300' > "$tmpfile" 2>&1 &
+	tmpfile=$(mktemp)
+	trap 'rm -f "$tmpfile"' RETURN
+
+	# Start Debug pod in background and capture output to get pod name
+	oc debug --to-namespace="default" node/"$node" -- /bin/bash -c 'sleep 300' > "$tmpfile" 2>&1 &
+	oc_debug_pid=$!
 
 	#Wait for the debug pod to be created and extract its name with exponential backoff
 	local max_attempts=10  # Fewer attempts needed with exponential backoff
@@ -32,27 +38,33 @@ function get_dump_off_node {
 	done
 	rm -f "$tmpfile"
 
-	#Wait for pod to be ready
-	if [ -n "$debugPod" ]; then
-		oc wait -n "default" --for=condition=Ready pod/"$debugPod" --timeout=30s > /dev/null 2>&1
-	fi
-
 	if [ -z "$debugPod" ]; then
-		echo "Debug pod for node ""$1"" never activated"
-	else
-		#Copy Core Dumps out of Nodes suppress Stdout
-		echo "Copying core dumps on node ""$1"""
-		if ! oc cp  --loglevel 1 -n "default" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump > /dev/null 2>&1; then
-			echo "Warning: Failed to copy core dumps from node $1"
-		fi
-
-		#clean up debug pod after we are done using them
-		oc delete pod "$debugPod" -n "default"
+		kill "${oc_debug_pid}" 2>/dev/null
+		wait "${oc_debug_pid}" 2>/dev/null
+		echo "Debug pod for node $node never activated"
+		return
 	fi
+
+	if ! oc wait -n "default" --for=condition=Ready pod/"$debugPod" --timeout=30s > /dev/null 2>&1; then
+		echo "Warning: Debug pod $debugPod on node $node did not become Ready in time"
+		oc delete pod "$debugPod" -n "default" --wait=false > /dev/null 2>&1
+		kill "${oc_debug_pid}" 2>/dev/null
+		wait "${oc_debug_pid}" 2>/dev/null
+		return
+	fi
+
+	echo "Copying core dumps on node $node"
+	if ! oc cp --loglevel 1 -n "default" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}/${node}_core_dump" > /dev/null 2>&1; then
+		echo "Warning: Failed to copy core dumps from node $node"
+	fi
+
+	oc delete pod "$debugPod" -n "default" --wait=false > /dev/null 2>&1
+	kill "${oc_debug_pid}" 2>/dev/null
+	wait "${oc_debug_pid}" 2>/dev/null
 }
 
 function gather_core_dump_data {
-	#Run coredump pull function on all nodes in parallel
+	# Run coredump pull function on all nodes in parallel
 	for NODE in ${NODES}; do
 		get_dump_off_node "${NODE}" &
 		PIDS+=($!)
