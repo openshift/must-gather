@@ -43,6 +43,9 @@ all_ns_resources+=(csistoragecapacities)
 # Image-source Resources
 group_resources+=(imagecontentsourcepolicies.operator.openshift.io)
 
+# OS Image Stream Resources
+group_resources+=(osimagestreams.machineconfiguration.openshift.io)
+
 # Networking Resources
 group_resources+=(networks.operator.openshift.io)
 
