@@ -31,6 +31,28 @@ get_log_collection_args() {
 		log_collection_args=--since-time="${MUST_GATHER_SINCE_TIME}"
 	fi
 
+	# Set in this shell; gather / gather_vsphere source this file and call
+	# get_log_collection_args before oc adm inspect — no export needed.
+	# REDUCE_LOGS: unset = default (--rotated-pod-logs). If set, only skip_rotated is allowed.
+	local rl="${REDUCE_LOGS:-}"
+	rl="${rl#"${rl%%[![:space:]]*}"}"
+	rl="${rl%"${rl##*[![:space:]]}"}"
+
+	rotated_pod_logs_arg="--rotated-pod-logs"
+
+	if [ -n "$rl" ]; then
+		case "$rl" in
+		skip_rotated_logs | SKIP_ROTATED_LOGS)
+			rotated_pod_logs_arg=""
+			echo "DEBUG: REDUCE_LOGS set to skip_rotated_logs"
+			;;
+		*)
+			echo "ERROR: REDUCE_LOGS must be unset or skip_rotated_logs (got: [${rl}])." >&2
+			exit 1
+			;;
+		esac
+	fi
+
 	# oc adm node-logs `--since` parameter is not the same as oc adm inspect `--since`.
 	# it takes a simplified duration in the form of '(+|-)[0-9]+(s|m|h|d)' or
 	# an ISO formatted time. since MUST_GATHER_SINCE and MUST_GATHER_SINCE_TIME
