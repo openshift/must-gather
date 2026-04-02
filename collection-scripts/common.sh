@@ -31,23 +31,17 @@ get_log_collection_args() {
 		log_collection_args=--since-time="${MUST_GATHER_SINCE_TIME}"
 	fi
 
-	# Set in this shell; gather / gather_vsphere source this file and call
-	# get_log_collection_args before oc adm inspect — no export needed.
-	# REDUCE_LOGS: unset = default (--rotated-pod-logs). If set, only skip_rotated is allowed.
-	local rl="${REDUCE_LOGS:-}"
-	rl="${rl#"${rl%%[![:space:]]*}"}"
-	rl="${rl%"${rl##*[![:space:]]}"}"
 
+	# REDUCE_LOGS: unset = default (--rotated-pod-logs). If set, only skip_rotated_logs is allowed.
 	rotated_pod_logs_arg="--rotated-pod-logs"
 
-	if [ -n "$rl" ]; then
-		case "$rl" in
-		skip_rotated_logs | SKIP_ROTATED_LOGS)
+	if [ -n "${REDUCE_LOGS:-}" ]; then
+		case "${REDUCE_LOGS}" in
+		skip_rotated_logs)
 			rotated_pod_logs_arg=""
-			echo "DEBUG: REDUCE_LOGS set to skip_rotated_logs"
 			;;
 		*)
-			echo "ERROR: REDUCE_LOGS must be unset or skip_rotated_logs (got: [${rl}])." >&2
+			echo "ERROR: REDUCE_LOGS must be unset or skip_rotated_logs (got: [${REDUCE_LOGS}])." >&2
 			exit 1
 			;;
 		esac
