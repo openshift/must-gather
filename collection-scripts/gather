@@ -41,7 +41,7 @@ group_resources+=(storageclasses persistentvolumes volumeattachments csidrivers 
 all_ns_resources+=(csistoragecapacities)
 
 # Image-source Resources
-group_resources+=(imagecontentsourcepolicies.operator.openshift.io imagedigestmirrorsets.config.openshift.io imagetagmirrorset.config.openshift.io)
+group_resources+=(imagecontentsourcepolicies.operator.openshift.io imagedigestmirrorsets.config.openshift.io imagetagmirrorsets.config.openshift.io)
 
 # Networking Resources
 group_resources+=(networks.operator.openshift.io)
