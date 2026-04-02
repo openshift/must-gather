@@ -1,6 +1,8 @@
 #!/bin/bash
 # Gather the insights archive data from insights operator
 
+source "$(dirname "$0")/common.sh"
+
 BASE_COLLECTION_PATH="${BASE_COLLECTION_PATH:-/must-gather}"
 INSIGHTS_DATA_PATH="${BASE_COLLECTION_PATH}/insights-data"
 
@@ -13,5 +15,7 @@ echo "INFO: Collecting Insights Archives from $INSIGHTS_OPERATOR_POD"
 oc $COLLECTOR --namespace=openshift-insights openshift-insights/$INSIGHTS_OPERATOR_POD:/var/lib/insights-operator $INSIGHTS_DATA_PATH
 
 #TODO: Prune or Limit the data that is collected/synced (as this might be a lot to add to the archive).
+
+compress_pod_logs_must_gather
 
 sync

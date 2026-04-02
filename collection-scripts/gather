@@ -179,14 +179,23 @@ pids+=($!)
 /usr/bin/gather_istio &
 pids+=($!)
 
-# Check if PID array has any values, if so, wait for them to finish
+# Wait for oc adm inspect jobs first, compress their pod logs to free disk before other scripts add more data
+if [ ${#pids[@]} -ge 3 ]; then
+	wait "${pids[0]}" "${pids[1]}" "${pids[2]}"
+	compress_pod_logs_must_gather
+fi
+# Wait for remaining subprocesses (each may call compress_pod_logs_must_gather when they finish)
 if [ ${#pids[@]} -ne 0 ]; then
 	echo "Waiting on subprocesses to finish execution."
 	wait "${pids[@]}"
 fi
 
 # Gather ARO information
-/usr/bin/gather_aro
+/usr/bin/gather_aro &
+pids+=($!)
+
+# Final compression pass for any remaining pod logs
+compress_pod_logs_must_gather
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

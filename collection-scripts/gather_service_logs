@@ -36,5 +36,7 @@ echo "INFO: Waiting for worker host service log collection to complete ..."
 wait "${PIDS[@]}"
 echo "INFO: Worker host service log collection to complete."
 
+compress_pod_logs_must_gather
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

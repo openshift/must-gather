@@ -25,10 +25,12 @@ echo INFO: Collecting logs for all Windows nodes
 for log in ${LOGS[@]}; do
 	LOG_FILE_DIR=${WINDOWS_NODE_LOGS}/log_files/$(dirname $log)
 	mkdir -p ${LOG_FILE_DIR}
-	/usr/bin/oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} -l kubernetes.io/os=windows --path=$log >${LOG_FILE_DIR}/$(basename $log) &
+	/usr/bin/oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} -l kubernetes.io/os=windows --path=$log | gzip >${LOG_FILE_DIR}/$(basename $log).gz &
 	PIDS+=($!)
 done
 wait ${PIDS[@]}
+
+compress_pod_logs_must_gather
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

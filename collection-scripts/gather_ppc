@@ -211,4 +211,6 @@ ppc_nodes
 
 echo "INFO: Node performance data collection complete."
 
+compress_pod_logs_must_gather
+
 exit 0

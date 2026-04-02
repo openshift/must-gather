@@ -33,5 +33,7 @@ done |
   echo "INFO: Finished downloading $1/$4 from $3"' \
 		bash
 
+compress_pod_logs_must_gather
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

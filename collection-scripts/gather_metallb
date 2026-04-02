@@ -20,8 +20,11 @@ get_metallb_crs
 
 if ! oc get metallb metallb -n ${operator_ns} >/dev/null 2>&1; then
 	echo "metallb not started"
+	compress_pod_logs_must_gather
 	exit 0
 fi
+
+compress_pod_logs_must_gather
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
