@@ -14,11 +14,12 @@ ifeq ($(BUILDER), podman)
 # Use podman to build the must gather image
 # Please ensure you have podman installed on your machine for this
 IMAGE_BUILD_BUILDER := podman build
-# Clear all build default flags
-IMAGE_BUILD_DEFAULT_FLAGS :=
+# ART_DNF_WRAPPER_POLICY=skip: skip the ART image-build DNF wrapper so local podman
+# builds use ordinary dnf; the wrapper applies in CI/product pipelines, not here.
+IMAGE_BUILD_DEFAULT_FLAGS := --env ART_DNF_WRAPPER_POLICY=skip
 # Set authfile if the user passes another location for the authentication file
 ifneq ($(strip $(AUTH_FILE)),)
-IMAGE_BUILD_DEFAULT_FLAGS := --authfile=$(AUTH_FILE)
+IMAGE_BUILD_DEFAULT_FLAGS += --authfile=$(AUTH_FILE)
 endif
 endif
 
