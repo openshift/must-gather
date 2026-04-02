@@ -46,8 +46,6 @@ group_resources+=(imagecontentsourcepolicies.operator.openshift.io)
 # Networking Resources
 group_resources+=(networks.operator.openshift.io)
 
-# NodeNetworkState
-resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
 
 # Assisted Installer
 named_resources+=(ns/assisted-installer)
@@ -167,8 +165,8 @@ pids+=($!)
 /usr/bin/gather_vsphere &
 pids+=($!)
 
-# Gather Performance profile information
-/usr/bin/gather_ppc &
+# Gather Performance profile information (nodes already inspected above via group_resources)
+MUST_GATHER_NODES_INSPECTED=1 /usr/bin/gather_ppc &
 pids+=($!)
 
 # Gather OSUS information
