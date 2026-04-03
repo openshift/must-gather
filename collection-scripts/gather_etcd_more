@@ -5,7 +5,8 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-source "$(dirname "$0")"/monitoring_common.sh
+# shellcheck source=collection-scripts/monitoring_common.sh
+source "$(dirname "$0")/monitoring_common.sh"
 
 MIN_TIME="$(date -d '24 hours ago' +%s%3N)"
 
@@ -17,13 +18,14 @@ ETCDCTL_CONTAINER='etcdctl'
 ALL_RUNNING_ETCD_PODS=$(oc get pod -n openshift-etcd --no-headers -l app=etcd | grep Running | grep -o '\S*etcd\S*')
 CEO_POD=$(oc get pods -n openshift-etcd-operator -l app=etcd-operator --no-headers | awk '{print $1}')
 
-mkdir -p ${ETCD_LOG_PATH}
+mkdir -p "${ETCD_LOG_PATH}"
 
+# shellcheck disable=SC2120
 function ocp4ip {
 	for pod in ${ALL_RUNNING_ETCD_PODS}; do
-		mkdir -p ${ETCD_LOG_PATH}/${pod}
+		mkdir -p "${ETCD_LOG_PATH}/${pod}"
 		echo "INFO: Gathering interface stats from pod ${pod}"
-		oc -n openshift-etcd exec -c "${ETCDCTL_CONTAINER}" "${pod}" -- ip -s link show "$@" >${ETCD_LOG_PATH}/${pod}/interface_stats.txt || true
+		oc -n openshift-etcd exec -c "${ETCDCTL_CONTAINER}" "${pod}" -- ip -s link show "$@" >"${ETCD_LOG_PATH}/${pod}/interface_stats.txt" || true
 	done
 }
 
@@ -47,6 +49,7 @@ PIDS+=($!)
 
 # interface stats
 echo "INFO: Getting interface stats"
+# shellcheck disable=SC2119
 ocp4ip &
 PIDS+=($!)
 

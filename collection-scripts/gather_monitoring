@@ -9,7 +9,8 @@ set -o pipefail
 declare -r BASE_COLLECTION_PATH="../must-gather"
 declare -r MONITORING_PATH="${BASE_COLLECTION_PATH}/monitoring"
 
-source "$(dirname "$0")"/monitoring_common.sh
+# shellcheck source=collection-scripts/monitoring_common.sh
+source "$(dirname "$0")/monitoring_common.sh"
 
 # init initializes global variables that need to be computed.
 # E.g. get token of the default ServiceAccount
