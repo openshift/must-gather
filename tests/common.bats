@@ -97,6 +97,54 @@ load test_helper
 	assert_output --partial "log_collection_args=[]"
 }
 
+@test "get_log_collection_args enables rotated pod logs by default" {
+	run bash -c "
+		unset REDUCE_LOGS
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		echo \"rotated_pod_logs_arg=\$rotated_pod_logs_arg\"
+	"
+
+	assert_success
+	assert_output --partial "rotated_pod_logs_arg=--rotated-pod-logs"
+}
+
+@test "get_log_collection_args skips rotated pod logs when REDUCE_LOGS is skip_rotated_logs" {
+	run bash -c "
+		export REDUCE_LOGS='skip_rotated_logs'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		echo \"rotated_pod_logs_arg=[\$rotated_pod_logs_arg]\"
+	"
+
+	assert_success
+	assert_output --partial "rotated_pod_logs_arg=[]"
+}
+
+@test "get_log_collection_args fails when REDUCE_LOGS is comma-separated" {
+	run bash -c "
+		export REDUCE_LOGS='skip_rotated_logs,other'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+	"
+
+	assert_failure
+	assert_output --partial "ERROR"
+	assert_output --partial "skip_rotated_logs,other"
+}
+
+@test "get_log_collection_args fails when REDUCE_LOGS is unknown" {
+	run bash -c "
+		export REDUCE_LOGS='invalid'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+	"
+
+	assert_failure
+	assert_output --partial "ERROR"
+	assert_output --partial "skip_rotated_logs"
+}
+
 @test "get_log_collection_args formats node_log_collection_args from MUST_GATHER_SINCE" {
 	run bash -c "
 		export MUST_GATHER_SINCE='8h'

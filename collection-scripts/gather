@@ -63,7 +63,7 @@ group_resources+=(clusterresourcequotas.quota.openshift.io)
 
 # Run the Collection of Resources using inspect
 # running across all-namespaces for the few "Autoscaler" resources.
-oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${named_resources[@]}" &
+oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${named_resources[@]}" &
 pids+=($!)
 
 filtered_group_resources=()
@@ -77,14 +77,14 @@ group_resources_text=$(
 	IFS=,
 	echo "${filtered_group_resources[*]}"
 )
-oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${group_resources_text}" &
+oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${group_resources_text}" &
 pids+=($!)
 
 all_ns_resources_text=$(
 	IFS=,
 	echo "${all_ns_resources[*]}"
 )
-oc adm inspect ${log_collection_args} --dest-dir must-gather --rotated-pod-logs "${all_ns_resources_text}" --all-namespaces &
+oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${all_ns_resources_text}" --all-namespaces &
 pids+=($!)
 
 # Gather Insights Operator Archives
