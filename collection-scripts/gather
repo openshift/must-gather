@@ -166,7 +166,7 @@ pids+=($!)
 pids+=($!)
 
 # Gather Performance profile information (nodes already inspected above via group_resources)
-MUST_GATHER_NODES_INSPECTED=1 /usr/bin/gather_ppc &
+MUST_GATHER_NODES_INSPECTED=true /usr/bin/gather_ppc &
 pids+=($!)
 
 # Gather OSUS information
