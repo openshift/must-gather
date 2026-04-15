@@ -7,6 +7,9 @@ get_operator_ns "sriov-network-operator"
 get_log_collection_args
 SRIOV_LOG_PATH="${BASE_COLLECTION_PATH}/namespaces/${operator_ns}"
 
+# Kernel log window when MUST_GATHER_SINCE* / node_log_collection_args are unset (journalctl --since=…).
+SRIOV_JOURNAL_SINCE="${SRIOV_JOURNAL_SINCE:-${SINCE_TIMEFRAME:--2d}}"
+
 # resource list
 resources=()
 
@@ -16,6 +19,7 @@ resources+=("ns/${operator_ns}")
 # sriovnetwork.openshift.io
 resources+=(sriovnetworknodepolicies sriovnetworknodestates sriovnetworkpoolconfigs sriovnetworks sriovoperatorconfigs sriovibnetworks)
 
+<<<<<<< HEAD
 # run the collection of resources using must-gather
 for resource in "${resources[@]}"; do
 	# shellcheck disable=SC2086
@@ -28,13 +32,52 @@ else
 	read -ra CONFIG_DAEMON_PODS <<<"$(oc -n "${operator_ns}" get pods -l app=sriov-network-config-daemon -o jsonpath='{.items[*].metadata.name}')"
 fi
 PIDS=()
+=======
+PIDS=()
+for resource in "${resources[@]}"; do
+	oc adm inspect ${log_collection_args} --dest-dir must-gather --all-namespaces ${resource} &
+	PIDS+=($!)
+done
 
-# gather_netns_ip_a runs ip netns, and for every net namespace runs `ip netns exec <id> ip a`
+if [ "$#" -gt 0 ]; then
+	CONFIG_DAEMON_PODS=( "$@" )
+else
+	if ! pod_names=$(oc -n "${operator_ns}" get pods -l app=sriov-network-config-daemon -o jsonpath='{.items[*].metadata.name}'); then
+		echo "ERROR: failed to list sriov-network-config-daemon pods" >&2
+		wait "${PIDS[@]}"
+		sync
+		exit 1
+	fi
+	read -r -a CONFIG_DAEMON_PODS <<< "${pod_names}"
+fi
+
+if [ "${#CONFIG_DAEMON_PODS[@]}" -eq 0 ]; then
+	echo "INFO: No sriov-network-config-daemon pods found; skipping per-node SR-IOV collection."
+	wait "${PIDS[@]}"
+	sync
+	exit 0
+fi
+
+function kernel_journal_since_args() {
+	if [ -n "${node_log_collection_args}" ]; then
+		echo "${node_log_collection_args}"
+	else
+		local s="${SRIOV_JOURNAL_SINCE}"
+		case "${s}" in
+		-*) echo "--since=${s}" ;;
+		*) echo "--since=-${s}" ;;
+		esac
+	fi
+}
+>>>>>>> 95dd7a1 (must-gather/gather_sriov: parallelize and optimize per-node SR-IOV collection)
+
 function gather_netns_ip_a() {
-	CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${1}"
-	NETNS_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/netns"
-	NETNS_IP_A_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/netns_ip_a"
+	local pod="$1"
+	local CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${pod}"
+	local NETNS_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/netns"
+	local NETNS_IP_A_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/netns_ip_a"
 
+<<<<<<< HEAD
 	# Filter out everything after network namespace name
 	oc exec -n "${operator_ns}" "${1}" -c sriov-network-config-daemon -- chroot /host /bin/bash -c "ip netns | sed 's/ .*//' " >"${NETNS_LOG_PATH}" 2>&1
 
@@ -43,12 +86,26 @@ function gather_netns_ip_a() {
 			oc exec -n "${operator_ns}" "${1}" -c sriov-network-config-daemon -- chroot /host \
 				/bin/bash -c "ip netns exec ${id} ip a" >>"${NETNS_IP_A_LOG_PATH}" 2>&1
 	done <"${NETNS_LOG_PATH}"
+=======
+	oc exec -n "${operator_ns}" "${pod}" -c sriov-network-config-daemon -- chroot /host \
+		/bin/bash -c "ip netns | sed 's/ .*//' " >"${NETNS_LOG_PATH}" 2>&1
+
+	oc exec -n "${operator_ns}" "${pod}" -c sriov-network-config-daemon -i -- chroot /host /bin/bash -s <<'NETNS_SCRIPT' >"${NETNS_IP_A_LOG_PATH}" 2>&1
+for id in $(ip netns 2>/dev/null | sed 's/ .*//'); do
+	[ -z "${id}" ] && continue
+	echo "> ip netns exec ${id} ip a"
+	ip netns exec "${id}" ip a 2>/dev/null
+done
+NETNS_SCRIPT
+>>>>>>> 95dd7a1 (must-gather/gather_sriov: parallelize and optimize per-node SR-IOV collection)
 }
 
 function gather_ethtool() {
-	CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${1}"
-	ETHTOOL_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/ethtool"
+	local pod="$1"
+	local CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${pod}"
+	local ETHTOOL_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/ethtool"
 
+<<<<<<< HEAD
 	# Get ip -o link show output.
 	OUT="$(oc exec -n "${operator_ns}" "${1}" -c sriov-network-config-daemon -- chroot /host \
 		/bin/bash -c "ip -o link show 2>/dev/null")"
@@ -65,18 +122,36 @@ function gather_ethtool() {
 		oc exec -n "${operator_ns}" "${1}" -c sriov-network-config-daemon -- chroot /host \
 			/bin/bash -c "ethtool -i ${interface}" >>"${ETHTOOL_LOG_PATH}"
 	done <<<"$INTERFACES"
+=======
+	oc exec -n "${operator_ns}" "${pod}" -c sriov-network-config-daemon -i -- chroot /host /bin/bash -s <<'ETHTOOL_SCRIPT' >"${ETHTOOL_LOG_PATH}" 2>&1
+while IFS= read -r interface; do
+	[ -z "${interface}" ] && continue
+	[ "${interface}" = lo ] && continue
+	[[ "${interface}" == *"@"* ]] && continue
+	echo "> ethtool -i ${interface}"
+	ethtool -i "${interface}" 2>/dev/null
+done <<< "$(ip -o link show 2>/dev/null | awk -F': ' '{print $2}')"
+ETHTOOL_SCRIPT
+>>>>>>> 95dd7a1 (must-gather/gather_sriov: parallelize and optimize per-node SR-IOV collection)
 }
 
 function gather_bf_info() {
-	CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${1}"
-	MSTCONFIG_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/mstconfig"
-	MSTFLINT_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/mstflint"
+	local pod="$1"
+	local CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${pod}"
+	local MSTCONFIG_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/mstconfig"
+	local MSTFLINT_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/mstflint"
 
+<<<<<<< HEAD
 	devices=$(oc exec -n openshift-sriov-network-operator "${1}" -c sriov-network-config-daemon -- mstconfig q 2>/dev/null | grep "Device:" | awk 'BEGIN {FS="/";} { print $6 }')
+=======
+	local devices
+	devices=$(oc exec -n "${operator_ns}" "${pod}" -c sriov-network-config-daemon -- mstconfig q 2>/dev/null | grep "Device:" | awk 'BEGIN {FS="/";} { print $6 }')
+>>>>>>> 95dd7a1 (must-gather/gather_sriov: parallelize and optimize per-node SR-IOV collection)
 	if [ -z "${devices}" ]; then
 		echo "No Mellanox devices detected by mstconfig" | tee -a "${MSTCONFIG_LOG_PATH}" "${MSTFLINT_LOG_PATH}" >/dev/null
 		return
 	fi
+<<<<<<< HEAD
 	for device in $devices; do
 		oc exec -n "${operator_ns}" "${1}" -c sriov-network-config-daemon -- \
 			/bin/bash -c "mstconfig -e -d $device q" >>"${MSTCONFIG_LOG_PATH}"
@@ -87,17 +162,54 @@ function gather_bf_info() {
 }
 
 for CONFIG_DAEMON_POD in "${CONFIG_DAEMON_PODS[@]}"; do
+=======
+	oc exec -n "${operator_ns}" "${pod}" -c sriov-network-config-daemon -i -- \
+		/bin/bash -c 'while IFS= read -r d; do mstconfig -e -d "$d" q; done' \
+		>>"${MSTCONFIG_LOG_PATH}" 2>&1 <<< "${devices}"
 
-	CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${CONFIG_DAEMON_POD}"
-	SNO_INITIAL_NODE_STATE_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/sno-initial-node-state.json"
-	KERNEL_CMDLINE_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/kernel-cmdline"
-	IP_LINK_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/ip_link"
-	DMESG_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/dmesg"
-	MULTUS_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/multus-log"
-	VAR_LIB_CNI_SRIOV_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/var-lib-cni-sriov"
+	oc exec -n "${operator_ns}" "${pod}" -c sriov-network-config-daemon -i -- \
+		/bin/bash -c 'while IFS= read -r d; do mstflint -d "$d" q; done' \
+		>>"${MSTFLINT_LOG_PATH}" 2>&1 <<< "${devices}"
+}
+
+# gather_hardware_info collects PCI and driver info.
+function gather_hardware_info() {
+	local pod="$1"
+	local CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${pod}"
+	local LSPCI_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/lspci"
+	local IP_DETAIL_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/ip_link_d"
+>>>>>>> 95dd7a1 (must-gather/gather_sriov: parallelize and optimize per-node SR-IOV collection)
+
+	oc exec -n "${operator_ns}" "${pod}" -c sriov-network-config-daemon -- chroot /host \
+		/bin/bash -c 'command -v lspci >/dev/null 2>&1 && lspci -nnk 2>/dev/null || { test -x /usr/sbin/lspci && /usr/sbin/lspci -nnk 2>/dev/null; }' \
+		>"${LSPCI_LOG_PATH}" 2>&1
+
+	oc exec -n "${operator_ns}" "${pod}" -c sriov-network-config-daemon -- chroot /host \
+		/bin/bash -c 'echo "=== ip -d link ==="; \
+		ip -d link show 2>/dev/null; \
+		echo "=== ip -s link ==="; \
+		ip -s link show 2>/dev/null' \
+		>"${IP_DETAIL_LOG_PATH}" 2>&1
+}
+
+function gather_sriov_for_pod() {
+	local gather_sriov_pids=()
+	local CONFIG_DAEMON_POD="$1"
+	local CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${CONFIG_DAEMON_POD}"
+	local SNO_INITIAL_NODE_STATE_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/sno-initial-node-state.json"
+	local KERNEL_CMDLINE_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/kernel-cmdline"
+	local DMESG_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/dmesg.gz"
+	local MULTUS_LOG_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/multus-log.gz"
+	local VAR_LIB_CNI_SRIOV_PATH="${CONFIG_DAEMON_POD_LOG_PATH}/var-lib-cni-sriov"
+
+	mkdir -p "${CONFIG_DAEMON_POD_LOG_PATH}"
+
+	local since_arg
+	since_arg=$(kernel_journal_since_args)
 
 	# Collect sno-initial-node-state.json.
 	oc exec -n "${operator_ns}" "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
+<<<<<<< HEAD
 		/bin/bash -c "cat /tmp/sno-initial-node-state.json" >"${SNO_INITIAL_NODE_STATE_LOG_PATH}" &
 	PIDS+=($!)
 
@@ -124,16 +236,50 @@ for CONFIG_DAEMON_POD in "${CONFIG_DAEMON_PODS[@]}"; do
 	# Collect /var/lib/cni/sriov contents.
 	oc cp -n "${operator_ns}" -c sriov-network-config-daemon "${CONFIG_DAEMON_POD}":/host/var/lib/cni/sriov "${VAR_LIB_CNI_SRIOV_PATH}" &
 	PIDS+=($!)
+=======
+		/bin/bash -c "cat /tmp/sno-initial-node-state.json" >"${SNO_INITIAL_NODE_STATE_LOG_PATH}" 2>&1 &
+	gather_sriov_pids+=($!)
+
+	# Collect kernel cmdline.
+	oc exec -n "${operator_ns}" "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
+		/bin/bash -c "cat /proc/cmdline" >"${KERNEL_CMDLINE_LOG_PATH}" 2>&1 &
+	gather_sriov_pids+=($!)
+
+	# Collect dmesg logs.
+	( set -o pipefail; oc exec -n "${operator_ns}" "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
+		/bin/bash -c "journalctl -k ${since_arg} --no-pager" 2>/dev/null | gzip >"${DMESG_LOG_PATH}" ) \
+		|| rm -f "${DMESG_LOG_PATH}" &
+	gather_sriov_pids+=($!)
+
+	# Collect multus.log if exists.
+	( set -o pipefail; oc exec -n "${operator_ns}" "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host /bin/bash -c \
+		"test -f var/log/multus.log && cat var/log/multus.log" 2>/dev/null | gzip >"${MULTUS_LOG_PATH}" ) \
+		|| rm -f "${MULTUS_LOG_PATH}" &
+	gather_sriov_pids+=($!)
+
+	# Collect /var/lib/cni/sriov contents.
+	oc cp -n "${operator_ns}" -c sriov-network-config-daemon "${CONFIG_DAEMON_POD}":/host/var/lib/cni/sriov "${VAR_LIB_CNI_SRIOV_PATH}" &>/dev/null || true &
+	gather_sriov_pids+=($!)
+>>>>>>> 95dd7a1 (must-gather/gather_sriov: parallelize and optimize per-node SR-IOV collection)
 
 	gather_netns_ip_a "${CONFIG_DAEMON_POD}" &
-	PIDS+=($!)
+	gather_sriov_pids+=($!)
 
 	gather_ethtool "${CONFIG_DAEMON_POD}" &
-	PIDS+=($!)
+	gather_sriov_pids+=($!)
 
 	gather_bf_info "${CONFIG_DAEMON_POD}" &
-	PIDS+=($!)
+	gather_sriov_pids+=($!)
 
+	gather_hardware_info "${CONFIG_DAEMON_POD}" &
+	gather_sriov_pids+=($!)
+
+	wait "${gather_sriov_pids[@]}"
+}
+
+for CONFIG_DAEMON_POD in "${CONFIG_DAEMON_PODS[@]}"; do
+	gather_sriov_for_pod "${CONFIG_DAEMON_POD}" &
+	PIDS+=($!)
 done
 
 echo "INFO: Waiting for sriov info collection to complete ..."
