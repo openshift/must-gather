@@ -32,10 +32,10 @@ function summarize() {
   echo "Stats"
 	for CRD in "${VIRT_CRDS[@]}"; do
     echo "$CRD  $(find must-gather/namespaces/ -path "*/$CRD/*" | wc -l)"
-  done | column --table -C right
+  done | column --table --table-right 1
 }
 
-get_basic_virt_crs
+#get_basic_virt_crs
 summarize
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
