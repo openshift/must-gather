@@ -3,6 +3,8 @@
 source $(dirname "$0")/common.sh
 BASE_COLLECTION_PATH="must-gather"
 
+oc get crd virtualmachines.kubevirt.io > /dev/null 2>&1 || { echo "Virt is not used. Skipping." ; exit 0 ; }
+
 get_log_collection_args
 
 #
