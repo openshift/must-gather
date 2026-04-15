@@ -1,0 +1,40 @@
+#!/bin/bash
+
+source $(dirname "$0")/common.sh
+BASE_COLLECTION_PATH="must-gather"
+
+get_log_collection_args
+
+#
+# This is intentionally covering multiple opreators
+# It is covering multiple operators in order to get basic (cross component) virtualization data
+#
+# Each operator usually has their own dedicate must-gather which will be eventually run if more
+# data is required.
+#
+
+declare -a VIRT_CRDS=(
+  # CNV
+  "virtualmachines" "virtualmachineinstances" "virtualmachineinstancemigrations"
+  # MTV
+  "migrations" "plans" "providers"
+  )
+
+function get_basic_virt_crs() {
+	for CRD in "${VIRT_CRDS[@]}"; do
+		oc adm inspect -A ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "${CRD}"
+	done
+}
+
+function summarize() {
+  echo "Stats"
+	for CRD in "${VIRT_CRDS[@]}"; do
+    echo "$CRD  $(find must-gather/namespaces/ -path "*/$CRD/*" | wc -l)"
+  done | column --table -C right
+}
+
+get_basic_virt_crs
+summarize
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
