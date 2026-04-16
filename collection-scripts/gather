@@ -149,6 +149,10 @@ pids+=($!)
 /usr/bin/gather_sriov &
 pids+=($!)
 
+# Gather basic Virtualization resources
+/usr/bin/gather_virt &
+pids+=($!)
+
 # Gather PodNetworkConnectivityCheck
 /usr/bin/gather_podnetworkconnectivitycheck &
 pids+=($!)
