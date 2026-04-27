@@ -1,11 +1,13 @@
 #!/bin/bash
 
 # generate /must-gather/version file
+# shellcheck disable=SC1091
 . version
 echo "openshift/must-gather" >/must-gather/version
 version >>/must-gather/version
 
-source $(dirname "$0")/common.sh
+# shellcheck source=collection-scripts/common.sh
+source "$(dirname "$0")/common.sh"
 get_log_collection_args
 
 # Store PIDs of all the subprocesses
@@ -61,12 +63,14 @@ group_resources+=(clusterresourcequotas.quota.openshift.io)
 
 # Run the Collection of Resources using inspect
 # running across all-namespaces for the few "Autoscaler" resources.
+# shellcheck disable=SC2086
 oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${named_resources[@]}" &
 pids+=($!)
 
 filtered_group_resources=()
 for gr in "${group_resources[@]}"; do
 	oc get "$gr" >/dev/null 2>&1
+	# shellcheck disable=SC2181
 	if [[ "$?" -eq 0 ]]; then
 		filtered_group_resources+=("$gr")
 	fi
@@ -75,6 +79,7 @@ group_resources_text=$(
 	IFS=,
 	echo "${filtered_group_resources[*]}"
 )
+# shellcheck disable=SC2086
 oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${group_resources_text}" &
 pids+=($!)
 
@@ -82,6 +87,7 @@ all_ns_resources_text=$(
 	IFS=,
 	echo "${all_ns_resources[*]}"
 )
+# shellcheck disable=SC2086
 oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${all_ns_resources_text}" --all-namespaces &
 pids+=($!)
 

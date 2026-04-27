@@ -1,7 +1,9 @@
 #!/bin/bash
 
-source $(dirname "$0")/common.sh
+# shellcheck source=collection-scripts/common.sh
+source "$(dirname "$0")/common.sh"
 get_log_collection_args
+# shellcheck source=collection-scripts/gather_service_logs_util
 . gather_service_logs_util
 
 BASE_COLLECTION_PATH="/must-gather"
@@ -10,23 +12,26 @@ ROLES=${1:-master} ### Defaults to only collecting things from Masters
 # Service Lists
 GENERAL_SERVICES=(crio kubelet rpm-ostreed ostree-finalize-staged machine-config-daemon-firstboot machine-config-daemon-host NetworkManager openvswitch
 	ovs-configuration ovsdb-server ovs-vswitchd)
+# shellcheck disable=SC2206
 MASTER_SERVICES+=(${2:-"${GENERAL_SERVICES[@]}"})
 MASTER_SERVICES+=() ### Placeholder to extend Master only services
+# shellcheck disable=SC2206
 NODE_SERVICES+=(${2:-"${GENERAL_SERVICES[@]}"})
 NODE_SERVICES+=() ### Placeholder to extend Node only services
 
 # Collect System Service Logs
+# shellcheck disable=SC2034
 SERVICE_LOG_PATH="${BASE_COLLECTION_PATH}/host_service_logs/"
 
 # collect service logs expects PIDS to be an already defined array
 PIDS=()
 if [[ $ROLES == "master" ]]; then
-	collect_service_logs --role=master ${MASTER_SERVICES[@]}
+	collect_service_logs --role=master "${MASTER_SERVICES[@]}"
 elif [[ $ROLES == "worker" ]]; then
-	collect_service_logs --role=worker ${NODE_SERVICES[@]}
+	collect_service_logs --role=worker "${NODE_SERVICES[@]}"
 elif [[ $ROLES == "master,worker" ]] || [[ $ROLES == "worker,master" ]]; then
-	collect_service_logs --role=master ${MASTER_SERVICES[@]}
-	collect_service_logs --role=worker ${NODE_SERVICES[@]}
+	collect_service_logs --role=master "${MASTER_SERVICES[@]}"
+	collect_service_logs --role=worker "${NODE_SERVICES[@]}"
 else
 	echo "Error: no selector supplied or an invalid selector was supplied." >&2
 	echo "Error: valid selectors are '--role=master', '--role=worker', '--rolemaster,worker', '--role=worker,master' the node name." >&2
