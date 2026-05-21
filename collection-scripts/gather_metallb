@@ -38,13 +38,7 @@ if ! oc get metallb metallb -n ${operator_ns} > /dev/null 2>&1; then
     exit 0
 fi
 
-BGP_BACKEND=$(oc get metallb metallb -n ${operator_ns} -o jsonpath='{.spec.bgpBackend}')
-
-if [ "$BGP_BACKEND" == "frr-k8s" ]; then
-	FRR_PODS="${@:-$(oc -n ${operator_ns} get pods -l component=frr-k8s -o jsonpath='{.items[*].metadata.name}')}"
-else
-	FRR_PODS="${@:-$(oc -n ${operator_ns} get pods -l component=speaker -o jsonpath='{.items[*].metadata.name}')}"
-fi
+FRR_PODS="${@:-$(oc -n ${operator_ns} get pods -l component=frr-k8s -o jsonpath='{.items[*].metadata.name}')}"
 PIDS=()
 
 for POD in ${FRR_PODS[@]}; do
