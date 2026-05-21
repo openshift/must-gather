@@ -48,6 +48,9 @@ group_resources+=(imagecontentsourcepolicies.operator.openshift.io)
 # OS Image Stream Resources
 group_resources+=(osimagestreams.machineconfiguration.openshift.io)
 
+# Internal Release Image Resources
+group_resources+=(internalreleaseimages.machineconfiguration.openshift.io)
+
 # Networking Resources
 group_resources+=(networks.operator.openshift.io)
 
