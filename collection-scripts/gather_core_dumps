@@ -22,7 +22,7 @@ function get_dump_off_node {
 	else
 		#Copy Core Dumps out of Nodes suppress Stdout
 		echo "Copying core dumps on node ""$1"""
-		oc cp --loglevel 1 -n "default" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}"/"$1"_core_dump >/dev/null 2>&1 && PIDS+=($!)
+		oc cp --loglevel 1 -n "default" "$debugPod":/host/var/lib/systemd/coredump "${CORE_DUMP_PATH}/${1}_core_dump" >/dev/null 2>&1 && PIDS+=($!)
 
 		#clean up debug pod after we are done using them
 		oc delete pod "$debugPod" -n "default"

@@ -4,7 +4,8 @@
 # OLM v1 uses the olm.operatorframework.io API group and provides a new declarative
 # installation and management experience for cluster extensions.
 
-source $(dirname "$0")/common.sh
+# shellcheck source=collection-scripts/common.sh
+source "$(dirname "$0")/common.sh"
 get_log_collection_args
 BASE_COLLECTION_PATH="must-gather"
 
@@ -33,6 +34,7 @@ echo "INFO: Collecting OLM v1 resources from olm.operatorframework.io API group"
 for crd in ${OLMV1_CRDS}; do
 	echo "INFO: Collecting ${crd}"
 	# Use --all-namespaces to collect both cluster-scoped and namespace-scoped resources
+	# shellcheck disable=SC2086
 	oc adm inspect ${log_collection_args} --dest-dir="${BASE_COLLECTION_PATH}" "${crd}" --all-namespaces 2>/dev/null || {
 		echo "WARNING: Failed to collect ${crd}, skipping..."
 	}

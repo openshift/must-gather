@@ -62,7 +62,7 @@ PIDS+=($!)
 
 # object count and size
 echo "INFO: Getting object count and size"
-ocp4etcd "etcdctl get / --prefix --keys-only | grep -oE \"^/[a-z|.]+/[a-z|.|8]*\" | sort | uniq -c | sort -rn | while read KEY; do printf \"\$KEY\\t\" && etcdctl get \${KEY##* } --prefix --print-value-only | wc -c | numfmt --to=iec ; done | sort -k3 -hr | column -J -n \"etcd_resources\" -N \"object_count,object_name,object_size\"" | jq -c > ${ETCD_LOG_PATH}/object_count.json &
+ocp4etcd "etcdctl get / --prefix --keys-only | grep -oE \"^/[a-z|.]+/[a-z|.|8]*\" | sort | uniq -c | sort -rn | while read KEY; do printf \"\$KEY\\t\" && etcdctl get \${KEY##* } --prefix --print-value-only | wc -c | numfmt --to=iec ; done | sort -k3 -hr | column -J -n \"etcd_resources\" -N \"object_count,object_name,object_size\"" | jq -c >${ETCD_LOG_PATH}/object_count.json &
 PIDS+=($!)
 
 echo "INFO: Waiting for etcd info collection to complete ..."

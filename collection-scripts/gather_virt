@@ -1,0 +1,43 @@
+#!/bin/bash
+
+source $(dirname "$0")/common.sh
+BASE_COLLECTION_PATH="must-gather"
+VIRT_LOG_PATH="${BASE_COLLECTION_PATH}/virt_info"
+
+#
+# This is intentionally covering multiple opreators
+# It is covering multiple operators in order to get basic (cross component) virtualization data
+#
+# Each operator usually has their own dedicate must-gather which will be eventually run if more
+# data is required.
+#
+
+declare -a VIRT_CRDS=(
+  # CNV
+  "virtualmachines.kubevirt.io" "virtualmachineinstances.kubevirt.io" "virtualmachineinstancemigrations.kubevirt.io"
+  # MTV
+  "migrations.forklift.konveyor.io" "plans.forklift.konveyor.io" "providers.forklift.konveyor.io"
+  )
+
+function get_crd_stats() {
+  echo "Gathering stats for the following CRDs: ${VIRT_CRDS[@]}"
+  mkdir -p "${VIRT_LOG_PATH}/crd"
+	for CRD in "${VIRT_CRDS[@]}";
+  do
+    oc get -A --chunk-size=10000 $CRD -o NAME | wc -l > ${VIRT_LOG_PATH}/crd/$CRD.count
+  done
+}
+
+function summarize() {
+  echo "Stats"
+  for FN in ${VIRT_LOG_PATH}/crd/*;
+  do
+    echo "$(basename $FN) $(cat $FN)"
+  done | column --table --table-right 1
+}
+
+get_crd_stats
+summarize
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync
