@@ -129,6 +129,41 @@ function gather_hardware_info() {
 		>"${IP_DETAIL_LOG_PATH}" 2>&1
 }
 
+function gather_sriov_service_journal() {
+  local pod="$1"
+	local CONFIG_DAEMON_POD_LOG_PATH="${SRIOV_LOG_PATH}/pods/${pod}"
+	local JOURNAL_LOG_DIR="${CONFIG_DAEMON_POD_LOG_PATH}/sriov-service-journal"
+
+	SRIOV_SERVICES="sriov-config.service sriov-config-post-network.service"
+	MAX_BOOTS=5
+
+	boot_count=$(oc exec -n ${operator_ns} "${pod}" -c sriov-network-config-daemon -- chroot /host \
+		/bin/bash -c "journalctl --list-boots --no-pager 2>/dev/null | wc -l" 2>/dev/null) || true
+	boot_count=${boot_count//[!0-9]/}
+	boot_count=${boot_count:-1}
+
+	if [ "${boot_count}" -gt "${MAX_BOOTS}" ]; then
+		boot_count=${MAX_BOOTS}
+	fi
+
+	mkdir -p "${JOURNAL_LOG_DIR}"
+
+	for service in ${SRIOV_SERVICES}; do
+		service_name="${service%.service}"
+		for (( boot_idx=0; boot_idx<boot_count; boot_idx++ )); do
+			log_file="${JOURNAL_LOG_DIR}/${service_name}_boot-${boot_idx}.log"
+			oc exec -n ${operator_ns} "${pod}" -c sriov-network-config-daemon -- chroot /host \
+				/bin/bash -c "journalctl -u ${service} -b -${boot_idx} --no-pager 2>/dev/null" >"${log_file}" 2>&1 || true
+			if [ ! -s "${log_file}" ]; then
+				rm -f "${log_file}"
+			fi
+		done
+	done
+
+	# Clean up directory if no logs were collected (systemd mode not enabled)
+	rmdir "${JOURNAL_LOG_DIR}" 2>/dev/null || true
+}
+
 function gather_sriov_for_pod() {
 	local gather_sriov_pids=()
 	local CONFIG_DAEMON_POD="$1"
@@ -169,6 +204,9 @@ function gather_sriov_for_pod() {
 	# Collect /var/lib/cni/sriov contents.
 	oc cp -n "${operator_ns}" -c sriov-network-config-daemon "${CONFIG_DAEMON_POD}":/host/var/lib/cni/sriov "${VAR_LIB_CNI_SRIOV_PATH}" &>/dev/null || true &
 	gather_sriov_pids+=($!)
+
+  gather_sriov_service_journal "${CONFIG_DAEMON_POD}" &
+  gather_sriov_pids+=($!)
 
 	gather_netns_ip_a "${CONFIG_DAEMON_POD}" &
 	gather_sriov_pids+=($!)
