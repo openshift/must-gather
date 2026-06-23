@@ -22,14 +22,26 @@ if [ -z "$WIN_NODES" ]; then
 fi
 
 PIDS=()
+# In CI (OPENSHIFT_CI/ARTIFACTS_DIR) skip gzip for easier inspection of artifacts
+if [[ -n "${OPENSHIFT_CI:-}" || -n "${ARTIFACTS_DIR:-}" ]]; then
+	WIN_LOG_SUFFIX=""
+	WIN_LOG_PIPE="cat"
+else
+	WIN_LOG_SUFFIX=".gz"
+	WIN_LOG_PIPE="gzip"
+fi
+
+WINDOWS_NODE_LOGS_START=$(date +%s)
 echo INFO: Collecting logs for all Windows nodes
 for log in "${LOGS[@]}"; do
 	LOG_FILE_DIR=${WINDOWS_NODE_LOGS}/log_files/$(dirname "$log")
 	mkdir -p "${LOG_FILE_DIR}"
-	/usr/bin/oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} -l kubernetes.io/os=windows --path="$log" >"${LOG_FILE_DIR}/$(basename "$log")" &
+	/usr/bin/oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} -l kubernetes.io/os=windows --path="$log" | ${WIN_LOG_PIPE} >"${LOG_FILE_DIR}/$(basename "$log")${WIN_LOG_SUFFIX}" &
 	PIDS+=($!)
 done
 wait "${PIDS[@]}"
+WINDOWS_NODE_LOGS_END=$(date +%s)
+echo "INFO: Windows node log collection completed in $((WINDOWS_NODE_LOGS_END - WINDOWS_NODE_LOGS_START)) seconds"
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
