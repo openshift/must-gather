@@ -32,19 +32,34 @@ get_log_collection_args() {
 	fi
 
 
-	# REDUCE_LOGS: unset = default (--rotated-pod-logs). If set, only skip_rotated_logs is allowed.
+	# REDUCE_LOGS: unset = defaults. Comma or space separated list of:
+	#   skip_rotated_logs     - omit --rotated-pod-logs from oc adm inspect
+	#   compress_service_logs - gzip host service logs (see gather_service_logs_util)
+	# shellcheck disable=SC2034
 	rotated_pod_logs_arg="--rotated-pod-logs"
+	# shellcheck disable=SC2034
+	compress_service_logs=""
 
 	if [ -n "${REDUCE_LOGS:-}" ]; then
-		case "${REDUCE_LOGS}" in
-		skip_rotated_logs)
-			rotated_pod_logs_arg=""
-			;;
-		*)
-			echo "ERROR: REDUCE_LOGS must be unset or skip_rotated_logs (got: [${REDUCE_LOGS}])." >&2
-			exit 1
-			;;
-		esac
+		# Normalize commas to spaces, then validate each option.
+		# Intentional word-splitting of comma/space separated options.
+		# shellcheck disable=SC2086
+		for reduce_logs_option in ${REDUCE_LOGS//,/ }; do
+			case "${reduce_logs_option}" in
+			skip_rotated_logs)
+				rotated_pod_logs_arg=""
+				;;
+			compress_service_logs)
+				compress_service_logs=1
+				;;
+			"")
+				;;
+			*)
+				echo "ERROR: REDUCE_LOGS unknown value '${reduce_logs_option}'. Allowed: skip_rotated_logs, compress_service_logs (got: [${REDUCE_LOGS}])." >&2
+				exit 1
+				;;
+			esac
+		done
 	fi
 
 	# oc adm node-logs `--since` parameter is not the same as oc adm inspect `--since`.

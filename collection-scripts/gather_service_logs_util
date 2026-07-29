@@ -22,13 +22,14 @@ function collect_service_logs {
 	fi
 
 	mkdir -p "${DIR_PATH}"
-	# In CI (OPENSHIFT_CI/ARTIFACTS_DIR) skip gzip for easier inspection of artifacts
-	if [[ -n "${OPENSHIFT_CI:-}" || -n "${ARTIFACTS_DIR:-}" ]]; then
-		LOG_SUFFIX=".log"
-		LOG_PIPE="cat"
-	else
+	# Default: uncompressed .log for compatibility with existing tooling.
+	# Opt in via REDUCE_LOGS=compress_service_logs (parsed by get_log_collection_args).
+	if [[ -n "${compress_service_logs:-}" ]]; then
 		LOG_SUFFIX=".log.gz"
 		LOG_PIPE="gzip"
+	else
+		LOG_SUFFIX=".log"
+		LOG_PIPE="cat"
 	fi
 	for service in "${@}"; do
 		echo "INFO: Collecting host service logs for $service"

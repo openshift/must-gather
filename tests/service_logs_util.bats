@@ -149,3 +149,52 @@ run_service_logs_test() {
 	assert_success
 	assert_output --partial "INFO: Collecting host service logs for testservice"
 }
+
+@test "collect_service_logs writes uncompressed .log by default" {
+	run_service_logs_test "
+		unset REDUCE_LOGS
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		collect_service_logs --role=master testservice 2>&1
+		wait \"\${PIDS[@]}\" 2>/dev/null || true
+		PIDS=()
+		[[ -f \"$TEST_TMPDIR/service_logs/masters/testservice_service.log\" ]] && echo 'uncompressed log present'
+		[[ ! -f \"$TEST_TMPDIR/service_logs/masters/testservice_service.log.gz\" ]] && echo 'gzip absent'
+	"
+
+	assert_success
+	assert_output --partial "uncompressed log present"
+	assert_output --partial "gzip absent"
+}
+
+@test "collect_service_logs writes .log.gz when REDUCE_LOGS is compress_service_logs" {
+	run_service_logs_test "
+		export REDUCE_LOGS='compress_service_logs'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		collect_service_logs --role=master testservice 2>&1
+		wait \"\${PIDS[@]}\" 2>/dev/null || true
+		PIDS=()
+		[[ -f \"$TEST_TMPDIR/service_logs/masters/testservice_service.log.gz\" ]] && echo 'gzip log present'
+		[[ ! -f \"$TEST_TMPDIR/service_logs/masters/testservice_service.log\" ]] && echo 'uncompressed absent'
+	"
+
+	assert_success
+	assert_output --partial "gzip log present"
+	assert_output --partial "uncompressed absent"
+}
+
+@test "collect_service_logs writes .log.gz when REDUCE_LOGS includes compress_service_logs with skip_rotated_logs" {
+	run_service_logs_test "
+		export REDUCE_LOGS='skip_rotated_logs,compress_service_logs'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		collect_service_logs --role=master testservice 2>&1
+		wait \"\${PIDS[@]}\" 2>/dev/null || true
+		PIDS=()
+		[[ -f \"$TEST_TMPDIR/service_logs/masters/testservice_service.log.gz\" ]] && echo 'gzip log present'
+	"
+
+	assert_success
+	assert_output --partial "gzip log present"
+}
