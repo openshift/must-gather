@@ -24,12 +24,11 @@ function collect_service_logs {
 	mkdir -p "${DIR_PATH}"
 	# Default: uncompressed .log for compatibility with existing tooling.
 	# Opt in via REDUCE_LOGS=compress_service_logs (parsed by get_log_collection_args).
-	if [[ -n "${compress_service_logs:-}" ]]; then
+	LOG_SUFFIX=".log"
+	LOG_PIPE="cat"
+	if [[ "${compress_service_logs:-}" == "true" ]]; then
 		LOG_SUFFIX=".log.gz"
 		LOG_PIPE="gzip"
-	else
-		LOG_SUFFIX=".log"
-		LOG_PIPE="cat"
 	fi
 	for service in "${@}"; do
 		echo "INFO: Collecting host service logs for $service"

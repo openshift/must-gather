@@ -134,7 +134,7 @@ load test_helper
 
 	assert_success
 	assert_output --partial "rotated_pod_logs_arg=--rotated-pod-logs"
-	assert_output --partial "compress_service_logs=1"
+	assert_output --partial "compress_service_logs=true"
 }
 
 @test "get_log_collection_args accepts both REDUCE_LOGS tokens" {
@@ -148,7 +148,7 @@ load test_helper
 
 	assert_success
 	assert_output --partial "rotated_pod_logs_arg=[]"
-	assert_output --partial "compress_service_logs=1"
+	assert_output --partial "compress_service_logs=true"
 }
 
 @test "get_log_collection_args accepts both REDUCE_LOGS tokens in either order" {
@@ -162,7 +162,7 @@ load test_helper
 
 	assert_success
 	assert_output --partial "rotated_pod_logs_arg=[]"
-	assert_output --partial "compress_service_logs=1"
+	assert_output --partial "compress_service_logs=true"
 }
 
 @test "get_log_collection_args fails when REDUCE_LOGS contains an unknown token" {
@@ -186,6 +186,8 @@ load test_helper
 
 	assert_failure
 	assert_output --partial "ERROR"
+	assert_output --partial "invalid"
+	assert_output --partial "skip_rotated_logs"
 	assert_output --partial "compress_service_logs"
 }
 

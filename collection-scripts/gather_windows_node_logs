@@ -22,7 +22,6 @@ if [ -z "$WIN_NODES" ]; then
 fi
 
 PIDS=()
-WINDOWS_NODE_LOGS_START=$(date +%s)
 echo INFO: Collecting logs for all Windows nodes
 for log in "${LOGS[@]}"; do
 	LOG_FILE_DIR=${WINDOWS_NODE_LOGS}/log_files/$(dirname "$log")
@@ -31,8 +30,6 @@ for log in "${LOGS[@]}"; do
 	PIDS+=($!)
 done
 wait "${PIDS[@]}"
-WINDOWS_NODE_LOGS_END=$(date +%s)
-echo "INFO: Windows node log collection completed in $((WINDOWS_NODE_LOGS_END - WINDOWS_NODE_LOGS_START)) seconds"
 
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync

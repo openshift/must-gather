@@ -34,9 +34,9 @@ get_log_collection_args() {
 
 	# REDUCE_LOGS: unset = defaults. Comma or space separated list of:
 	#   skip_rotated_logs     - omit --rotated-pod-logs from oc adm inspect
-	#   compress_service_logs - gzip host service logs (see gather_service_logs_util)
+	#   compress_service_logs - gzip host service logs (see gather_service_logs_util)	
 	# shellcheck disable=SC2034
-	rotated_pod_logs_arg="--rotated-pod-logs"
+	rotated_pod_logs_arg="--rotated-pod-logs"	
 	# shellcheck disable=SC2034
 	compress_service_logs=""
 
@@ -50,7 +50,7 @@ get_log_collection_args() {
 				rotated_pod_logs_arg=""
 				;;
 			compress_service_logs)
-				compress_service_logs=1
+				compress_service_logs=true
 				;;
 			"")
 				;;
