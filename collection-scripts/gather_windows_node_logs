@@ -22,11 +22,19 @@ if [ -z "$WIN_NODES" ]; then
 fi
 
 PIDS=()
+# Default: uncompressed for compatibility with existing tooling.
+# Opt in via REDUCE_LOGS=compress_service_logs (parsed by get_log_collection_args).
+LOG_SUFFIX=""
+LOG_OUTPUT_CMD="cat"
+if [[ "${compress_service_logs:-}" == "true" ]]; then
+	LOG_SUFFIX=".gz"
+	LOG_OUTPUT_CMD="gzip"
+fi
 echo INFO: Collecting logs for all Windows nodes
 for log in "${LOGS[@]}"; do
 	LOG_FILE_DIR=${WINDOWS_NODE_LOGS}/log_files/$(dirname "$log")
 	mkdir -p "${LOG_FILE_DIR}"
-	/usr/bin/oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} -l kubernetes.io/os=windows --path="$log" | gzip >"${LOG_FILE_DIR}/$(basename "$log").gz" &
+	/usr/bin/oc adm node-logs ${node_log_collection_args:+"$node_log_collection_args"} -l kubernetes.io/os=windows --path="$log" | ${LOG_OUTPUT_CMD} >"${LOG_FILE_DIR}/$(basename "$log")${LOG_SUFFIX}" &
 	PIDS+=($!)
 done
 wait "${PIDS[@]}"

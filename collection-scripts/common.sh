@@ -18,6 +18,9 @@ function get_operator_ns() {
 	fi
 }
 
+# Sets globals for callers: log_collection_args, node_log_collection_args,
+# rotated_pod_logs_arg, compress_service_logs. SC2034: assigned here, read elsewhere.
+# shellcheck disable=SC2034
 get_log_collection_args() {
 	# validation of MUST_GATHER_SINCE and MUST_GATHER_SINCE_TIME is done by the
 	# caller (oc adm must-gather) so it's safe to use the values as they are.
@@ -27,17 +30,15 @@ get_log_collection_args() {
 		log_collection_args=--since="${MUST_GATHER_SINCE}"
 	fi
 	if [ -n "${MUST_GATHER_SINCE_TIME:-}" ]; then
-		# shellcheck disable=SC2034
 		log_collection_args=--since-time="${MUST_GATHER_SINCE_TIME}"
 	fi
 
 
 	# REDUCE_LOGS: unset = defaults. Comma or space separated list of:
 	#   skip_rotated_logs     - omit --rotated-pod-logs from oc adm inspect
-	#   compress_service_logs - gzip host service logs (see gather_service_logs_util)	
-	# shellcheck disable=SC2034
-	rotated_pod_logs_arg="--rotated-pod-logs"	
-	# shellcheck disable=SC2034
+	#   compress_service_logs - gzip host service / Windows node logs (see gather_service_logs_util, gather_windows_node_logs)
+
+	rotated_pod_logs_arg="--rotated-pod-logs"
 	compress_service_logs=""
 
 	if [ -n "${REDUCE_LOGS:-}" ]; then
@@ -74,7 +75,6 @@ get_log_collection_args() {
 		since=$(echo "${MUST_GATHER_SINCE:-}" | sed 's/\([0-9]*[dhms]\).*/\1/')
 		node_log_collection_args=--since="-${since}"
 	fi
-	# shellcheck disable=SC2034
 	if [ -n "${MUST_GATHER_SINCE_TIME:-}" ]; then
 		iso_time=$(echo "${MUST_GATHER_SINCE_TIME}" | sed 's/T/ /; s/Z//')
 		node_log_collection_args=--since="${iso_time}"
