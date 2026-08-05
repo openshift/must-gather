@@ -115,13 +115,57 @@ load test_helper
 		source \"$SCRIPT_DIR/common.sh\"
 		get_log_collection_args
 		echo \"rotated_pod_logs_arg=[\$rotated_pod_logs_arg]\"
+		echo \"compress_service_logs=[\$compress_service_logs]\"
 	"
 
 	assert_success
 	assert_output --partial "rotated_pod_logs_arg=[]"
+	assert_output --partial "compress_service_logs=[]"
 }
 
-@test "get_log_collection_args fails when REDUCE_LOGS is comma-separated" {
+@test "get_log_collection_args enables compress_service_logs when REDUCE_LOGS is compress_service_logs" {
+	run bash -c "
+		export REDUCE_LOGS='compress_service_logs'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		echo \"rotated_pod_logs_arg=\$rotated_pod_logs_arg\"
+		echo \"compress_service_logs=\$compress_service_logs\"
+	"
+
+	assert_success
+	assert_output --partial "rotated_pod_logs_arg=--rotated-pod-logs"
+	assert_output --partial "compress_service_logs=true"
+}
+
+@test "get_log_collection_args accepts both REDUCE_LOGS tokens" {
+	run bash -c "
+		export REDUCE_LOGS='skip_rotated_logs,compress_service_logs'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		echo \"rotated_pod_logs_arg=[\$rotated_pod_logs_arg]\"
+		echo \"compress_service_logs=\$compress_service_logs\"
+	"
+
+	assert_success
+	assert_output --partial "rotated_pod_logs_arg=[]"
+	assert_output --partial "compress_service_logs=true"
+}
+
+@test "get_log_collection_args accepts both REDUCE_LOGS tokens in either order" {
+	run bash -c "
+		export REDUCE_LOGS='compress_service_logs,skip_rotated_logs'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		echo \"rotated_pod_logs_arg=[\$rotated_pod_logs_arg]\"
+		echo \"compress_service_logs=\$compress_service_logs\"
+	"
+
+	assert_success
+	assert_output --partial "rotated_pod_logs_arg=[]"
+	assert_output --partial "compress_service_logs=true"
+}
+
+@test "get_log_collection_args fails when REDUCE_LOGS contains an unknown token" {
 	run bash -c "
 		export REDUCE_LOGS='skip_rotated_logs,other'
 		source \"$SCRIPT_DIR/common.sh\"
@@ -130,7 +174,7 @@ load test_helper
 
 	assert_failure
 	assert_output --partial "ERROR"
-	assert_output --partial "skip_rotated_logs,other"
+	assert_output --partial "other"
 }
 
 @test "get_log_collection_args fails when REDUCE_LOGS is unknown" {
@@ -142,7 +186,9 @@ load test_helper
 
 	assert_failure
 	assert_output --partial "ERROR"
+	assert_output --partial "invalid"
 	assert_output --partial "skip_rotated_logs"
+	assert_output --partial "compress_service_logs"
 }
 
 @test "get_log_collection_args formats node_log_collection_args from MUST_GATHER_SINCE" {
