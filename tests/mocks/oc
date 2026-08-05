@@ -64,6 +64,26 @@ get)
 		exit "${MOCK_METALLB_EXISTS:-1}"
 	fi
 
+	# Handle CRD listing for gather_olm_v1
+	# Note: can't use has_arg for "custom-columns" because the actual arg is
+	# "custom-columns=NAME:metadata.name" (no space after "custom-columns")
+	if has_arg "crds" && [[ "$MOCK_OC_ARGS" == *"custom-columns"* ]]; then
+		echo "${MOCK_OC_CRDS_OUTPUT:-}"
+		exit 0
+	fi
+
+	# Handle clustercsidriver queries for gather_vsphere
+	if has_arg "clustercsidriver"; then
+		echo "${MOCK_OC_CSIDRIVER_OUTPUT:-}"
+		exit "${MOCK_OC_CSIDRIVER_EXIT_CODE:-0}"
+	fi
+
+	# Handle ARO cluster CR queries for gather_aro
+	if has_arg "clusters.aro.openshift.io"; then
+		echo "${MOCK_OC_ARO_OUTPUT:-}"
+		exit "${MOCK_OC_ARO_EXIT_CODE:-0}"
+	fi
+
 	# Handle namespace check
 	if has_arg "ns"; then
 		if [[ -n "${MOCK_NS_EXISTS:-}" ]]; then
