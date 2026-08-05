@@ -8,19 +8,8 @@ get_log_collection_args
 # shellcheck disable=SC2034
 METALLB_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${operator_ns}/pods"
 
-function get_metallb_crs() {
-	declare -a METALLB_CRDS=("bgppeers" "bfdprofiles" "bgpAdvertisements" "ipaddresspools" "l2advertisements" "communities")
-
-	for CRD in "${METALLB_CRDS[@]}"; do
-		# shellcheck disable=SC2086
-		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n "${operator_ns}" "${CRD}"
-	done
-}
-
-# shellcheck disable=SC2086
-oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${operator_ns}"
-
-get_metallb_crs
+inspect_operator_ns "${operator_ns}"
+inspect_crds_namespaced "${operator_ns}" bgppeers bfdprofiles bgpAdvertisements ipaddresspools l2advertisements communities
 
 if ! oc get metallb metallb -n "${operator_ns}" >/dev/null 2>&1; then
 	echo "metallb not started"

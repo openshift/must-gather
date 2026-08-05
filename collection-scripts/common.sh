@@ -81,3 +81,21 @@ get_log_collection_args() {
 	# log_collection_args, node_log_collection_args, rotated_pod_logs_arg, compress_service_logs.
 	export log_collection_args node_log_collection_args rotated_pod_logs_arg compress_service_logs
 }
+
+inspect_crds_namespaced() {
+	local ns="$1"
+	shift
+	# shellcheck disable=SC2086
+	oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n "${ns}" "$@"
+}
+
+inspect_crds_cluster() {
+	# shellcheck disable=SC2086
+	oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "$@"
+}
+
+inspect_operator_ns() {
+	local ns="$1"
+	# shellcheck disable=SC2086
+	oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${ns}"
+}
