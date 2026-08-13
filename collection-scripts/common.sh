@@ -34,9 +34,11 @@ get_log_collection_args() {
 	# REDUCE_LOGS: unset = defaults. Comma or space separated list of:
 	#   skip_rotated_logs     - omit --rotated-pod-logs from oc adm inspect
 	#   compress_service_logs - gzip host service / Windows node logs (see gather_service_logs_util, gather_windows_node_logs)
+	#   compress_logs         - gzip collected .log files >=10MB after gather (before rsync)
 
 	rotated_pod_logs_arg="--rotated-pod-logs"
 	compress_service_logs=""
+	compress_after_gather=""
 
 	if [ -n "${REDUCE_LOGS:-}" ]; then
 		# Normalize commas to spaces, then validate each option.
@@ -50,10 +52,13 @@ get_log_collection_args() {
 			compress_service_logs)
 				compress_service_logs=true
 				;;
+			compress_logs)
+				compress_after_gather=true
+				;;
 			"")
 				;;
 			*)
-				echo "ERROR: REDUCE_LOGS unknown value '${reduce_logs_option}'. Allowed: skip_rotated_logs, compress_service_logs (got: [${REDUCE_LOGS}])." >&2
+				echo "ERROR: REDUCE_LOGS unknown value '${reduce_logs_option}'. Allowed: skip_rotated_logs, compress_service_logs, compress_logs (got: [${REDUCE_LOGS}])." >&2
 				exit 1
 				;;
 			esac
@@ -78,6 +83,36 @@ get_log_collection_args() {
 	fi
 
 	# Export globals used by gather_* scripts that source this file (also satisfies ShellCheck SC2034):
-	# log_collection_args, node_log_collection_args, rotated_pod_logs_arg, compress_service_logs.
-	export log_collection_args node_log_collection_args rotated_pod_logs_arg compress_service_logs
+	# log_collection_args, node_log_collection_args, rotated_pod_logs_arg, compress_service_logs, compress_after_gather.
+	export log_collection_args node_log_collection_args rotated_pod_logs_arg compress_service_logs compress_after_gather
+}
+
+# Compress collected .log / .log.* files larger than 10MB (skip already-gzipped).
+# Uses gzip -1 (fastest). Parallelism defaults to 4; override with COMPRESS_LOGS_JOBS.
+compress_logs() {
+	local target_dir="${1:-/must-gather}"
+	local max_jobs="${COMPRESS_LOGS_JOBS:-4}"
+	local -a pids=()
+	local log_file
+	local pid
+
+	if [ ! -d "${target_dir}" ]; then
+		echo "WARNING: compress_logs: target directory ${target_dir} does not exist, skipping." >&2
+		return 0
+	fi
+
+	echo "Compressing collected logs in parallel (jobs=${max_jobs})..."
+	while IFS= read -r -d '' log_file; do
+		while [ "${#pids[@]}" -ge "${max_jobs}" ]; do
+			wait "${pids[0]}" || true
+			pids=("${pids[@]:1}")
+		done
+		gzip -1 "${log_file}" &
+		pids+=($!)
+	done < <(find "${target_dir}" \( -name '*.log' -o -name '*.log.*' \) ! -name '*.gz' -size +10M -print0)
+
+	for pid in "${pids[@]}"; do
+		wait "${pid}" || true
+	done
+	echo "Compression complete."
 }
