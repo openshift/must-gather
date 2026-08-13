@@ -92,27 +92,9 @@ get_log_collection_args() {
 compress_logs() {
 	local target_dir="${1:-/must-gather}"
 	local max_jobs="${COMPRESS_LOGS_JOBS:-4}"
-	local -a pids=()
-	local log_file
-	local pid
-
-	if [ ! -d "${target_dir}" ]; then
-		echo "WARNING: compress_logs: target directory ${target_dir} does not exist, skipping." >&2
-		return 0
-	fi
 
 	echo "Compressing collected logs in parallel (jobs=${max_jobs})..."
-	while IFS= read -r -d '' log_file; do
-		while [ "${#pids[@]}" -ge "${max_jobs}" ]; do
-			wait "${pids[0]}" || true
-			pids=("${pids[@]:1}")
-		done
-		gzip -1 "${log_file}" &
-		pids+=($!)
-	done < <(find "${target_dir}" \( -name '*.log' -o -name '*.log.*' \) ! -name '*.gz' -size +10M -print0)
-
-	for pid in "${pids[@]}"; do
-		wait "${pid}" || true
-	done
+	find "${target_dir}" \( -name '*.log' -o -name '*.log.*' \) ! -name '*.gz' -size +10M \
+		| xargs -P "${max_jobs}" gzip -1
 	echo "Compression complete."
 }
