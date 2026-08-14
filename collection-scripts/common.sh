@@ -88,13 +88,14 @@ get_log_collection_args() {
 }
 
 # Compress collected .log / .log.* files larger than 10MB (skip already-gzipped).
-# Uses gzip -1 (fastest). Parallelism defaults to 4; override with COMPRESS_LOGS_JOBS.
+# Uses gzip -1 (fastest) with 2 parallel jobs.
 compress_logs() {
 	local target_dir="${1:-/must-gather}"
-	local max_jobs="${COMPRESS_LOGS_JOBS:-4}"
 
-	echo "Compressing collected logs in parallel (jobs=${max_jobs})..."
-	find "${target_dir}" \( -name '*.log' -o -name '*.log.*' \) ! -name '*.gz' -size +10M \
-		| xargs -P "${max_jobs}" gzip -1
+	echo "Compressing collected logs in parallel (jobs=2)..."
+	# -print0 / xargs -0: keep path names with spaces/quotes intact
+	# -r: do not run gzip when find matches nothing (GNU xargs)
+	find "${target_dir}" \( -name '*.log' -o -name '*.log.*' \) ! -name '*.gz' -size +10M -print0 \
+		| xargs -0 -r -P 2 gzip -1
 	echo "Compression complete."
 }

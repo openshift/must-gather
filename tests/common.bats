@@ -264,6 +264,37 @@ load test_helper
 	assert_output --partial "preexisting gz kept"
 }
 
+@test "compress_logs gzips large .log files whose names contain spaces" {
+	run bash -c "
+		source \"$SCRIPT_DIR/common.sh\"
+		mkdir -p \"$TEST_TMPDIR/logs\"
+		dd if=/dev/zero of=\"$TEST_TMPDIR/logs/file with spaces.log\" bs=1024 count=11264 status=none
+		compress_logs \"$TEST_TMPDIR/logs\"
+		[[ -f \"$TEST_TMPDIR/logs/file with spaces.log.gz\" ]] && echo 'spaced compressed'
+		[[ ! -f \"$TEST_TMPDIR/logs/file with spaces.log\" ]] && echo 'spaced original removed'
+	"
+
+	assert_success
+	assert_output --partial "spaced compressed"
+	assert_output --partial "spaced original removed"
+}
+
+@test "compress_logs skips gzip when no files match" {
+	run bash -c "
+		source \"$SCRIPT_DIR/common.sh\"
+		mkdir -p \"$TEST_TMPDIR/empty-logs\"
+		echo 'tiny' > \"$TEST_TMPDIR/empty-logs/small.log\"
+		compress_logs \"$TEST_TMPDIR/empty-logs\"
+		[[ -f \"$TEST_TMPDIR/empty-logs/small.log\" ]] && echo 'small kept'
+	"
+
+	assert_success
+	assert_output --partial "Compressing collected logs"
+	assert_output --partial "Compression complete"
+	assert_output --partial "small kept"
+	refute_output --partial "gzip:"
+}
+
 @test "get_log_collection_args formats node_log_collection_args from MUST_GATHER_SINCE" {
 	run bash -c "
 		export MUST_GATHER_SINCE='8h'
