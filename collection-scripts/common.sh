@@ -93,9 +93,14 @@ compress_logs() {
 	local target_dir="${1:-/must-gather}"
 
 	echo "Compressing collected logs in parallel (jobs=2)..."
-	# -print0 / xargs -0: keep path names with spaces/quotes intact
-	# -r: do not run gzip when find matches nothing (GNU xargs)
-	find "${target_dir}" \( -name '*.log' -o -name '*.log.*' \) ! -name '*.gz' -size +10M -print0 \
-		| xargs -0 -r -P 2 gzip -1
+	# Find large logs, then gzip up to 2 at a time.
+	# -print0 / xargs -0: safe with spaces in paths
+	# xargs -r: skip gzip if find matches nothing
+	find "${target_dir}" \
+		\( -name '*.log' -o -name '*.log.*' \) \
+		! -name '*.gz' \
+		-size +10M \
+		-print0 |
+		xargs -0 -r -P 2 gzip -1
 	echo "Compression complete."
 }
