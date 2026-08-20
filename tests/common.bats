@@ -116,11 +116,13 @@ load test_helper
 		get_log_collection_args
 		echo \"rotated_pod_logs_arg=[\$rotated_pod_logs_arg]\"
 		echo \"compress_service_logs=[\$compress_service_logs]\"
+		echo \"compress_after_gather=[\$compress_after_gather]\"
 	"
 
 	assert_success
 	assert_output --partial "rotated_pod_logs_arg=[]"
 	assert_output --partial "compress_service_logs=[]"
+	assert_output --partial "compress_after_gather=[]"
 }
 
 @test "get_log_collection_args enables compress_service_logs when REDUCE_LOGS is compress_service_logs" {
@@ -130,11 +132,27 @@ load test_helper
 		get_log_collection_args
 		echo \"rotated_pod_logs_arg=\$rotated_pod_logs_arg\"
 		echo \"compress_service_logs=\$compress_service_logs\"
+		echo \"compress_after_gather=[\$compress_after_gather]\"
 	"
 
 	assert_success
 	assert_output --partial "rotated_pod_logs_arg=--rotated-pod-logs"
 	assert_output --partial "compress_service_logs=true"
+	assert_output --partial "compress_after_gather=[]"
+}
+
+@test "get_log_collection_args enables compress_after_gather when REDUCE_LOGS is compress_logs" {
+	run bash -c "
+		export REDUCE_LOGS='compress_logs'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		echo \"rotated_pod_logs_arg=\$rotated_pod_logs_arg\"
+		echo \"compress_after_gather=\$compress_after_gather\"
+	"
+
+	assert_success
+	assert_output --partial "rotated_pod_logs_arg=--rotated-pod-logs"
+	assert_output --partial "compress_after_gather=true"
 }
 
 @test "get_log_collection_args accepts both REDUCE_LOGS tokens" {
@@ -165,6 +183,36 @@ load test_helper
 	assert_output --partial "compress_service_logs=true"
 }
 
+@test "get_log_collection_args accepts compress_logs with skip_rotated_logs" {
+	run bash -c "
+		export REDUCE_LOGS='skip_rotated_logs,compress_logs'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		echo \"rotated_pod_logs_arg=[\$rotated_pod_logs_arg]\"
+		echo \"compress_after_gather=\$compress_after_gather\"
+	"
+
+	assert_success
+	assert_output --partial "rotated_pod_logs_arg=[]"
+	assert_output --partial "compress_after_gather=true"
+}
+
+@test "get_log_collection_args accepts all REDUCE_LOGS tokens together" {
+	run bash -c "
+		export REDUCE_LOGS='skip_rotated_logs,compress_service_logs,compress_logs'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		echo \"rotated_pod_logs_arg=[\$rotated_pod_logs_arg]\"
+		echo \"compress_service_logs=\$compress_service_logs\"
+		echo \"compress_after_gather=\$compress_after_gather\"
+	"
+
+	assert_success
+	assert_output --partial "rotated_pod_logs_arg=[]"
+	assert_output --partial "compress_service_logs=true"
+	assert_output --partial "compress_after_gather=true"
+}
+
 @test "get_log_collection_args fails when REDUCE_LOGS contains an unknown token" {
 	run bash -c "
 		export REDUCE_LOGS='skip_rotated_logs,other'
@@ -189,6 +237,62 @@ load test_helper
 	assert_output --partial "invalid"
 	assert_output --partial "skip_rotated_logs"
 	assert_output --partial "compress_service_logs"
+	assert_output --partial "compress_logs"
+}
+
+@test "compress_logs gzips large .log files and leaves small ones alone" {
+	run bash -c "
+		source \"$SCRIPT_DIR/common.sh\"
+		mkdir -p \"$TEST_TMPDIR/logs/nested\"
+		# 11MB file should be compressed (>10M threshold)
+		dd if=/dev/zero of=\"$TEST_TMPDIR/logs/large.log\" bs=1024 count=11264 status=none
+		# small file should remain uncompressed
+		echo 'small' > \"$TEST_TMPDIR/logs/nested/small.log\"
+		# already-gzipped should be skipped
+		echo 'already' | gzip > \"$TEST_TMPDIR/logs/already.log.gz\"
+		compress_logs \"$TEST_TMPDIR/logs\"
+		[[ -f \"$TEST_TMPDIR/logs/large.log.gz\" ]] && echo 'large compressed'
+		[[ ! -f \"$TEST_TMPDIR/logs/large.log\" ]] && echo 'large original removed'
+		[[ -f \"$TEST_TMPDIR/logs/nested/small.log\" ]] && echo 'small kept'
+		[[ -f \"$TEST_TMPDIR/logs/already.log.gz\" ]] && echo 'preexisting gz kept'
+	"
+
+	assert_success
+	assert_output --partial "large compressed"
+	assert_output --partial "large original removed"
+	assert_output --partial "small kept"
+	assert_output --partial "preexisting gz kept"
+}
+
+@test "compress_logs gzips large .log files whose names contain spaces" {
+	run bash -c "
+		source \"$SCRIPT_DIR/common.sh\"
+		mkdir -p \"$TEST_TMPDIR/logs\"
+		dd if=/dev/zero of=\"$TEST_TMPDIR/logs/file with spaces.log\" bs=1024 count=11264 status=none
+		compress_logs \"$TEST_TMPDIR/logs\"
+		[[ -f \"$TEST_TMPDIR/logs/file with spaces.log.gz\" ]] && echo 'spaced compressed'
+		[[ ! -f \"$TEST_TMPDIR/logs/file with spaces.log\" ]] && echo 'spaced original removed'
+	"
+
+	assert_success
+	assert_output --partial "spaced compressed"
+	assert_output --partial "spaced original removed"
+}
+
+@test "compress_logs skips gzip when no files match" {
+	run bash -c "
+		source \"$SCRIPT_DIR/common.sh\"
+		mkdir -p \"$TEST_TMPDIR/empty-logs\"
+		echo 'tiny' > \"$TEST_TMPDIR/empty-logs/small.log\"
+		compress_logs \"$TEST_TMPDIR/empty-logs\"
+		[[ -f \"$TEST_TMPDIR/empty-logs/small.log\" ]] && echo 'small kept'
+	"
+
+	assert_success
+	assert_output --partial "Compressing collected logs"
+	assert_output --partial "Compression complete"
+	assert_output --partial "small kept"
+	refute_output --partial "gzip:"
 }
 
 @test "get_log_collection_args formats node_log_collection_args from MUST_GATHER_SINCE" {

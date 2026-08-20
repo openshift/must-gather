@@ -204,5 +204,11 @@ fi
 # Gather ARO information
 /usr/bin/gather_aro
 
+# Optionally compress collected log files before the sidecar copies them out.
+# Enabled via REDUCE_LOGS=compress_logs.
+if [ "${compress_after_gather}" = "true" ]; then
+	compress_logs
+fi
+
 # force disk flush to ensure that all data gathered is accessible in the copy container
 sync
