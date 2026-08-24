@@ -34,9 +34,11 @@ get_log_collection_args() {
 	# REDUCE_LOGS: unset = defaults. Comma or space separated list of:
 	#   skip_rotated_logs     - omit --rotated-pod-logs from oc adm inspect
 	#   compress_service_logs - gzip host service / Windows node logs (see gather_service_logs_util, gather_windows_node_logs)
+	#   compress_logs         - gzip collected .log files >=10MB after gather (before rsync)
 
 	rotated_pod_logs_arg="--rotated-pod-logs"
 	compress_service_logs=""
+	compress_after_gather=""
 
 	if [ -n "${REDUCE_LOGS:-}" ]; then
 		# Normalize commas to spaces, then validate each option.
@@ -50,10 +52,13 @@ get_log_collection_args() {
 			compress_service_logs)
 				compress_service_logs=true
 				;;
+			compress_logs)
+				compress_after_gather=true
+				;;
 			"")
 				;;
 			*)
-				echo "ERROR: REDUCE_LOGS unknown value '${reduce_logs_option}'. Allowed: skip_rotated_logs, compress_service_logs (got: [${REDUCE_LOGS}])." >&2
+				echo "ERROR: REDUCE_LOGS unknown value '${reduce_logs_option}'. Allowed: skip_rotated_logs, compress_service_logs, compress_logs (got: [${REDUCE_LOGS}])." >&2
 				exit 1
 				;;
 			esac
@@ -78,6 +83,24 @@ get_log_collection_args() {
 	fi
 
 	# Export globals used by gather_* scripts that source this file (also satisfies ShellCheck SC2034):
-	# log_collection_args, node_log_collection_args, rotated_pod_logs_arg, compress_service_logs.
-	export log_collection_args node_log_collection_args rotated_pod_logs_arg compress_service_logs
+	# log_collection_args, node_log_collection_args, rotated_pod_logs_arg, compress_service_logs, compress_after_gather.
+	export log_collection_args node_log_collection_args rotated_pod_logs_arg compress_service_logs compress_after_gather
+}
+
+# Compress collected .log / .log.* files larger than 10MB (skip already-gzipped).
+# Uses gzip -1 (fastest) with 2 parallel jobs.
+compress_logs() {
+	local target_dir="${1:-/must-gather}"
+
+	echo "Compressing collected logs in parallel (jobs=2)..."
+	# Find large logs, then gzip up to 2 at a time.
+	# -print0 / xargs -0: safe with spaces in paths
+	# xargs -r: skip gzip if find matches nothing
+	find "${target_dir}" \
+		\( -name '*.log' -o -name '*.log.*' \) \
+		! -name '*.gz' \
+		-size +10M \
+		-print0 |
+		xargs -0 -r -P 2 gzip -1
+	echo "Compression complete."
 }
