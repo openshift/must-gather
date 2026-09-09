@@ -7,6 +7,8 @@ pod=$1
 NAMESPACE=$2
 node=$3
 NODE_PATH=$4
+tuned_pod=$5
+TUNED_NAMESPACE=$6
 
 echo "Collecting performance related data for node $node"
 
@@ -14,8 +16,38 @@ oc exec "$pod" -n "$NAMESPACE" -- lspci -nvv >"$NODE_PATH"/lspci
 oc exec "$pod" -n "$NAMESPACE" -- lscpu -e >"$NODE_PATH"/lscpu
 oc exec "$pod" -n "$NAMESPACE" -- cat /proc/cmdline >"$NODE_PATH"/proc_cmdline
 oc exec "$pod" -n "$NAMESPACE" -- dmesg >"$NODE_PATH"/dmesg
-oc exec "$pod" -n "$NAMESPACE" -- ethtool -k eth0 >"$NODE_PATH"/ethtool_features
-oc exec "$pod" -n "$NAMESPACE" -- ethtool -l eth0 >"$NODE_PATH"/ethtool_channels
+if [ -n "$tuned_pod" ]; then
+	oc exec "$tuned_pod" -n "$TUNED_NAMESPACE" -- /bin/bash -c '
+		found=false
+		for interface_path in /sys/class/net/*; do
+			[ -e "${interface_path}/device" ] || continue
+			found=true
+			interface=${interface_path##*/}
+			echo "> ethtool -k ${interface}"
+			ethtool -k "${interface}" 2>&1
+			echo
+		done
+		if [ "$found" = false ]; then
+			echo "No hardware-backed network interfaces found"
+		fi
+	' >"$NODE_PATH"/ethtool_features
+	oc exec "$tuned_pod" -n "$TUNED_NAMESPACE" -- /bin/bash -c '
+		found=false
+		for interface_path in /sys/class/net/*; do
+			[ -e "${interface_path}/device" ] || continue
+			found=true
+			interface=${interface_path##*/}
+			echo "> ethtool -l ${interface}"
+			ethtool -l "${interface}" 2>&1
+			echo
+		done
+		if [ "$found" = false ]; then
+			echo "No hardware-backed network interfaces found"
+		fi
+	' >"$NODE_PATH"/ethtool_channels
+else
+	echo "No running TuneD pod found on node ${node}" | tee "$NODE_PATH"/ethtool_features >"$NODE_PATH"/ethtool_channels
+fi
 
 oc exec "$pod" -n "$NAMESPACE" -- gather-sysinfo --json cpuaff --procfs=/host/proc --sysfs=/host/sys >"$NODE_PATH"/cpu_affinities.json
 oc exec "$pod" -n "$NAMESPACE" -- gather-sysinfo --json irqaff --procfs=/host/proc --sysfs=/host/sys >"$NODE_PATH"/irq_affinities.json

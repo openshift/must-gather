@@ -6,6 +6,7 @@ get_log_collection_args
 
 BASE_COLLECTION_PATH="must-gather"
 NODES_PATH=${BASE_COLLECTION_PATH}/nodes
+TUNED_NAMESPACE=openshift-cluster-node-tuning-operator
 
 # Once you start the pod, the Kubernetes will set the pod hostname to the name of the pod
 # https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-hostname-and-subdomain-fields
@@ -165,9 +166,13 @@ EOF
 		mkdir -p "${NODE_PATH}"
 
 		COLLECTABLE_NODES+=("$node")
+		# TuneD already has the host network namespace needed to inspect node NICs.
+		tuned_pod=$(oc get pods -n "${TUNED_NAMESPACE}" -l openshift-app=tuned \
+			--field-selector="spec.nodeName=${node},status.phase=Running" \
+			-o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
 
 		# Run per node data collection in parallel
-		timeout -k 1m 5m /usr/bin/gather_ppc_single_node "${pod}" "${NAMESPACE}" "${node}" "${NODE_PATH}" &
+		timeout -k 1m 5m /usr/bin/gather_ppc_single_node "${pod}" "${NAMESPACE}" "${node}" "${NODE_PATH}" "${tuned_pod}" "${TUNED_NAMESPACE}" &
 		NODE_PIDS+=($!)
 	done
 	wait "${NODE_PIDS[@]}"
