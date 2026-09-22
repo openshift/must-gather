@@ -95,6 +95,8 @@ spec:
         image: ${NTO}
         command: ["/bin/bash", "-c", "echo ok > /tmp/healthy && sleep INF"]
         imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
         resources:
           requests:
             cpu: "100m"
