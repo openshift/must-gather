@@ -190,8 +190,10 @@ function gather_sriov_for_pod() {
 	gather_sriov_pids+=($!)
 
 	# Collect dmesg logs.
-	( set -o pipefail; oc exec -n "${operator_ns}" "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
-		/bin/bash -c "journalctl -k ${since_arg} --no-pager" 2>/dev/null | gzip >"${DMESG_LOG_PATH}" ) \
+	( set -o pipefail; {
+		oc exec -n "${operator_ns}" "${CONFIG_DAEMON_POD}" -c sriov-network-config-daemon -- chroot /host \
+			/bin/bash -c "journalctl -k $(printf '%q' "${since_arg}") --no-pager" 2>/dev/null
+	} | gzip >"${DMESG_LOG_PATH}" ) \
 		|| rm -f "${DMESG_LOG_PATH}" &
 	gather_sriov_pids+=($!)
 
