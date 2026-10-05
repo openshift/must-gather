@@ -89,6 +89,10 @@ spec:
       # the processes running on a worker nodes, like thread count and CPU affinity of
       # them. Hence, we need to be able to see all the processes on the node.
       hostPID: true
+      # ethtool queries the NIC drivers through the ethtool API, which resolves
+      # interfaces by name in the caller's network namespace. Share the host
+      # network namespace so we can inspect the node's real NICs.
+      hostNetwork: true
       terminationGracePeriodSeconds: 0
       containers:
       - name: node-probe
