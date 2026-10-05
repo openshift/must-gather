@@ -348,6 +348,11 @@ load test_helper
 	assert_output --partial "node_log_collection_args=--since=2024-01-15 10:00:00"
 }
 
+@test "gather invokes gather_apirequestcounts in the default orchestrator" {
+	run grep -E '/usr/bin/gather_apirequestcounts &' "$SCRIPT_DIR/gather"
+	assert_success
+}
+
 # =============================================================================
 # Error case tests
 # =============================================================================

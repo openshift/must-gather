@@ -18,11 +18,13 @@ tests/
 │   └── oc_outputs/        # Sample oc command outputs
 │       ├── subs_single.txt
 │       ├── subs_multiple.txt
-│       └── subs_empty.txt
+│       ├── subs_empty.txt
+│       └── apirequestcounts.json
 ├── common.bats            # Tests for common.sh
 ├── monitoring_common.bats # Tests for monitoring_common.sh
 ├── service_logs_util.bats # Tests for gather_service_logs_util
-└── gather_metallb.bats    # Tests for gather_metallb
+├── gather_metallb.bats    # Tests for gather_metallb
+└── gather_apirequestcounts.bats # Tests for gather_apirequestcounts
 ```
 
 ## Writing a Test

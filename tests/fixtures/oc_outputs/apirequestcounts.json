@@ -1,0 +1,52 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "metadata": {
+        "name": "pods.core"
+      },
+      "status": {
+        "requestCount": 100,
+        "removedInRelease": "",
+        "last24h": [
+          {
+            "byNode": [
+              {
+                "byUser": [
+                  {
+                    "username": "system:admin",
+                    "requestCount": 100
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "name": "flowschemas.v1beta3.flowcontrol.apiserver.k8s.io"
+      },
+      "status": {
+        "requestCount": 50,
+        "removedInRelease": "1.32",
+        "last24h": [
+          {
+            "byNode": [
+              {
+                "byUser": [
+                  {
+                    "username": "system:serviceaccount:openshift-monitoring:prometheus-k8s",
+                    "requestCount": 50
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
