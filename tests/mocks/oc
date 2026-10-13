@@ -1,0 +1,120 @@
+#!/bin/bash
+# Mock oc command for testing
+# This script intercepts oc calls and returns predefined outputs based on arguments
+
+# Store all arguments for flexible matching
+MOCK_OC_ARGS="$*"
+
+# Helper: check if a pattern exists in the arguments as a word boundary
+# This prevents false positives like "subs" matching "subscriptions"
+has_arg() {
+	[[ " $MOCK_OC_ARGS " == *" $1 "* ]] ||
+		[[ "$MOCK_OC_ARGS" == "$1 "* ]] ||
+		[[ "$MOCK_OC_ARGS" == *" $1" ]] ||
+		[[ "$MOCK_OC_ARGS" == "$1" ]]
+}
+
+# Log the call for debugging (to stderr so it doesn't affect output)
+echo "MOCK oc called with: $MOCK_OC_ARGS" >&2
+
+# If MOCK_OC_LOG_FILE is set, log all calls to that file for later verification
+if [[ -n "${MOCK_OC_LOG_FILE:-}" ]]; then
+	echo "$(date +%s)|$MOCK_OC_ARGS" >>"$MOCK_OC_LOG_FILE"
+fi
+
+# Determine command type from first argument
+cmd="$1"
+
+case "$cmd" in
+get)
+	# Handle subscription queries for get_operator_ns()
+	if has_arg "subs" && has_arg "-A" && has_arg "-o template"; then
+		if [[ -n "${MOCK_OC_OUTPUT:-}" ]]; then
+			if [[ ! -f "$MOCK_OC_OUTPUT" ]]; then
+				echo "ERROR: MOCK_OC_OUTPUT file does not exist: $MOCK_OC_OUTPUT" >&2
+				exit 1
+			fi
+			/bin/cat "$MOCK_OC_OUTPUT"
+		fi
+		exit "${MOCK_OC_EXIT_CODE:-0}"
+	fi
+
+	# Handle pod queries for monitoring_common.sh (prometheus)
+	if has_arg "pods" && has_arg "-n openshift-monitoring" && has_arg "-l prometheus=k8s"; then
+		if [[ -v MOCK_OC_PODS_OUTPUT ]]; then
+			echo -n "$MOCK_OC_PODS_OUTPUT"
+		else
+			echo "prometheus-k8s-0"
+		fi
+		exit 0
+	fi
+
+	# Handle pod queries for monitoring_common.sh (alertmanager)
+	if has_arg "pods" && has_arg "-n openshift-monitoring" && has_arg "-l alertmanager=main"; then
+		if [[ -v MOCK_OC_PODS_OUTPUT ]]; then
+			echo -n "$MOCK_OC_PODS_OUTPUT"
+		else
+			echo "alertmanager-main-0"
+		fi
+		exit 0
+	fi
+
+	# Handle metallb existence check
+	if has_arg "metallb"; then
+		exit "${MOCK_METALLB_EXISTS:-1}"
+	fi
+
+	# Handle namespace check
+	if has_arg "ns"; then
+		if [[ -n "${MOCK_NS_EXISTS:-}" ]]; then
+			echo "$MOCK_NS_EXISTS"
+			exit 0
+		fi
+		exit 1
+	fi
+
+	# Generic get command
+	if [[ -n "${MOCK_OC_OUTPUT:-}" ]]; then
+		if [[ ! -f "$MOCK_OC_OUTPUT" ]]; then
+			echo "ERROR: MOCK_OC_OUTPUT file does not exist: $MOCK_OC_OUTPUT" >&2
+			exit 1
+		fi
+		/bin/cat "$MOCK_OC_OUTPUT"
+		exit "${MOCK_OC_EXIT_CODE:-0}"
+	fi
+	echo "MOCK: oc $MOCK_OC_ARGS"
+	exit "${MOCK_OC_EXIT_CODE:-0}"
+	;;
+
+adm)
+	# Handle oc adm inspect calls
+	if has_arg "inspect"; then
+		echo "MOCK: oc $MOCK_OC_ARGS"
+		exit "${MOCK_OC_INSPECT_EXIT_CODE:-0}"
+	fi
+
+	# Handle oc adm node-logs calls
+	if has_arg "node-logs"; then
+		echo "MOCK: oc $MOCK_OC_ARGS"
+		exit 0
+	fi
+
+	echo "MOCK: unhandled oc adm call: $MOCK_OC_ARGS" >&2
+	exit "${MOCK_OC_EXIT_CODE:-1}"
+	;;
+
+exec)
+	echo "MOCK: oc $MOCK_OC_ARGS"
+	exit 0
+	;;
+
+cp)
+	echo "MOCK: oc $MOCK_OC_ARGS"
+	exit 0
+	;;
+
+*)
+	echo "MOCK: unhandled oc call: $MOCK_OC_ARGS" >&2
+	exit "${MOCK_OC_EXIT_CODE:-1}"
+	;;
+esac

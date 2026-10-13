@@ -1,0 +1,192 @@
+#!/bin/bash
+
+# generate /must-gather/version file
+. version
+echo "openshift/must-gather" >/must-gather/version
+version >>/must-gather/version
+
+source $(dirname "$0")/common.sh
+get_log_collection_args
+
+# Store PIDs of all the subprocesses
+pids=()
+
+# Named resource list, eg. ns/openshift-config
+named_resources=()
+
+# Resource groups list, eg. pods
+group_resources=()
+
+# Resources to gather with `--all-namespaces` option
+all_ns_resources=()
+
+# Cluster Version Information
+named_resources+=(ns/openshift-cluster-version)
+group_resources+=(clusterversion)
+
+# Operator and APIService Resources
+group_resources+=(clusteroperators apiservices)
+
+# Certificate Resources
+group_resources+=(certificatesigningrequests)
+
+# Machine/Node Resources
+group_resources+=(nodes)
+
+# Namespaces/Project Resources
+named_resources+=(ns/default ns/openshift ns/kube-system ns/openshift-etcd)
+
+# Storage Resources
+group_resources+=(storageclasses persistentvolumes volumeattachments csidrivers csinodes volumesnapshotclasses volumesnapshotcontents volumegroupsnapshotclasses volumegroupsnapshotcontents clustercsidrivers volumeattributesclasses)
+all_ns_resources+=(csistoragecapacities)
+
+# Image-source Resources
+group_resources+=(imagecontentsourcepolicies.operator.openshift.io)
+
+# Networking Resources
+group_resources+=(networks.operator.openshift.io)
+
+# NodeNetworkState
+resources+=(nodenetworkstates nodenetworkconfigurationenactments nodenetworkconfigurationpolicies)
+
+# Assisted Installer
+named_resources+=(ns/assisted-installer)
+
+# Leases
+all_ns_resources+=(leases)
+
+# Flowcontrol - API Priority and Fairness (APF)
+group_resources+=(prioritylevelconfigurations.flowcontrol.apiserver.k8s.io flowschemas.flowcontrol.apiserver.k8s.io)
+
+# ClusterResourceQuota
+group_resources+=(clusterresourcequotas.quota.openshift.io)
+
+# Run the Collection of Resources using inspect
+# running across all-namespaces for the few "Autoscaler" resources.
+oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${named_resources[@]}" &
+pids+=($!)
+
+filtered_group_resources=()
+for gr in "${group_resources[@]}"; do
+	oc get "$gr" >/dev/null 2>&1
+	if [[ "$?" -eq 0 ]]; then
+		filtered_group_resources+=("$gr")
+	fi
+done
+group_resources_text=$(
+	IFS=,
+	echo "${filtered_group_resources[*]}"
+)
+oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${group_resources_text}" &
+pids+=($!)
+
+all_ns_resources_text=$(
+	IFS=,
+	echo "${all_ns_resources[*]}"
+)
+oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${all_ns_resources_text}" --all-namespaces &
+pids+=($!)
+
+# Gather Insights Operator Archives
+/usr/bin/gather_insights &
+pids+=($!)
+
+# Gather monitoring data from the cluster
+/usr/bin/gather_monitoring &
+pids+=($!)
+
+# Gather optional operator resources from all namespaces
+/usr/bin/gather_olm &
+pids+=($!)
+
+# Gather OLM v1 resources
+/usr/bin/gather_olm_v1 &
+pids+=($!)
+
+# Gather API Priority and Fairness Endpoints
+/usr/bin/gather_priority_and_fairness &
+pids+=($!)
+
+# Gather etcd information
+/usr/bin/gather_etcd &
+pids+=($!)
+
+# Gather Service Logs (using a supplemental Script); Scoped to Masters.
+/usr/bin/gather_service_logs master &
+pids+=($!)
+
+# Gather Windows Kubernetes component logs
+/usr/bin/gather_windows_node_logs &
+pids+=($!)
+
+# Gather HAProxy config files
+/usr/bin/gather_haproxy_config &
+pids+=($!)
+
+# Gather kas startup and termination logs
+/usr/bin/gather_kas_startup_termination_logs &
+pids+=($!)
+
+# Gather network logs
+/usr/bin/gather_network_logs_basics &
+pids+=($!)
+
+# Gather metallb logs
+/usr/bin/gather_metallb &
+pids+=($!)
+
+# Gather frr-k8s logs
+/usr/bin/gather_frrk8s &
+pids+=($!)
+
+# Gather NMState
+/usr/bin/gather_nmstate &
+pids+=($!)
+
+# Gather Node Feature Discovery (NFD)
+/usr/bin/gather_nfd &
+pids+=($!)
+
+# Gather SR-IOV resources
+/usr/bin/gather_sriov &
+pids+=($!)
+
+# Gather PodNetworkConnectivityCheck
+/usr/bin/gather_podnetworkconnectivitycheck &
+pids+=($!)
+
+# Gather On-Disk MachineConfig files
+/usr/bin/gather_machineconfig_ondisk &
+pids+=($!)
+
+# Gather On-Disk MachineConfigDaemon logs
+/usr/bin/gather_machineconfigdaemon_termination_logs &
+pids+=($!)
+
+# Gather vSphere resources. This is NOOP on non-vSphere platform.
+/usr/bin/gather_vsphere &
+pids+=($!)
+
+# Gather Performance profile information
+/usr/bin/gather_ppc &
+pids+=($!)
+
+# Gather OSUS information
+/usr/bin/gather_osus &
+pids+=($!)
+
+# Gather Istio/Gateway API information
+/usr/bin/gather_istio &
+pids+=($!)
+
+# Check if PID array has any values, if so, wait for them to finish
+if [ ${#pids[@]} -ne 0 ]; then
+	echo "Waiting on subprocesses to finish execution."
+	wait "${pids[@]}"
+fi
+
+# Gather ARO information
+/usr/bin/gather_aro
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync

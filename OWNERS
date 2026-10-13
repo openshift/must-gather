@@ -1,0 +1,9 @@
+reviewers:
+  - sferich888
+  - ingvagabund
+approvers:
+  - ardaguclu
+  - sferich888
+  - soltysh
+  - ingvagabund
+component: "oc"

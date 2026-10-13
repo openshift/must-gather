@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+echo "WARNING: openshift-must-gather has been DEPRECATED. Use \`oc adm inspect\` instead."
+exec oc adm inspect "$@"
+
+# force disk flush to ensure that all data gathered is accessible in the copy container
+sync

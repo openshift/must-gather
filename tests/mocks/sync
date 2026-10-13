@@ -1,0 +1,10 @@
+#!/bin/bash
+# Mock sync command for testing
+
+echo "MOCK sync called" >&2
+
+if [[ -n "${MOCK_SYNC_LOG_FILE:-}" ]]; then
+	echo "$(date +%s)|sync" >>"$MOCK_SYNC_LOG_FILE"
+fi
+
+exit 0

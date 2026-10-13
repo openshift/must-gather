@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+source $(dirname "$0")/common.sh
+get_log_collection_args
+
+oc adm inspect ${log_collection_args} --dest-dir=must-gather -A olm
