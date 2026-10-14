@@ -1,13 +1,11 @@
 reviewers:
   - sferich888
   - ingvagabund
-  - swghosh
   - shivprakashmuley
 approvers:
   - ardaguclu
   - sferich888
   - soltysh
   - ingvagabund
-  - swghosh
   - shivprakashmuley
 component: "oc"
