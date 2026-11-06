@@ -43,6 +43,9 @@ duration_to_seconds() {
 #   since_cutoff_rfc3339 - the same instant, RFC3339 UTC
 #
 # MUST_GATHER_SINCE_TIME wins over MUST_GATHER_SINCE, matching get_log_collection_args.
+# A positive sub-second duration (e.g. 500ms) becomes a 1s window: whole-second
+# cutoffs cannot express anything smaller, and leaving it empty would unbound
+# the collection.
 get_since_cutoff() {
 	local seconds
 	since_cutoff_epoch=""
@@ -53,6 +56,9 @@ get_since_cutoff() {
 			since_cutoff_epoch=""
 	elif [ -n "${MUST_GATHER_SINCE:-}" ]; then
 		seconds="$(duration_to_seconds "${MUST_GATHER_SINCE}")"
+		if [ "${seconds}" -le 0 ] && [[ "${MUST_GATHER_SINCE}" =~ [0-9](ns|us|µs|ms) ]]; then
+			seconds=1
+		fi
 		if [ "${seconds}" -gt 0 ]; then
 			since_cutoff_epoch="$(($(date -u +%s) - seconds))"
 		fi
@@ -76,23 +82,30 @@ since_window_requested() {
 }
 
 # find(1) predicate that keeps files in the window, or empty with no window.
-# Intended for unquoted expansion:
+# Expand unquoted with noglob so -name patterns are not shell-expanded:
 #
+#   set -f
 #   find /var/log/ovnkube -type f $(since_find_predicate) -name 'libovsdb*log*'
+#   set +f
 #
-# A file is kept when it was written inside the window *or* it is not an
+# A file is kept when it was written at or after the cutoff *or* it is not an
 # archived copy (no date / .gz / .N in the name). Live logs have no timestamp
 # in the name; dropping them when idle would leave nothing for that service.
+# -newermt is exclusive, so the threshold is cutoff-1s to include mtime==cutoff.
 since_find_predicate() {
+	local mt
 	if ! since_window_requested; then
 		return 0
 	fi
 
+	mt="${since_cutoff_epoch}"
+	[ "${mt}" -gt 0 ] && mt=$((mt - 1))
+
 	printf '%s' \
-		"'(' -newermt @${since_cutoff_epoch} -o '!' '(' " \
-		"-name '*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*' " \
-		"-o -name '*.gz' -o -name '*.[0-9]' -o -name '*.[0-9][0-9]' " \
-		"')' ')'"
+		"( -newermt @${mt} -o ! ( " \
+		"-name *[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]* " \
+		"-o -name *.gz -o -name *.[0-9] -o -name *.[0-9][0-9] " \
+		") )"
 }
 
 # Epoch seconds encoded in a log file name, or empty if none.
@@ -130,7 +143,8 @@ filter_names_since() {
 		return 0
 	fi
 
-	while IFS= read -r line; do
+	# Also process a final line that lacks a trailing newline.
+	while IFS= read -r line || [ -n "${line}" ]; do
 		# Listings from --role=<role> are prefixed with the node name.
 		name="${line##* }"
 		epoch="$(filename_timestamp_epoch "${name}")"
@@ -141,6 +155,7 @@ filter_names_since() {
 		else
 			skipped=$((skipped + 1))
 		fi
+		line= # clear so EOF after a newline does not reprocess the last entry
 	done
 
 	since_report "${label}" "filename-timestamp" "${kept}" "${skipped}"
@@ -148,7 +163,7 @@ filter_names_since() {
 
 # Copy a directory out of a pod, limited to files in the window.
 # Replaces `oc cp <ns>/<pod>:<src> <dest>`, which cannot express a time bound.
-# Falls back to plain `oc cp` when find/tar are missing in the container.
+# Falls back to plain `oc cp` when find/tar (with required options) are missing.
 #
 # Trailing-slash layout matches rsync / oc cp:
 #   src = /a/b   ->  <dest>/b/...
@@ -159,7 +174,7 @@ filter_names_since() {
 copy_pod_dir_since() {
 	local ns="$1" pod="$2" container="$3" src="$4" dest="$5"
 	local label="${6:-${pod}}"
-	local predicate before after total chdir target
+	local total chdir target mt copied rc=0 oc_rc tar_rc
 	local -a c_arg=()
 
 	[ -n "${container}" ] && c_arg=(-c "${container}")
@@ -179,63 +194,132 @@ copy_pod_dir_since() {
 		target="$(basename "${src}")"
 	fi
 
+	# Require find -newermt and tar --null/-T used by the filtered path.
 	if ! oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
-		sh -c 'command -v find >/dev/null 2>&1 && command -v tar >/dev/null 2>&1' 2>/dev/null; then
+		sh -c 'command -v find >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 &&
+			find /dev/null -newermt @0 >/dev/null 2>&1 &&
+			tar czf - --null -T /dev/null >/dev/null 2>&1' 2>/dev/null; then
 		echo "INFO: ${label}: find/tar unavailable in ${pod}; copying ${src} whole" >&2
 		oc cp -n "${ns}" "${c_arg[@]}" "${pod}:${src%/}" "${dest}"
+		rc=$?
 		since_report "${label}" "unfiltered-fallback" "all" "0"
-		return $?
+		return "${rc}"
 	fi
 
+	mt="${since_cutoff_epoch}"
+	[ "${mt}" -gt 0 ] && mt=$((mt - 1))
+
 	total="$(oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
-		sh -c "cd '${chdir}' 2>/dev/null && find '${target}' -type f 2>/dev/null | wc -l" 2>/dev/null | tr -d '[:space:]')"
-	before="$(find "${dest}" -type f 2>/dev/null | wc -l)"
+		sh -c 'cd "$1" 2>/dev/null && find "$2" -type f 2>/dev/null | wc -l' \
+		sh "${chdir}" "${target}" 2>/dev/null | tr -d '[:space:]')"
 
-	predicate="$(since_find_predicate)"
+	copied="$(oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
+		sh -c 'cd "$1" 2>/dev/null || exit 0
+			find "$2" -type f \( -newermt @"$3" -o ! \( \
+				-name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*" \
+				-o -name "*.gz" -o -name "*.[0-9]" -o -name "*.[0-9][0-9]" \) \) \
+				-print 2>/dev/null | wc -l' \
+		sh "${chdir}" "${target}" "${mt}" 2>/dev/null | tr -d '[:space:]')"
 
-	# shellcheck disable=SC2086
 	oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
-		sh -c "cd '${chdir}' 2>/dev/null && find '${target}' -type f ${predicate} -print0 2>/dev/null | tar czf - --null -T - 2>/dev/null" |
-		tar xzf - -C "${dest}" 2>/dev/null
+		sh -c 'cd "$1" 2>/dev/null || exit 0
+			find "$2" -type f \( -newermt @"$3" -o ! \( \
+				-name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*" \
+				-o -name "*.gz" -o -name "*.[0-9]" -o -name "*.[0-9][0-9]" \) \) \
+				-print0 2>/dev/null | tar czf - --null -T -' \
+		sh "${chdir}" "${target}" "${mt}" |
+		tar xzf - -C "${dest}"
+	oc_rc=${PIPESTATUS[0]:-0}
+	tar_rc=${PIPESTATUS[1]:-0}
+	copied=${copied:-0}
+	total=${total:-0}
+	[[ "${copied}" =~ ^[0-9]+$ ]] || copied=0
+	[[ "${total}" =~ ^[0-9]+$ ]] || total=0
+	# Empty selection yields an empty stream; tar then fails — that is not an error.
+	if [ "${oc_rc}" -ne 0 ]; then
+		rc=${oc_rc}
+		echo "ERROR: ${label}: remote archive failed (rc=${rc})" >&2
+	elif [ "${tar_rc}" -ne 0 ] && [ "${copied}" -gt 0 ]; then
+		rc=${tar_rc}
+		echo "ERROR: ${label}: tar extract failed (rc=${rc})" >&2
+	else
+		rc=0
+	fi
 
-	after="$(find "${dest}" -type f 2>/dev/null | wc -l)"
-	since_report "${label}" "find-newermt" "$((after - before))" \
-		"$((${total:-0} - (after - before)))"
+	since_report "${label}" "find-newermt" "${copied}" "$((total - copied))"
+	return "${rc}"
 }
 
 # Stream several directories out of a pod as one tarball, limited to the window.
 # Missing directories are skipped (like tar --ignore-failed-read).
+# With no window, archives each directory whole (symlinks and empty dirs kept).
 #
 # Usage: pod_tar_dirs_since <namespace> <pod> <container> <dest-dir> <label> <src-dir>...
 pod_tar_dirs_since() {
 	local ns="$1" pod="$2" container="$3" dest="$4" label="$5"
 	shift 5
-	local predicate quoted=""
-	local -a c_arg=()
+	local mt rc=0 oc_rc tar_rc kept
+	local -a c_arg=() rels=()
 
 	[ -n "${container}" ] && c_arg=(-c "${container}")
 	mkdir -p "${dest}"
 
+	# find with no paths would walk from /, so skip the container trip.
+	[ "$#" -gt 0 ] || return 0
+
 	local dir
 	for dir in "$@"; do
 		# relative to / so tar records paths without a leading slash
-		quoted+="${quoted:+ }'${dir#/}'"
+		rels+=("${dir#/}")
 	done
 
-	predicate="$(since_find_predicate)"
-
-	# shellcheck disable=SC2086
-	oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
-		sh -c "cd / && find ${quoted} -type f ${predicate} -print0 2>/dev/null | tar czf - --null -T - 2>/dev/null" |
-		tar xzf - -C "${dest}" 2>/dev/null
-
 	if since_window_requested; then
-		since_report "${label}" "find-newermt" \
-			"$(find "${dest}" -type f 2>/dev/null | wc -l)" "pre-cutoff"
+		mt="${since_cutoff_epoch}"
+		[ "${mt}" -gt 0 ] && mt=$((mt - 1))
+		oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
+			sh -c 'cd / || exit 0
+				mt=$1; shift
+				find "$@" -type f \( -newermt @"$mt" -o ! \( \
+					-name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*" \
+					-o -name "*.gz" -o -name "*.[0-9]" -o -name "*.[0-9][0-9]" \) \) \
+					-print0 2>/dev/null | tar czf - --null -T -' \
+			sh "${mt}" "${rels[@]}" |
+			tar xzf - -C "${dest}"
+		oc_rc=${PIPESTATUS[0]}
+		tar_rc=${PIPESTATUS[1]}
+		kept="$(find "${dest}" -type f 2>/dev/null | wc -l)"
+		if [ "${oc_rc}" -ne 0 ]; then
+			rc=${oc_rc}
+			echo "ERROR: ${label}: remote archive failed (rc=${rc})" >&2
+		elif [ "${tar_rc}" -ne 0 ] && [ "${kept}" -gt 0 ]; then
+			rc=${tar_rc}
+			echo "ERROR: ${label}: tar extract failed (rc=${rc})" >&2
+		else
+			rc=0
+		fi
+		since_report "${label}" "find-newermt" "${kept}" "pre-cutoff"
 	else
+		# Whole trees: preserve symlinks and empty directories.
+		oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
+			sh -c 'cd / || exit 0; tar czf - --ignore-failed-read "$@"' \
+			sh "${rels[@]}" |
+			tar xzf - -C "${dest}"
+		oc_rc=${PIPESTATUS[0]}
+		tar_rc=${PIPESTATUS[1]}
+		kept="$(find "${dest}" \( -type f -o -type l -o -type d \) 2>/dev/null | wc -l)"
+		if [ "${oc_rc}" -ne 0 ]; then
+			rc=${oc_rc}
+			echo "ERROR: ${label}: remote archive failed (rc=${rc})" >&2
+		elif [ "${tar_rc}" -ne 0 ]; then
+			rc=${tar_rc}
+			echo "ERROR: ${label}: tar extract failed (rc=${rc})" >&2
+		else
+			rc=0
+		fi
 		since_report "${label}" "no-window" \
 			"$(find "${dest}" -type f 2>/dev/null | wc -l)" "0"
 	fi
+	return "${rc}"
 }
 
 # Drop JSONL records older than the cutoff by an RFC3339 field (default
@@ -252,11 +336,15 @@ trim_jsonl_since() {
 	fi
 
 	jq -crR --arg cutoff "${since_cutoff_rfc3339}" --arg field "${field}" '
+		def to_instant:
+			# Strip fractional seconds; fromdateiso8601 needs whole seconds.
+			sub("\\.[0-9]+"; "") | fromdateiso8601;
 		. as $line
 		| (try fromjson catch null) as $o
 		| if $o == null or ($o | type) != "object" then $line
 		  elif (($o[$field] // "") == "") then $o
-		  elif ($o[$field] >= $cutoff) then $o
+		  elif ((try ($o[$field] | to_instant) catch -1)
+		        >= (try ($cutoff | to_instant) catch 0)) then $o
 		  else empty
 		  end' 2>/dev/null
 }
@@ -291,7 +379,8 @@ since_report_header() {
 
 export SINCE_REPORT_PATH
 
-# Export functions so they survive `xargs ... bash -c` / `sh -c` fan-out.
+# Export functions so they survive `xargs ... bash -c` fan-out.
+# export -f is Bash-only; plain sh -c will not see these functions.
 # Without this, $(since_find_predicate) expands empty and the window is ignored.
 if [ -n "${BASH_VERSION:-}" ]; then
 	export -f duration_to_seconds get_since_cutoff

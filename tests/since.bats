@@ -109,6 +109,19 @@ load test_helper
 	assert_output "[][]"
 }
 
+@test "get_since_cutoff bounds a positive sub-second MUST_GATHER_SINCE" {
+	run bash -c "
+		export MUST_GATHER_SINCE='500ms'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_since_cutoff
+		now=\$(date -u +%s)
+		delta=\$((now - since_cutoff_epoch))
+		[ \"\$delta\" -ge 0 ] && [ \"\$delta\" -le 2 ] && echo in-range || echo \"out-of-range: \$delta\"
+	"
+	assert_success
+	assert_output "in-range"
+}
+
 # =============================================================================
 # since_find_predicate()
 # =============================================================================
@@ -132,7 +145,30 @@ load test_helper
 		since_find_predicate
 	"
 	assert_success
-	assert_output --partial "-newermt @1792141200"
+	# -newermt is exclusive; threshold is cutoff-1 so mtime==cutoff is kept
+	assert_output --partial "-newermt @1792141199"
+	refute_output --partial "'"
+}
+
+@test "since_find_predicate works in a direct find invocation without eval" {
+	mkdir -p "$TEST_TMPDIR/direct"
+	# Archived names so the live-log exception does not keep the pre-cutoff file.
+	touch -d '@1792141200' "$TEST_TMPDIR/direct/audit-2026-10-16T09-00-00.000.log"
+	touch -d '@1792141199' "$TEST_TMPDIR/direct/audit-2026-10-16T08-59-59.000.log"
+	touch -d '@1792141201' "$TEST_TMPDIR/direct/audit-2026-10-16T09-00-01.000.log"
+
+	run bash -c "
+		export MUST_GATHER_SINCE_TIME='2026-10-16T09:00:00Z'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_since_cutoff
+		set -f
+		find '$TEST_TMPDIR/direct' -type f \$(since_find_predicate) -print
+		set +f
+	"
+	assert_success
+	assert_output --partial "audit-2026-10-16T09-00-00.000.log"
+	assert_output --partial "audit-2026-10-16T09-00-01.000.log"
+	refute_output --partial "audit-2026-10-16T08-59-59.000.log"
 }
 
 @test "the window keeps a live log even when nothing was written during it" {
@@ -149,7 +185,9 @@ load test_helper
 		export MUST_GATHER_SINCE=5m0s
 		source \"$SCRIPT_DIR/common.sh\"
 		get_since_cutoff
-		eval \"find '$TEST_TMPDIR/logs' -type f \$(since_find_predicate)\" | sed 's|.*/||' | sort
+		set -f
+		find '$TEST_TMPDIR/logs' -type f \$(since_find_predicate) | sed 's|.*/||' | sort
+		set +f
 	"
 	assert_success
 	assert_output "ceph-mon.a.log
@@ -168,7 +206,9 @@ cnv-test_bg-testvm.log"
 		export MUST_GATHER_SINCE=5m0s
 		source \"$SCRIPT_DIR/common.sh\"
 		get_since_cutoff
-		eval \"find '$TEST_TMPDIR/rot' -type f \$(since_find_predicate)\" | sed 's|.*/||' | sort
+		set -f
+		find '$TEST_TMPDIR/rot' -type f \$(since_find_predicate) | sed 's|.*/||' | sort
+		set +f
 	"
 	assert_success
 	# only the live one survives; the three archived copies do not
@@ -300,6 +340,18 @@ termination.log
 	assert_output --partial "skipped=2"
 }
 
+@test "filter_names_since keeps a final line that lacks a trailing newline" {
+	run bash -c "
+		export MUST_GATHER_SINCE_TIME='2026-10-16T12:00:00Z'
+		export SINCE_REPORT_PATH=\"$TEST_TMPDIR/report.txt\"
+		source \"$SCRIPT_DIR/common.sh\"
+		get_since_cutoff
+		printf '%s' 'audit.log' | filter_names_since test
+	"
+	assert_success
+	assert_output "audit.log"
+}
+
 # =============================================================================
 # trim_jsonl_since()
 # =============================================================================
@@ -354,6 +406,21 @@ another plain line"
 	"
 	assert_success
 	assert_output '{"auditID":"nofield"}'
+}
+
+@test "trim_jsonl_since compares parsed instants including fractional seconds" {
+	run bash -c "
+		export MUST_GATHER_SINCE_TIME='2026-10-16T12:00:00Z'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_since_cutoff
+		printf '%s\n' \
+			'{\"requestReceivedTimestamp\":\"2026-10-16T12:00:00.500Z\",\"auditID\":\"frac\"}' \
+			'{\"requestReceivedTimestamp\":\"2026-10-16T11:59:59.900Z\",\"auditID\":\"old\"}' \
+			| trim_jsonl_since
+	"
+	assert_success
+	assert_output --partial '"auditID":"frac"'
+	refute_output --partial '"auditID":"old"'
 }
 
 # =============================================================================
@@ -426,39 +493,55 @@ another plain line"
 # under <dest>/a/b/... instead of where oc cp or rsync would have put it.
 
 @test "copy_pod_dir_since tars the directory itself without a trailing slash" {
+	# Fixture archive + stub oc that serves it on print0, so we assert both
+	# the positional chdir/target and the extracted layout.
+	mkdir -p "$TEST_TMPDIR/payload/b" "$TEST_TMPDIR/mocks"
+	echo hi >"$TEST_TMPDIR/payload/b/file.txt"
+	printf '%s\n' '#!/bin/bash' \
+		"echo \"\$*\" >>\"$TEST_TMPDIR/cmds\"" \
+		"if [[ \"\$*\" == *print0* ]]; then tar czf - -C \"$TEST_TMPDIR/payload\" b; exit 0; fi" \
+		'if [[ "$*" == *wc* ]]; then echo 1; exit 0; fi' \
+		'exit 0' >"$TEST_TMPDIR/mocks/oc"
+	chmod +x "$TEST_TMPDIR/mocks/oc"
+
 	run bash -c "
 		export MUST_GATHER_SINCE_TIME='2026-10-16T12:00:00Z'
 		export SINCE_REPORT_PATH=\"$TEST_TMPDIR/report.txt\"
-		mkdir -p \"$TEST_TMPDIR/mocks\"
-		printf '#!/bin/bash\necho \"\$*\" >>\"$TEST_TMPDIR/cmds\"\nexit 0\n' > \"$TEST_TMPDIR/mocks/oc\"
-		chmod +x \"$TEST_TMPDIR/mocks/oc\"
 		export PATH=\"$TEST_TMPDIR/mocks:\$PATH\"
 		source \"$SCRIPT_DIR/common.sh\"
 		get_since_cutoff
-		copy_pod_dir_since ns pod '' /a/b \"$TEST_TMPDIR/dest\" lbl >/dev/null 2>&1
-		grep -o \"cd '[^']*' .*find '[^']*'\" \"$TEST_TMPDIR/cmds\" | tail -1
+		copy_pod_dir_since ns pod '' /a/b \"$TEST_TMPDIR/dest\" lbl >/dev/null 2>&1 || true
+		grep -E ' sh /a b ' \"$TEST_TMPDIR/cmds\" | head -1
+		[ -f \"$TEST_TMPDIR/dest/b/file.txt\" ] && echo extracted
 	"
 	assert_success
-	assert_output --partial "cd '/a'"
-	assert_output --partial "find 'b'"
+	assert_output --partial " sh /a b "
+	assert_output --partial "extracted"
 }
 
 @test "copy_pod_dir_since tars the contents with a trailing slash" {
+	mkdir -p "$TEST_TMPDIR/payload" "$TEST_TMPDIR/mocks"
+	echo hi >"$TEST_TMPDIR/payload/file.txt"
+	printf '%s\n' '#!/bin/bash' \
+		"echo \"\$*\" >>\"$TEST_TMPDIR/cmds\"" \
+		"if [[ \"\$*\" == *print0* ]]; then tar czf - -C \"$TEST_TMPDIR/payload\" .; exit 0; fi" \
+		'if [[ "$*" == *wc* ]]; then echo 1; exit 0; fi' \
+		'exit 0' >"$TEST_TMPDIR/mocks/oc"
+	chmod +x "$TEST_TMPDIR/mocks/oc"
+
 	run bash -c "
 		export MUST_GATHER_SINCE_TIME='2026-10-16T12:00:00Z'
 		export SINCE_REPORT_PATH=\"$TEST_TMPDIR/report.txt\"
-		mkdir -p \"$TEST_TMPDIR/mocks\"
-		printf '#!/bin/bash\necho \"\$*\" >>\"$TEST_TMPDIR/cmds\"\nexit 0\n' > \"$TEST_TMPDIR/mocks/oc\"
-		chmod +x \"$TEST_TMPDIR/mocks/oc\"
 		export PATH=\"$TEST_TMPDIR/mocks:\$PATH\"
 		source \"$SCRIPT_DIR/common.sh\"
 		get_since_cutoff
-		copy_pod_dir_since ns pod '' /a/b/ \"$TEST_TMPDIR/dest\" lbl >/dev/null 2>&1
-		grep -o \"cd '[^']*' .*find '[^']*'\" \"$TEST_TMPDIR/cmds\" | tail -1
+		copy_pod_dir_since ns pod '' /a/b/ \"$TEST_TMPDIR/dest\" lbl >/dev/null 2>&1 || true
+		grep -E ' sh /a/b \\. ' \"$TEST_TMPDIR/cmds\" | head -1
+		[ -f \"$TEST_TMPDIR/dest/file.txt\" ] && echo extracted
 	"
 	assert_success
-	assert_output --partial "cd '/a/b'"
-	assert_output --partial "find '.'"
+	assert_output --partial " sh /a/b . "
+	assert_output --partial "extracted"
 }
 
 @test "copy_pod_dir_since falls back to oc cp without a window" {
@@ -495,10 +578,28 @@ another plain line"
 		cat \"$TEST_TMPDIR/cmds\"
 	"
 	assert_success
-	assert_output --partial "cd / && find 'var/log/libvirt/qemu/' 'var/run/libvirt/qemu/log/'"
+	# paths are positional args after mt, not interpolated into the script
+	assert_output --partial "var/log/libvirt/qemu/"
+	assert_output --partial "var/run/libvirt/qemu/log/"
 	assert_output --partial "-newermt @"
 }
 
+@test "pod_tar_dirs_since skips oc exec when no source directories are given" {
+	run bash -c "
+		export MUST_GATHER_SINCE_TIME='2026-10-16T12:00:00Z'
+		export SINCE_REPORT_PATH=\"$TEST_TMPDIR/report.txt\"
+		mkdir -p \"$TEST_TMPDIR/mocks\"
+		printf '#!/bin/bash\necho \"\$*\" >>\"$TEST_TMPDIR/cmds\"\nexit 0\n' > \"$TEST_TMPDIR/mocks/oc\"
+		chmod +x \"$TEST_TMPDIR/mocks/oc\"
+		export PATH=\"$TEST_TMPDIR/mocks:\$PATH\"
+		source \"$SCRIPT_DIR/common.sh\"
+		get_since_cutoff
+		pod_tar_dirs_since ns pod compute \"$TEST_TMPDIR/dest\" lbl
+		if [ -f \"$TEST_TMPDIR/cmds\" ]; then echo invoked; else echo skipped; fi
+	"
+	assert_success
+	assert_output "skipped"
+}
 @test "every script calling the since helpers also sources common.sh" {
 	# gather runs each gather_* as a separate script, so functions defined in
 	# a parent shell are not inherited. Forgetting the source is silent: the
@@ -516,19 +617,19 @@ another plain line"
 	}
 }
 
-@test "library functions survive into an xargs/sh -c grandchild" {
-	# Collection scripts fan out with `xargs ... sh -c`, where a function from
-	# the parent shell is not visible. Without export -f the failure is quiet
-	# and expensive: $(since_find_predicate) becomes empty, find runs
-	# unfiltered, and the window is silently ignored.
+@test "library functions survive into an xargs/bash -c grandchild" {
+	# Collection scripts fan out with `xargs ... bash -c`. export -f is
+	# Bash-only; plain sh -c will not see these functions. Without export -f
+	# the failure is quiet: $(since_find_predicate) becomes empty and the
+	# window is ignored.
 	run bash -c "
 		export MUST_GATHER_SINCE_TIME='2026-10-16T12:00:00Z'
 		source \"$SCRIPT_DIR/common.sh\"
 		get_since_cutoff
-		sh -c 'since_find_predicate'
+		bash -c 'since_find_predicate'
 	"
 	assert_success
-	assert_output --partial "-newermt @1792152000"
+	assert_output --partial "-newermt @1792151999"
 }
 
 @test "every public library function is exported" {
