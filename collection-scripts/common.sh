@@ -161,6 +161,25 @@ filter_names_since() {
 	since_report "${label}" "filename-timestamp" "${kept}" "${skipped}"
 }
 
+# True when the pod can run the filtered find|tar path (-newermt, tar --null/-T).
+# Extra args after <pod> are forwarded to oc exec (e.g. -c container).
+since_pod_filtered_archive_ok() {
+	local ns="$1" pod="$2"
+	shift 2
+	oc exec -n "${ns}" "${pod}" "$@" -- \
+		sh -c 'command -v find >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 &&
+			find /dev/null -newermt @0 >/dev/null 2>&1 &&
+			tar czf - --null -T /dev/null >/dev/null 2>&1' 2>/dev/null
+}
+
+# True when the pod has tar for a whole-tree archive fallback.
+since_pod_tar_ok() {
+	local ns="$1" pod="$2"
+	shift 2
+	oc exec -n "${ns}" "${pod}" "$@" -- \
+		sh -c 'command -v tar >/dev/null 2>&1' 2>/dev/null
+}
+
 # Copy a directory out of a pod, limited to files in the window.
 # Replaces `oc cp <ns>/<pod>:<src> <dest>`, which cannot express a time bound.
 # Falls back to plain `oc cp` when find/tar (with required options) are missing.
@@ -194,11 +213,7 @@ copy_pod_dir_since() {
 		target="$(basename "${src}")"
 	fi
 
-	# Require find -newermt and tar --null/-T used by the filtered path.
-	if ! oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
-		sh -c 'command -v find >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 &&
-			find /dev/null -newermt @0 >/dev/null 2>&1 &&
-			tar czf - --null -T /dev/null >/dev/null 2>&1' 2>/dev/null; then
+	if ! since_pod_filtered_archive_ok "${ns}" "${pod}" "${c_arg[@]}"; then
 		echo "INFO: ${label}: find/tar unavailable in ${pod}; copying ${src} whole" >&2
 		oc cp -n "${ns}" "${c_arg[@]}" "${pod}:${src%/}" "${dest}"
 		rc=$?
@@ -258,7 +273,7 @@ copy_pod_dir_since() {
 pod_tar_dirs_since() {
 	local ns="$1" pod="$2" container="$3" dest="$4" label="$5"
 	shift 5
-	local mt rc=0 oc_rc tar_rc kept
+	local mt rc=0 oc_rc tar_rc kept=0 mechanism
 	local -a c_arg=() rels=()
 
 	[ -n "${container}" ] && c_arg=(-c "${container}")
@@ -273,21 +288,10 @@ pod_tar_dirs_since() {
 		rels+=("${dir#/}")
 	done
 
-	if since_window_requested; then
-		mt="${since_cutoff_epoch}"
-		[ "${mt}" -gt 0 ] && mt=$((mt - 1))
-		oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
-			sh -c 'cd / || exit 0
-				mt=$1; shift
-				find "$@" -type f \( -newermt @"$mt" -o ! \( \
-					-name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*" \
-					-o -name "*.gz" -o -name "*.[0-9]" -o -name "*.[0-9][0-9]" \) \) \
-					-print0 2>/dev/null | tar czf - --null -T -' \
-			sh "${mt}" "${rels[@]}" |
-			tar xzf - -C "${dest}"
-		oc_rc=${PIPESTATUS[0]}
-		tar_rc=${PIPESTATUS[1]}
-		kept="$(find "${dest}" -type f 2>/dev/null | wc -l)"
+	_pod_tar_extract_status() {
+		oc_rc=${PIPESTATUS[0]:-0}
+		tar_rc=${PIPESTATUS[1]:-0}
+		[[ "${kept}" =~ ^[0-9]+$ ]] || kept=0
 		if [ "${oc_rc}" -ne 0 ]; then
 			rc=${oc_rc}
 			echo "ERROR: ${label}: remote archive failed (rc=${rc})" >&2
@@ -297,27 +301,68 @@ pod_tar_dirs_since() {
 		else
 			rc=0
 		fi
-		since_report "${label}" "find-newermt" "${kept}" "pre-cutoff"
-	else
-		# Whole trees: preserve symlinks and empty directories.
+	}
+
+	_pod_tar_whole_tree() {
+		# Per-call file count (includes overwrites); not dest's total size.
+		kept="$(oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
+			sh -c 'cd / || exit 0; find "$@" -type f 2>/dev/null | wc -l' \
+			sh "${rels[@]}" 2>/dev/null | tr -d '[:space:]')"
+		kept=${kept:-0}
+		[[ "${kept}" =~ ^[0-9]+$ ]] || kept=0
+
 		oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
 			sh -c 'cd / || exit 0; tar czf - --ignore-failed-read "$@"' \
 			sh "${rels[@]}" |
 			tar xzf - -C "${dest}"
-		oc_rc=${PIPESTATUS[0]}
-		tar_rc=${PIPESTATUS[1]}
-		kept="$(find "${dest}" \( -type f -o -type l -o -type d \) 2>/dev/null | wc -l)"
-		if [ "${oc_rc}" -ne 0 ]; then
-			rc=${oc_rc}
-			echo "ERROR: ${label}: remote archive failed (rc=${rc})" >&2
-		elif [ "${tar_rc}" -ne 0 ]; then
-			rc=${tar_rc}
-			echo "ERROR: ${label}: tar extract failed (rc=${rc})" >&2
+		_pod_tar_extract_status
+	}
+
+	if since_window_requested; then
+		mt="${since_cutoff_epoch}"
+		[ "${mt}" -gt 0 ] && mt=$((mt - 1))
+
+		if since_pod_filtered_archive_ok "${ns}" "${pod}" "${c_arg[@]}"; then
+			mechanism="find-newermt"
+			kept="$(oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
+				sh -c 'cd / || exit 0
+					mt=$1; shift
+					find "$@" -type f \( -newermt @"$mt" -o ! \( \
+						-name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*" \
+						-o -name "*.gz" -o -name "*.[0-9]" -o -name "*.[0-9][0-9]" \) \) \
+						-print 2>/dev/null | wc -l' \
+				sh "${mt}" "${rels[@]}" 2>/dev/null | tr -d '[:space:]')"
+			kept=${kept:-0}
+			[[ "${kept}" =~ ^[0-9]+$ ]] || kept=0
+
+			oc exec -n "${ns}" "${pod}" "${c_arg[@]}" -- \
+				sh -c 'cd / || exit 0
+					mt=$1; shift
+					find "$@" -type f \( -newermt @"$mt" -o ! \( \
+						-name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*" \
+						-o -name "*.gz" -o -name "*.[0-9]" -o -name "*.[0-9][0-9]" \) \) \
+						-print0 2>/dev/null | tar czf - --null -T -' \
+				sh "${mt}" "${rels[@]}" |
+				tar xzf - -C "${dest}"
+			_pod_tar_extract_status
+			since_report "${label}" "${mechanism}" "${kept}" "pre-cutoff"
+		elif since_pod_tar_ok "${ns}" "${pod}" "${c_arg[@]}"; then
+			echo "INFO: ${label}: filtered find/tar unavailable in ${pod}; archiving whole trees" >&2
+			mechanism="unfiltered-fallback"
+			_pod_tar_whole_tree
+			since_report "${label}" "${mechanism}" "${kept}" "0"
 		else
-			rc=0
+			echo "ERROR: ${label}: tar unavailable in ${pod}; cannot archive ${rels[*]}" >&2
+			return 1
 		fi
-		since_report "${label}" "no-window" \
-			"$(find "${dest}" -type f 2>/dev/null | wc -l)" "0"
+	else
+		if ! since_pod_tar_ok "${ns}" "${pod}" "${c_arg[@]}"; then
+			echo "ERROR: ${label}: tar unavailable in ${pod}; cannot archive ${rels[*]}" >&2
+			return 1
+		fi
+		# Whole trees: preserve symlinks and empty directories.
+		_pod_tar_whole_tree
+		since_report "${label}" "no-window" "${kept}" "0"
 	fi
 	return "${rc}"
 }
@@ -386,6 +431,7 @@ if [ -n "${BASH_VERSION:-}" ]; then
 	export -f duration_to_seconds get_since_cutoff
 	export -f since_window_requested since_find_predicate
 	export -f filename_timestamp_epoch filter_names_since
+	export -f since_pod_filtered_archive_ok since_pod_tar_ok
 	export -f copy_pod_dir_since pod_tar_dirs_since trim_jsonl_since
 	export -f since_report since_report_header
 fi

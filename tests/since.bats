@@ -638,7 +638,8 @@ another plain line"
 		missing=''
 		for f in duration_to_seconds get_since_cutoff \
 			since_window_requested since_find_predicate filename_timestamp_epoch \
-			filter_names_since copy_pod_dir_since pod_tar_dirs_since \
+			filter_names_since since_pod_filtered_archive_ok since_pod_tar_ok \
+			copy_pod_dir_since pod_tar_dirs_since \
 			trim_jsonl_since since_report since_report_header; do
 			declare -F \"\$f\" >/dev/null || { missing=\"\$missing \$f(undefined)\"; continue; }
 			[[ \$(declare -pF \"\$f\") == *' -fx '* ]] || missing=\"\$missing \$f\"
