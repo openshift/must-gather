@@ -10,6 +10,10 @@ source "${SCRIPT_DIR}/status_reporting.sh"
 source "${SCRIPT_DIR}/version"
 
 mapfile -t collectors < <(sed '/^\s*#/d; /^\s*$/d' "${SCRIPT_DIR}/collectors.conf")
+if [[ ${#collectors[@]} -eq 0 ]]; then
+    echo "ERROR: collectors.conf is missing or empty" >&2
+    exit 1
+fi
 
 status_init "${BASE_COLLECTION_PATH:-/must-gather}" "$(version)" || :
 BASE_COLLECTION_PATH=$_STATUS_ROOT
@@ -41,8 +45,8 @@ gather_finalize() {
 
     status_finalize || exit_code=1
     _gather_sync || { _status_failure; exit_code=1; }
-    if ((exit_code != 0)); then status_finalize || :; fi
     if ((_STATUS_SIGNAL_EXIT != 0)); then exit_code=$_STATUS_SIGNAL_EXIT; fi
+    if ((exit_code != 0)); then status_finalize || :; fi
     exit "$exit_code"
 }
 
@@ -154,7 +158,7 @@ status_wait_all
 status_run gather_aro "${SCRIPT_DIR}/gather_aro"
 
 if [ "${compress_after_gather}" = "true" ]; then
-    compress_logs
+    compress_logs "${BASE_COLLECTION_PATH}"
 fi
 
 exit 0
