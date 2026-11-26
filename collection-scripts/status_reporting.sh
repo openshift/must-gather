@@ -65,7 +65,7 @@ _status_report() {
 			if ! jq -n --arg severity "$severity" --arg code "$code" --arg message "${message:0:16384}" '
 				def redact:
 					gsub("(?i)(bearer|basic)[[:space:]]+[A-Za-z0-9._~+/-]+=*"; "[REDACTED]")
-					| gsub("(?i)(?<key>access[_-]?token|refresh[_-]?token|id[_-]?token|token|password|passwd|secret|client[_-]?secret|api[_-]?key|authorization|cookie)[\"\\x27]?[[:space:]]*[:=][[:space:]]*(\"[^\"]*\"|\\x27[^\\x27]*\\x27|[^[:space:],;]+)"; "\(.key)=[REDACTED]")
+					| gsub("(?i)(?<key>access[_-]?token|refresh[_-]?token|id[_-]?token|token|password|passwd|secret|client[_-]?secret|api[_-]?key|authorization|cookie)[\"\\x27]?[[:space:]]*[:=][[:space:]]*(\"([^\"\\\\]|\\\\.)*\"|\\x27([^\\x27\\\\]|\\\\.)*\\x27|[^[:space:],;]+)"; "\(.key)=[REDACTED]")
 					| gsub("(?<scheme>https?://)[^/@[:space:]]+:[^/@[:space:]]+@"; "\(.scheme)[REDACTED]@")
 					| gsub("[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}"; "[REDACTED]");
 				{severity: $severity, code: $code, message: ($message | redact | .[0:500])}
