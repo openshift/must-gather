@@ -1,17 +1,64 @@
 #!/bin/bash
 
-# generate /must-gather/version file
-# shellcheck disable=SC1091
-. version
-echo "openshift/must-gather" >/must-gather/version
-version >>/must-gather/version
+SCRIPT_DIR=$(cd -- "$(dirname -- "$0")" && pwd -P)
 
 # shellcheck source=collection-scripts/common.sh
-source "$(dirname "$0")/common.sh"
-get_log_collection_args
+source "${SCRIPT_DIR}/common.sh"
+# shellcheck source=collection-scripts/status_reporting.sh
+source "${SCRIPT_DIR}/status_reporting.sh"
+# shellcheck source=collection-scripts/version
+source "${SCRIPT_DIR}/version"
 
-# Store PIDs of all the subprocesses
-pids=()
+mapfile -t collectors < <(sed '/^\s*#/d; /^\s*$/d' "${SCRIPT_DIR}/collectors.conf")
+if [[ ${#collectors[@]} -eq 0 ]]; then
+    echo "ERROR: collectors.conf is missing or empty" >&2
+    exit 1
+fi
+
+status_init "${BASE_COLLECTION_PATH:-/must-gather}" "$(version)" || :
+BASE_COLLECTION_PATH=$_STATUS_ROOT
+
+for unit in \
+    inspect_named_resources inspect_group_resources inspect_all_namespaces \
+    "${collectors[@]}" \
+    gather_aro
+do
+    status_register "$unit"
+done
+
+_gather_sync() {
+    if [[ $_STATUS_INTERRUPTED == true ]]; then
+        timeout 5s sync
+    else
+        sync
+    fi
+}
+
+gather_finalize() {
+    local exit_code=$1
+    trap - EXIT
+    _STATUS_FINISHING=true
+
+    if ((exit_code != 0)) && [[ $_STATUS_INTERRUPTED == false ]]; then
+        _status_failure
+    fi
+
+    status_finalize || exit_code=1
+    _gather_sync || { _status_failure; exit_code=1; }
+    if ((_STATUS_SIGNAL_EXIT != 0)); then exit_code=$_STATUS_SIGNAL_EXIT; fi
+    if ((exit_code != 0)); then status_finalize || :; fi
+    exit "$exit_code"
+}
+
+trap 'gather_finalize "$?"' EXIT
+trap 'status_interrupt 143' TERM
+trap 'status_interrupt 130' INT
+
+{
+    echo "openshift/must-gather"
+    version
+} >"${BASE_COLLECTION_PATH}/version" || _status_failure
+get_log_collection_args
 
 # Named resource list, eg. ns/openshift-config
 named_resources=()
@@ -69,11 +116,9 @@ group_resources+=(prioritylevelconfigurations.flowcontrol.apiserver.k8s.io flows
 # ClusterResourceQuota
 group_resources+=(clusterresourcequotas.quota.openshift.io)
 
-# Run the Collection of Resources using inspect
-# running across all-namespaces for the few "Autoscaler" resources.
 # shellcheck disable=SC2086
-oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${named_resources[@]}" &
-pids+=($!)
+status_start inspect_named_resources oc adm inspect ${log_collection_args} \
+    --dest-dir "${BASE_COLLECTION_PATH}" ${rotated_pod_logs_arg} "${named_resources[@]}"
 
 filtered_group_resources=()
 for gr in "${group_resources[@]}"; do
@@ -88,127 +133,32 @@ group_resources_text=$(
 	echo "${filtered_group_resources[*]}"
 )
 # shellcheck disable=SC2086
-oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${group_resources_text}" &
-pids+=($!)
+status_start inspect_group_resources oc adm inspect ${log_collection_args} \
+    --dest-dir "${BASE_COLLECTION_PATH}" ${rotated_pod_logs_arg} "${group_resources_text}"
 
 all_ns_resources_text=$(
 	IFS=,
 	echo "${all_ns_resources[*]}"
 )
 # shellcheck disable=SC2086
-oc adm inspect ${log_collection_args} --dest-dir must-gather ${rotated_pod_logs_arg} "${all_ns_resources_text}" --all-namespaces &
-pids+=($!)
+status_start inspect_all_namespaces oc adm inspect ${log_collection_args} \
+    --dest-dir "${BASE_COLLECTION_PATH}" ${rotated_pod_logs_arg} "${all_ns_resources_text}" --all-namespaces
 
-# Gather Insights Operator Archives
-/usr/bin/gather_insights &
-pids+=($!)
+for collector in "${collectors[@]}"; do
+    case "$collector" in
+        gather_service_logs) status_start "$collector" "${SCRIPT_DIR}/$collector" master ;;
+        gather_ppc) MUST_GATHER_NODES_INSPECTED=true status_start "$collector" "${SCRIPT_DIR}/$collector" ;;
+        *) status_start "$collector" "${SCRIPT_DIR}/$collector" ;;
+    esac
+done
 
-# Gather monitoring data from the cluster
-/usr/bin/gather_monitoring &
-pids+=($!)
+echo "Waiting on subprocesses to finish execution."
+status_wait_all
 
-# Gather optional operator resources from all namespaces
-/usr/bin/gather_olm &
-pids+=($!)
+status_run gather_aro "${SCRIPT_DIR}/gather_aro"
 
-# Gather OLM v1 resources
-/usr/bin/gather_olm_v1 &
-pids+=($!)
-
-# Gather API Priority and Fairness Endpoints
-/usr/bin/gather_priority_and_fairness &
-pids+=($!)
-
-# Gather etcd information
-/usr/bin/gather_etcd &
-pids+=($!)
-
-# Gather Service Logs (using a supplemental Script); Scoped to Masters.
-/usr/bin/gather_service_logs master &
-pids+=($!)
-
-# Gather Windows Kubernetes component logs
-/usr/bin/gather_windows_node_logs &
-pids+=($!)
-
-# Gather HAProxy config files
-/usr/bin/gather_haproxy_config &
-pids+=($!)
-
-# Gather kas startup and termination logs
-/usr/bin/gather_kas_startup_termination_logs &
-pids+=($!)
-
-# Gather network logs
-/usr/bin/gather_network_logs_basics &
-pids+=($!)
-
-# Gather metallb logs
-/usr/bin/gather_metallb &
-pids+=($!)
-
-# Gather frr-k8s logs
-/usr/bin/gather_frrk8s &
-pids+=($!)
-
-# Gather NMState
-/usr/bin/gather_nmstate &
-pids+=($!)
-
-# Gather Node Feature Discovery (NFD)
-/usr/bin/gather_nfd &
-pids+=($!)
-
-# Gather SR-IOV resources
-/usr/bin/gather_sriov &
-pids+=($!)
-
-# Gather basic Virtualization resources
-/usr/bin/gather_virt &
-pids+=($!)
-
-# Gather PodNetworkConnectivityCheck
-/usr/bin/gather_podnetworkconnectivitycheck &
-pids+=($!)
-
-# Gather On-Disk MachineConfig files
-/usr/bin/gather_machineconfig_ondisk &
-pids+=($!)
-
-# Gather On-Disk MachineConfigDaemon logs
-/usr/bin/gather_machineconfigdaemon_termination_logs &
-pids+=($!)
-
-# Gather vSphere resources. This is NOOP on non-vSphere platform.
-/usr/bin/gather_vsphere &
-pids+=($!)
-
-# Gather Performance profile information (nodes already inspected above via group_resources)
-MUST_GATHER_NODES_INSPECTED=true /usr/bin/gather_ppc &
-pids+=($!)
-
-# Gather OSUS information
-/usr/bin/gather_osus &
-pids+=($!)
-
-# Gather Istio/Gateway API information
-/usr/bin/gather_istio &
-pids+=($!)
-
-# Check if PID array has any values, if so, wait for them to finish
-if [ ${#pids[@]} -ne 0 ]; then
-	echo "Waiting on subprocesses to finish execution."
-	wait "${pids[@]}"
-fi
-
-# Gather ARO information
-/usr/bin/gather_aro
-
-# Optionally compress collected log files before the sidecar copies them out.
-# Enabled via REDUCE_LOGS=compress_logs.
 if [ "${compress_after_gather}" = "true" ]; then
-	compress_logs
+    compress_logs "${BASE_COLLECTION_PATH}"
 fi
 
-# force disk flush to ensure that all data gathered is accessible in the copy container
-sync
+exit 0
