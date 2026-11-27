@@ -348,6 +348,14 @@ load test_helper
 	assert_output --partial "node_log_collection_args=--since=2024-01-15 10:00:00"
 }
 
+@test "gather_kas_startup_termination_logs xargs body does not unquoted-expand node_log_collection_args" {
+	# MUST_GATHER_SINCE_TIME becomes --since=YYYY-MM-DD HH:MM:SS. An extra unquoted
+	# ${node_log_collection_args} in the xargs body is parsed as a node named HH:MM:SS.
+	# gather_audit_logs already passes only quoted $5.
+	run grep -E 'oc adm node-logs \$\{5:\+"\$5"\} \$\{node_log_collection_args\}' "$SCRIPT_DIR/gather_kas_startup_termination_logs"
+	assert_failure
+}
+
 # =============================================================================
 # Error case tests
 # =============================================================================
