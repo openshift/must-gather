@@ -50,10 +50,10 @@ The test adapts to each cluster by first discovering what operators/platforms ar
 
 ### Two Invocation Groups
 
-The `gather` orchestrator calls 23 sub-scripts. Eight more are separate entry points requiring explicit invocation:
+The `gather` orchestrator calls 24 sub-scripts. Seven more are separate entry points requiring explicit invocation:
 
-- **Default** (`oc adm must-gather`): 23 sub-scripts run in parallel, ~15-25 min
-- **Separate** (`oc adm must-gather -- /usr/bin/<script>`): gather_audit_logs, gather_apirequestcounts, gather_etcd_more, gather_metrics, gather_ingress_node_firewall, gather_core_dumps, gather_profiling_node, gather_network_logs (~10-15 min each)
+- **Default** (`oc adm must-gather`): 24 sub-scripts run in parallel, ~15-25 min
+- **Separate** (`oc adm must-gather -- /usr/bin/<script>`): gather_audit_logs, gather_etcd_more, gather_metrics, gather_ingress_node_firewall, gather_core_dumps, gather_profiling_node, gather_network_logs (~10-15 min each)
 
 Note: `gather_ingress_node_firewall` is present in the must-gather image but is not invoked by the default `gather` orchestrator. It must be called explicitly as a separate entry point.
 
@@ -65,14 +65,14 @@ On a **vanilla AWS cluster** (no extra operators):
 
 | Category | Scripts | E2E coverage | New value beyond UTs? |
 |----------|---------|-------------|----------------------|
-| Always-present, meaningful output (default) | 12 | Structure, format, non-emptiness | **Yes** |
+| Always-present, meaningful output (default) | 13 | Structure, format, non-emptiness | **Yes** |
 | Always-present, likely empty on healthy cluster | 2 | No-crash only | Marginal |
 | Conditional, self-skipping in default gather | 10 | Early-exit path | **No** -- same as BATS UTs |
-| Separate entry points (Phase 3) | 4 | Structure, format | **Yes** |
+| Separate entry points (Phase 3) | 3 | Structure, format | **Yes** |
 | Separate entry points (Phase 4, with operators) | 1 | Structure, format (gather_ingress_node_firewall) | **Yes** |
 | Separate entry points (deferred) | 3 | Not tested (core_dumps, profiling_node, network_logs) | No |
 
-**Day-one (Phase 1-3):** 18 scripts tested (14 from default gather + 4 separate entry points).
+**Day-one (Phase 1-3):** 18 scripts tested (15 from default gather + 3 separate entry points).
 **With operator job (Phase 4):** 23 scripts (adds metallb, nmstate, frrk8s, olm_v1 in default gather + gather_ingress_node_firewall as separate entry point).
 **With vSphere job (Phase 5):** 24 scripts.
 **Remaining 8:** gather_sriov (hardware), gather_osus (no operator installed), gather_istio (no operator installed), gather_aro (ARO only), gather_windows_node_logs (Windows only), gather_core_dumps (deferred), gather_profiling_node (deferred), gather_network_logs (deferred).
@@ -101,7 +101,7 @@ On a **vanilla AWS cluster** (no extra operators):
 |-------|------|----------|-----------------|
 | 1 | Add `test/e2e/` scripts + `make test-e2e`, validate locally | 14 scripts | All validators pass on a dev cluster; no false failures on 3 consecutive runs |
 | 2 | Add Job 1 to ci-operator config; mark `optional: true` | 14 scripts in CI | 2 weeks of green runs, then promote to required |
-| 3 | Add separate entry points (audit_logs, apirequestcounts, etcd_more, metrics) | 18 scripts | Separate invocations complete within 15 min each |
+| 3 | Add remaining separate entry points (audit_logs, etcd_more, metrics) | 18 scripts | Separate invocations complete within 15 min each |
 | 4 | Add Job 2 with `install-operators` pre-step + gather_ingress_node_firewall as separate invocation | 23 scripts | Conditional validators assert real output, not just skip |
 | 5 | Add Job 3 on vSphere weekly cron | 24 scripts | gather_vsphere produces non-empty CSI CRD data |
 
@@ -168,8 +168,8 @@ The e2e test registers a `trap` on EXIT/INT/TERM that cleans up all three.
 | `gather_ppc` | default | `nodes/<node>/` with hardware data | Creates + deletes DaemonSet |
 | `gather_priority_and_fairness` | default | APF debug endpoint data | None |
 | `gather_insights` | default | `insights-data/` directory | None |
+| `gather_apirequestcounts` | default | `requests/apirequestscounts.json`, top-20 files | None |
 | `gather_audit_logs` | **separate** | gzipped audit log files | None |
-| `gather_apirequestcounts` | **separate** | `requests/apirequestscounts.json`, top-20 files | None |
 
 ### Always present -- likely empty on healthy cluster (2 scripts)
 

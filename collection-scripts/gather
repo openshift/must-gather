@@ -119,6 +119,10 @@ pids+=($!)
 /usr/bin/gather_priority_and_fairness &
 pids+=($!)
 
+# Gather APIRequestCount summaries (top resources/users; removedInRelease)
+/usr/bin/gather_apirequestcounts &
+pids+=($!)
+
 # Gather etcd information
 /usr/bin/gather_etcd &
 pids+=($!)
