@@ -7,15 +7,6 @@ get_log_collection_args
 FRRK8S_NS="openshift-frr-k8s"
 FRRK8S_PODS_PATH="${BASE_COLLECTION_PATH}/namespaces/${FRRK8S_NS}/pods"
 
-function get_frrk8s_crs() {
-	declare -a FRRK8S_CRDS=("frrconfiguration" "frrnodestate")
-
-	for CRD in "${FRRK8S_CRDS[@]}"; do
-		# shellcheck disable=SC2086
-		oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" -n ${FRRK8S_NS} "${CRD}"
-	done
-}
-
 function gather_frr_logs() {
 	declare -a FILES_TO_GATHER=("frr.conf" "daemons" "vtysh.conf")
 	declare -a COMMANDS=("show running-config" "show bgp ipv4" "show bgp ipv6" "show bgp neighbor" "show bfd peer")
@@ -37,9 +28,8 @@ if ! oc get ns "${FRRK8S_NS}" &>/dev/null; then
 	exit
 fi
 
-# shellcheck disable=SC2086
-oc adm inspect ${log_collection_args} --dest-dir "${BASE_COLLECTION_PATH}" "ns/${FRRK8S_NS}"
-get_frrk8s_crs
+inspect_operator_ns "${FRRK8S_NS}"
+inspect_crds_namespaced "${FRRK8S_NS}" frrconfiguration frrnodestate
 
 if [ $# -gt 0 ]; then
 	FRR_PODS=("$@")
