@@ -349,6 +349,100 @@ load test_helper
 }
 
 # =============================================================================
+# Future --since-time warning tests
+# =============================================================================
+
+@test "get_log_collection_args warns but still collects when MUST_GATHER_SINCE_TIME is in the future" {
+	run bash -c "
+		export MUST_GATHER_SINCE_TIME=\"\$(date -u -d '+30 days' +%Y-%m-%dT%H:%M:%SZ)\"
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		echo \"log_collection_args=\$log_collection_args\"
+	"
+
+	assert_success
+	assert_output --partial "WARNING"
+	assert_output --partial "in the future"
+	assert_output --partial "continuing anyway"
+	# The requested window is still honoured; the check never blocks collection.
+	assert_output --partial "log_collection_args=--since-time="
+}
+
+@test "get_log_collection_args does not warn when MUST_GATHER_SINCE_TIME is in the past" {
+	run bash -c "
+		export MUST_GATHER_SINCE_TIME='2024-01-15T10:00:00Z'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+	"
+
+	assert_success
+	refute_output --partial "in the future"
+}
+
+@test "get_log_collection_args tolerates small clock drift without warning" {
+	run bash -c "
+		export SINCE_TIME_SKEW_TOLERANCE_SECONDS=120
+		export MUST_GATHER_SINCE_TIME=\"\$(date -u -d '+30 seconds' +%Y-%m-%dT%H:%M:%SZ)\"
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+	"
+
+	assert_success
+	refute_output --partial "in the future"
+}
+
+@test "get_log_collection_args passes an unparseable MUST_GATHER_SINCE_TIME through untouched" {
+	# oc validates the RFC3339 format before the pod is created, so this cannot
+	# be reached via `oc adm must-gather`. If it ever is, the check skips itself
+	# silently instead of failing the run.
+	run bash -c "
+		export MUST_GATHER_SINCE_TIME='not-a-timestamp'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		echo \"log_collection_args=\$log_collection_args\"
+	"
+
+	assert_success
+	refute_output --partial "WARNING"
+	assert_output --partial "log_collection_args=--since-time=not-a-timestamp"
+}
+
+@test "get_log_collection_args warns only once per run" {
+	run bash -c "
+		export MUST_GATHER_SINCE_TIME=\"\$(date -u -d '+30 days' +%Y-%m-%dT%H:%M:%SZ)\"
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+		get_log_collection_args
+	" 2>&1
+
+	assert_success
+	[ "$(grep -c 'in the future' <<<"$output")" -eq 1 ]
+}
+
+@test "get_log_collection_args stays quiet in subprocesses that inherit the warned marker" {
+	run bash -c "
+		export MUST_GATHER_SINCE_TIME=\"\$(date -u -d '+30 days' +%Y-%m-%dT%H:%M:%SZ)\"
+		export MUST_GATHER_SINCE_TIME_WARNED=1
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+	"
+
+	assert_success
+	refute_output --partial "in the future"
+}
+
+@test "get_log_collection_args does not run the future check for MUST_GATHER_SINCE durations" {
+	run bash -c "
+		export MUST_GATHER_SINCE='8h'
+		source \"$SCRIPT_DIR/common.sh\"
+		get_log_collection_args
+	"
+
+	assert_success
+	refute_output --partial "WARNING"
+}
+
+# =============================================================================
 # Error case tests
 # =============================================================================
 

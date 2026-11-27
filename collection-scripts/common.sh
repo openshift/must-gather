@@ -18,18 +18,52 @@ function get_operator_ns() {
 	fi
 }
 
+# Grace window for clock drift between the client that built the timestamp and
+# the cluster. Overridable mostly so tests can pin it.
+SINCE_TIME_SKEW_TOLERANCE_SECONDS="${SINCE_TIME_SKEW_TOLERANCE_SECONDS:-120}"
+
+# oc adm must-gather validates MUST_GATHER_SINCE_TIME for *format* only, never
+# against the clock. A timestamp in the future parses fine and is accepted by
+# every log backend (kubelet pod logs, journald, audit), each of which then
+# matches nothing - yielding a must-gather that looks complete but ships empty
+# logs, with no indication why.
+#
+# Warn and keep going: collection is best-effort and must never be blocked by
+# this check. Resource definitions are still worth gathering even when the
+# requested log window is useless.
+warn_on_future_since_time() {
+	# Warn once per run; exported so the gather_* subprocesses stay quiet.
+	[ -z "${MUST_GATHER_SINCE_TIME_WARNED:-}" ] || return 0
+	export MUST_GATHER_SINCE_TIME_WARNED=1
+
+	local since_epoch now_epoch ahead
+	# oc validates the RFC3339 format before the pod is created, so date cannot
+	# fail here. If it ever does, since_epoch is empty, the arithmetic below
+	# treats it as 0 and the check silently skips itself.
+	since_epoch="$(date -u -d "${MUST_GATHER_SINCE_TIME}" +%s 2>/dev/null)"
+	now_epoch="$(date -u +%s)"
+	ahead=$((since_epoch - now_epoch))
+
+	[ "${ahead}" -gt "${SINCE_TIME_SKEW_TOLERANCE_SECONDS}" ] || return 0
+
+	echo "WARNING: --since-time '${MUST_GATHER_SINCE_TIME}' is $((ahead / 86400))d $((ahead % 86400 / 3600))h $((ahead % 3600 / 60))m in the future (cluster time is $(date -u +%Y-%m-%dT%H:%M:%SZ))." >&2
+	echo "WARNING: no log entry can be newer than that, so pod logs, node journals and audit logs will be collected empty. Resource definitions are unaffected." >&2
+	echo "WARNING: continuing anyway. Re-run with a past --since-time, or with --since=<duration>, to capture logs." >&2
+}
+
 get_log_collection_args() {
-	# validation of MUST_GATHER_SINCE and MUST_GATHER_SINCE_TIME is done by the
-	# caller (oc adm must-gather) so it's safe to use the values as they are.
+	# oc adm must-gather validates the *format* of MUST_GATHER_SINCE and
+	# MUST_GATHER_SINCE_TIME, so the values are safe to use as they are. It does
+	# not check them against the clock - see warn_on_future_since_time.
 	log_collection_args=""
 
 	if [ -n "${MUST_GATHER_SINCE:-}" ]; then
 		log_collection_args=--since="${MUST_GATHER_SINCE}"
 	fi
 	if [ -n "${MUST_GATHER_SINCE_TIME:-}" ]; then
+		warn_on_future_since_time
 		log_collection_args=--since-time="${MUST_GATHER_SINCE_TIME}"
 	fi
-
 
 	# REDUCE_LOGS: unset = defaults. Comma or space separated list of:
 	#   skip_rotated_logs     - omit --rotated-pod-logs from oc adm inspect
@@ -55,8 +89,7 @@ get_log_collection_args() {
 			compress_logs)
 				compress_after_gather=true
 				;;
-			"")
-				;;
+			"") ;;
 			*)
 				echo "ERROR: REDUCE_LOGS unknown value '${reduce_logs_option}'. Allowed: skip_rotated_logs, compress_service_logs, compress_logs (got: [${REDUCE_LOGS}])." >&2
 				exit 1
